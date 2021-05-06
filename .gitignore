@@ -1,0 +1,7 @@
+# exclude editor stuff
+.vscode/
+venv/
+
+# executable/object files
+*.o
+restClient
