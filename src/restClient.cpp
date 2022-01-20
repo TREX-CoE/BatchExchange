@@ -3,6 +3,7 @@
 
 #include "restClient.h"
 #include "curlHelper.h"
+#include "base64.h"
 
 /**
  * \brief Constructor
@@ -128,7 +129,7 @@ void RestClient::useragent(const std::string &useragent) {
 int RestClient::login() {
     int errorCode;
 
-    if (this->authType == SESSION_TOKEN_NONE) {
+    if (this->authType == SESSION_TOKEN_NONE || this->authType == SESSION_TOKEN_BASIC_AUTH) {
         return 0;
     } else if (this->authType == SESSION_TOKEN_MEGWARE) {
         this->httpSession = new HttpSession(this->username, this->password, this->serverAddress, this->serverPort);
@@ -359,17 +360,30 @@ void RestClient::rest_helper_pre(
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, this->sslVerify);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, this->sslVerify);
 
-    if (this->authType == SESSION_TOKEN_MEGWARE) {
+    switch (this->authType) {
+    case SESSION_TOKEN_BASIC_AUTH:
+        // Remove a header curl would otherwise add by itself
+        this->chunk = curl_slist_append(this->chunk, "Content-Type: application/json");
+        this->chunk = curl_slist_append(this->chunk, ("Authorization: Basic " + base64_encode(this->username + ":" + this->password)).c_str());
+        // set our custom set of headers
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, this->chunk);
+        break;
+    case SESSION_TOKEN_MEGWARE:
         // Remove a header curl would otherwise add by itself
         this->chunk = curl_slist_append(this->chunk, "Content-Type: application/json");
         this->chunk = curl_slist_append(this->chunk, ("Authorization: Bearer " + httpSession->get_access_token()).c_str());
         // set our custom set of headers
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, this->chunk);
-    } else if (this->authType == SESSION_TOKEN_XCAT) {
+        break;
+    case SESSION_TOKEN_XCAT:
         // Remove a header curl would otherwise add by itself
         this->chunk = curl_slist_append(this->chunk, "Content-Type: application/json");
         this->chunk = curl_slist_append(this->chunk, ("X-Auth-Token:" + httpSession->get_access_token()).c_str());
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, this->chunk);
+        break;
+    
+    default:
+        break;
     }
 }
 
@@ -378,11 +392,10 @@ void RestClient::rest_helper_pre(
  * \brief Some clean up and write back after request
  */
 void RestClient::rest_helper_post() {
-    if (this->authType == SESSION_TOKEN_MEGWARE) {
-        // cleanup
-        curl_slist_free_all(this->chunk);
-        this->chunk = nullptr;
-    } else if (this->authType == SESSION_TOKEN_XCAT) {
+    if (this->authType == SESSION_TOKEN_BASIC_AUTH ||
+        this->authType == SESSION_TOKEN_MEGWARE ||
+        this->authType == SESSION_TOKEN_XCAT
+        ) {
         // cleanup
         curl_slist_free_all(this->chunk);
         this->chunk = nullptr;

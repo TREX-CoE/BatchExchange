@@ -12,6 +12,6 @@ struct loginData {
 };
 
 void str_split(const std::string &input, const std::string delimiter, std::vector<std::string> &ret);
-void read_login_data(const std::string &path, loginData &megware, loginData &xcat, bool ignoreHeader = true);
+void read_login_data(const std::string &path, loginData &megware, loginData &xcat, loginData &slurm, bool ignoreHeader = true);
 
 #endif //UTILS_H

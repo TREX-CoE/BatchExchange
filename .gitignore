@@ -5,3 +5,6 @@ venv/
 # executable/object files
 *.o
 restClient
+
+# loginfile
+testLogins
