@@ -1,0 +1,80 @@
+openapi: 3.0.3
+info:
+    title: Batch Server API
+    description: Batch Server API
+    version: 0.1.0
+    contact:
+        name: Nico Tippmann
+        url: megware.com
+        email: info@megware.com
+    license:
+        name: TODO
+servers:
+    - url: /v1
+      description: batch server
+
+paths:
+  /slurm/nodes/state:
+    post:
+      operationId: "batch_rest_server.api.slurm.nodes.setState"
+      tags:
+        - "slurm"
+      parameters:
+        - $ref: "#/components/parameters/NodeList"
+        - $ref: "#/components/parameters/State"
+      summary: "Set node(s) state"
+      description: "Sets the slurm state for all specified nodes"
+      responses:
+        "200":
+          description: "State Set"
+        "400":
+          description: "Invalid Request"
+          
+components:
+  schemas:
+    EnumSlurmStates:
+      type: string
+      enum:
+        - ALLOC
+        - ALLOCATED
+        - CLOUD
+        - COMP
+        - COMPLETING
+        - DOWN-DRAIN
+        - DRAINED
+        - DRAINING
+        - FAIL
+        - FUTURE
+        - FUTR
+        - IDLE
+        - MAINT
+        - MIX
+        - MIXED
+        - NO_RESPOND
+        - NPC
+        - PERFCTRS
+        - PLANNED
+        - POWER_DOWN
+        - POWERING_DOWN
+        - POWERED_DOWN
+        - POWERING_UP
+        - REBOOT_ISSUED
+        - REBOOT_REQUESTED
+        - RESV
+        - RESERVED
+        - UNK
+        - UNKNOWN
+  parameters:
+    NodeList:
+      name: nodes
+      in: query
+      schema:
+        type: string
+      description: List of comma-separated nodes
+    State:
+      name: state
+      in: query
+      schema:
+        $ref: "#/components/schemas/EnumSlurmStates"
+      description: State to be set  
+          
