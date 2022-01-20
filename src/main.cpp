@@ -10,12 +10,30 @@
 #include "restClient.h"
 #include "webserver.h"
 #include "xcat.h"
+#include "slurm.h"
 
 int main(/*int argc, char** argv*/) {
-    /*loginData megwareLogin, xCatLogin;
-    read_login_data("testLogins", megwareLogin, xCatLogin);
+    loginData megwareLogin, xCatLogin, slurmLogin;
+    //read_login_data("testLogins", megwareLogin, xCatLogin, slurmLogin);
 
-    Xcat xCat;
+    ////// slurm
+
+    /*Slurm slurmSession;
+
+    slurmSession.set_user_credentials(slurmLogin.username, slurmLogin.password);
+    slurmSession.set_host_config(slurmLogin.host, slurmLogin.port);
+    slurmSession.ssl_verify(false);
+
+    int errorCode = slurmSession.login();
+
+    std::cout << "login error code: " << errorCode << std::endl;
+    std::cout << slurmSession.get_nodes() << std::endl;
+
+    slurmSession.logout();*/
+
+    ////// xCat
+
+    /*Xcat xCat;
     xCat.set_user_credentials(xCatLogin.username, xCatLogin.password);
     xCat.set_host_config(xCatLogin.host, xCatLogin.port);
     xCat.ssl_verify(false);
@@ -121,10 +139,6 @@ int main(/*int argc, char** argv*/) {
     std::cout << "------------" << std::endl;
     std::cout << response << std::endl;
 */
-<<<<<<< HEAD
-=======
-
->>>>>>> 7aba195... Fix merge conflict
     /****************** Session Tests ********************/
 
     // MEGWARE TOKEN

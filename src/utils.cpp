@@ -23,7 +23,7 @@ void str_split(const std::string &input, const std::string delimiter, std::vecto
 }
 
 
-void read_login_data(const std::string &path, loginData &megware, loginData &xcat, bool ignoreHeader) {
+void read_login_data(const std::string &path, loginData &megware, loginData &xcat, loginData &slurm, bool ignoreHeader) {
     std::ifstream infile(path);
     std::string line;
     std::vector<std::string> tmpLoginData;
@@ -47,4 +47,13 @@ void read_login_data(const std::string &path, loginData &megware, loginData &xca
     xcat.password = tmpLoginData[2];
     xcat.host     = tmpLoginData[3];
     xcat.port     = tmpLoginData[4];
+
+    tmpLoginData.clear();
+
+    std::getline(infile, line);
+    str_split(line, ",", tmpLoginData);
+    slurm.username = tmpLoginData[1];
+    slurm.password = tmpLoginData[2];
+    slurm.host     = tmpLoginData[3];
+    slurm.port     = tmpLoginData[4];
 }
