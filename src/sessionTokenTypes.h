@@ -4,10 +4,11 @@
 #include <vector>
 #include <string>
 
-#define SESSION_TOKEN_NONE    0
-#define SESSION_TOKEN_CUSTOM  1 // todo not implemented
-#define SESSION_TOKEN_MEGWARE 2
-#define SESSION_TOKEN_XCAT    3
+#define SESSION_TOKEN_NONE          0
+#define SESSION_TOKEN_CUSTOM        1 // todo not implemented
+#define SESSION_TOKEN_BASIC_AUTH    2
+#define SESSION_TOKEN_MEGWARE       3
+#define SESSION_TOKEN_XCAT          4
 
 struct SessionTokenTypes {
     std::vector<std::string> keysTokenType;

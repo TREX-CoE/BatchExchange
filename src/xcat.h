@@ -8,10 +8,10 @@
 
 class Xcat {
 private:
-    RestClient *xCat;
+    RestClient *xCatSession;
 
 public:
-    Xcat(/* args */);
+    Xcat();
     ~Xcat();
 
     void set_user_credentials(std::string username, std::string password);
