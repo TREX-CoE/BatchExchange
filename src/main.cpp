@@ -1,35 +1,73 @@
-#include <string>
-#include <iostream>
-#include <ctime>
-#include <iomanip>
-#include <sstream>
 #include <curl/curl.h>
 
-#include "utils.h"
-#include "sessionTokenTypes.h"
+#include <boost/program_options.hpp>
+#include <ctime>
+#include <exception>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#include "CBatchSlurm.hpp"
 #include "restClient.h"
+#include "sessionTokenTypes.h"
+#include "utils.h"
 #include "webserver.h"
 #include "xcat.h"
-#include "slurm.h"
 
-int main(/*int argc, char** argv*/) {
+namespace po = boost::program_options;
+
+int main(int argc, char** argv) {
+    po::options_description desc("Options");
+    desc.add_options()("help", "show this message")("login-path,l", po::value<std::string>(), "File (CSV) to be read for login data")("batch-type,b", po::value<std::string>()->default_value("slurm"), "Batch System [slurm, pbs]")("nodeinfo", po::value<std::string>(), "Test");
+
+    /* TODO find way to address these settings for each service
+    ("host,h", po::value<std::string>(), "Host or IP")
+    ("port,p", po::value<std::string>(), "Port for communication with host")
+    ("username,u", po::value<std::string>(), "Username for host")
+    ("password,p", po::value<std::string>(), "Password for host")
+    */
+
+    po::positional_options_description p;
+    p.add("nodeinfo", -1);
+
+    po::variables_map vm;
+    po::store(po::command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
+
+    try {
+        po::notify(vm);
+    } catch (std::exception& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        return 1;
+    }
+
+    if (vm.count("help")) {
+        std::cout << desc << std::endl;
+        return 0;
+    }
+
     loginData megwareLogin, xCatLogin, slurmLogin;
-    //read_login_data("testLogins", megwareLogin, xCatLogin, slurmLogin);
+    if (!vm.count("login-path")) {
+        std::cerr << "Missing path to login data" << std::endl;
+        return 1;
+    }
+
+    std::string loginPath = vm["login-path"].as<std::string>();
+    std::cout << "Reading login data from " << loginPath << std::endl;
+
+    // TODO
+    read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin);
 
     ////// slurm
 
-    /*Slurm slurmSession;
-
-    slurmSession.set_user_credentials(slurmLogin.username, slurmLogin.password);
-    slurmSession.set_host_config(slurmLogin.host, slurmLogin.port);
-    slurmSession.ssl_verify(false);
+    CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
 
     int errorCode = slurmSession.login();
 
     std::cout << "login error code: " << errorCode << std::endl;
-    std::cout << slurmSession.get_nodes() << std::endl;
+    std::cout << slurmSession.getNodes() << std::endl;
 
-    slurmSession.logout();*/
+    // slurmSession.logout();
 
     ////// xCat
 
@@ -41,15 +79,14 @@ int main(/*int argc, char** argv*/) {
     int errorCode = xCat.login();
 
     std::string currentImage = xCat.get_os_image("cn1");*/
-    //if (currentImage.find("centos8-x86_64-netboot-compute") == std::string::npos) {
-        //xCat.set_os_image("cn1", "compute-alma8-diskless");
+    // if (currentImage.find("centos8-x86_64-netboot-compute") == std::string::npos) {
+    // xCat.set_os_image("cn1", "compute-alma8-diskless");
     //} else {
-        //xCat.set_os_image("cn1", "centos8-x86_64-netboot-compute");
+    // xCat.set_os_image("cn1", "centos8-x86_64-netboot-compute");
     //}
-    //xCat.reboot_node("cn1");
-    
-    //xCat.logout();
+    // xCat.reboot_node("cn1");
 
+    // xCat.logout();
 
     // Check command line arguments.
     /*if (argc != 4)
@@ -82,110 +119,110 @@ int main(/*int argc, char** argv*/) {
     ioc.run();
 
     return EXIT_SUCCESS;*/
-    
+
     /****************** REST Tests ********************/
 
     // MEGWARE
-/*
-    RestClient rest(SESSION_TOKEN_MEGWARE);
-    rest.set_user_credentials(megware.username, megware.password);
-    rest.set_host_config(megware.host, megware.port);
-    rest.ssl_verify(false);
+    /*
+        RestClient rest(SESSION_TOKEN_MEGWARE);
+        rest.set_user_credentials(megware.username, megware.password);
+        rest.set_host_config(megware.host, megware.port);
+        rest.ssl_verify(false);
 
-    int errorCode = rest.login();
-    std::cout << "login" << std::endl;
-    std::cout << "errorCode: " << errorCode << std::endl;
+        int errorCode = rest.login();
+        std::cout << "login" << std::endl;
+        std::cout << "errorCode: " << errorCode << std::endl;
 
-    std::string header, response;
-    //rest.post("api/v1/racks", "[{\"position\": 10, \"rack_name\": \"curlRack\", \"height\": 10, \"position\": 99}]", response, header);
-    errorCode = rest.get("api/v1/racks/", response, header);
-    //rest.patch("api/v1/racks/curlRack", "{\"height\": 42}", response, header);
-    //rest.get("api/v1/racks/curlRack", response, header);
-    //rest.del("api/v1/racks/curlRack", response, header);
-    std::cout << "errorCode: " << errorCode << std::endl;
-    std::cout << "get" << std::endl;
+        std::string header, response;
+        //rest.post("api/v1/racks", "[{\"position\": 10, \"rack_name\": \"curlRack\", \"height\": 10, \"position\": 99}]", response, header);
+        errorCode = rest.get("api/v1/racks/", response, header);
+        //rest.patch("api/v1/racks/curlRack", "{\"height\": 42}", response, header);
+        //rest.get("api/v1/racks/curlRack", response, header);
+        //rest.del("api/v1/racks/curlRack", response, header);
+        std::cout << "errorCode: " << errorCode << std::endl;
+        std::cout << "get" << std::endl;
 
-    rest.logout();
-    std::cout << "logout" << std::endl;
+        rest.logout();
+        std::cout << "logout" << std::endl;
 
-    std::cout << header << std::endl;
-    std::cout << "------------" << std::endl;
-    std::cout << response << std::endl;
-*/
+        std::cout << header << std::endl;
+        std::cout << "------------" << std::endl;
+        std::cout << response << std::endl;
+    */
 
     // XCAT TOKEN
-/*
-    RestClient rest(SESSION_TOKEN_XCAT);
-    rest.set_user_credentials(xCatLogin.username, xCatLogin.password);
-    rest.set_host_config(xCatLogin.host, xCatLogin.port);
-    rest.ssl_verify(false);
+    /*
+        RestClient rest(SESSION_TOKEN_XCAT);
+        rest.set_user_credentials(xCatLogin.username, xCatLogin.password);
+        rest.set_host_config(xCatLogin.host, xCatLogin.port);
+        rest.ssl_verify(false);
 
-    int errorCode = rest.login();
-    std::cout << "login" << std::endl;
-    std::cout << "errorCode: " << errorCode << std::endl;
+        int errorCode = rest.login();
+        std::cout << "login" << std::endl;
+        std::cout << "errorCode: " << errorCode << std::endl;
 
-    std::string header, response;
-    //errorCode = rest.get("xcatws/nodes", response, header);
-    errorCode = rest.get("xcatws/nodes/cn1/bootstate", response, header);
-    errorCode = rest.put("xcatws/nodes/cn1/bootstate", "{\"osimage\":\"centos8-x86_64-netboot-compute\"}", response, header);
+        std::string header, response;
+        //errorCode = rest.get("xcatws/nodes", response, header);
+        errorCode = rest.get("xcatws/nodes/cn1/bootstate", response, header);
+        errorCode = rest.put("xcatws/nodes/cn1/bootstate", "{\"osimage\":\"centos8-x86_64-netboot-compute\"}", response, header);
 
-    std::cout << "errorCode: " << errorCode << std::endl;
-    std::cout << "get" << std::endl;
+        std::cout << "errorCode: " << errorCode << std::endl;
+        std::cout << "get" << std::endl;
 
-    rest.logout();
-    std::cout << "logout" << std::endl;
+        rest.logout();
+        std::cout << "logout" << std::endl;
 
-    std::cout << header << std::endl;
-    std::cout << "------------" << std::endl;
-    std::cout << response << std::endl;
-*/
+        std::cout << header << std::endl;
+        std::cout << "------------" << std::endl;
+        std::cout << response << std::endl;
+    */
     /****************** Session Tests ********************/
 
     // MEGWARE TOKEN
-/*
-    HttpSession session(
-        megware.username,
-        megware.password,
-        megware.host,
-        megware.port
-    );
+    /*
+        HttpSession session(
+            megware.username,
+            megware.password,
+            megware.host,
+            megware.port
+        );
 
-    session.set_token_type(SESSION_TOKEN_MEGWARE);
-    session.set_login_path("/oauth/token");
-    session.set_logout_path("/oauth/revoke");
-    session.ssl_verify(false);
+        session.set_token_type(SESSION_TOKEN_MEGWARE);
+        session.set_login_path("/oauth/token");
+        session.set_logout_path("/oauth/revoke");
+        session.ssl_verify(false);
 
-    int errorCode = session.login();
-    if (errorCode != 0) {
-        std::cout << "login failed with error code: " << errorCode << std::endl;
-        return -1;
-    }
-    errorCode = session.logout();
-    if (errorCode != 0) {
-        std::cout << "logout failed with error code: " << errorCode << std::endl;
-        return -2;
-    }
-*/
+        int errorCode = session.login();
+        if (errorCode != 0) {
+            std::cout << "login failed with error code: " << errorCode << std::endl;
+            return -1;
+        }
+        errorCode = session.logout();
+        if (errorCode != 0) {
+            std::cout << "logout failed with error code: " << errorCode << std::endl;
+            return -2;
+        }
+    */
     // XCAT TOKEN
-/*
-    HttpSession session(
-        xCatLogin.username,
-        xCatLogin.password,
-        xCatLogin.host,
-        xCatLogin.port
-    );
+    /*
+        HttpSession session(
+            xCatLogin.username,
+            xCatLogin.password,
+            xCatLogin.host,
+            xCatLogin.port
+        );
 
-    session.set_token_type(SESSION_TOKEN_XCAT);
-    session.set_login_path("/xcatws/tokens");
-    session.set_date_parse_descr("%Y-%m-%d %H:%M:%S");
-    session.ssl_verify(false);
+        session.set_token_type(SESSION_TOKEN_XCAT);
+        session.set_login_path("/xcatws/tokens");
+        session.set_date_parse_descr("%Y-%m-%d %H:%M:%S");
+        session.ssl_verify(false);
 
-    int errorCode = session.login();
-    if (errorCode != 0) {
-        std::cout << "login failed with error code: " << errorCode << std::endl;
-        return -1;
-    }
-*/
+        int errorCode = session.login();
+        if (errorCode != 0) {
+            std::cout << "login failed with error code: " << errorCode << std::endl;
+            return -1;
+        }
+    */
     // not possible to logout
     /*errorCode = session.logout();
     if (errorCode != 0) {
@@ -196,27 +233,27 @@ int main(/*int argc, char** argv*/) {
     /****************** Token Tests ********************/
 
     // MEGWARE TOKEN
-/* 
-    SessionToken token;
-    token.set_keys_by_token_type(SESSION_TOKEN_KEYS_MEGWARE);
-    token.read_token("{\"access_token\": \"pHfFnU2Muhg0kIPeoSYGrt71fQxC3h\", \"expires_in\": 3600, \"token_type\": \"Bearer\", \"scope\": \"alerts_delete alerts_read batch_read batch_write commands_read commands_write configclasses_control configclasses_delete configclasses_read configclasses_write logs_read graphs_delete graphs_read graphs_write emails_read emails_write emails_delete inventories_read inventories_write maintenence_admin metrics_delete metrics_read metrics_write oauth_admin pdus_control pdus_delete pdus_read pdus_write preferences_read preferences_write racks_control racks_delete racks_read racks_write thresholds_admin thresholds_read traps_write traps_read units_control units_delete units_read units_write users_delete users_read users_self_read users_self_write users_write values_read views_delete views_read views_write\", \"refresh_token\": \"9S4JfjWHt5BH7161HvSviBgEfRRMIl\", \"version\": \"0.1.0\"}");
+    /*
+        SessionToken token;
+        token.set_keys_by_token_type(SESSION_TOKEN_KEYS_MEGWARE);
+        token.read_token("{\"access_token\": \"pHfFnU2Muhg0kIPeoSYGrt71fQxC3h\", \"expires_in\": 3600, \"token_type\": \"Bearer\", \"scope\": \"alerts_delete alerts_read batch_read batch_write commands_read commands_write configclasses_control configclasses_delete configclasses_read configclasses_write logs_read graphs_delete graphs_read graphs_write emails_read emails_write emails_delete inventories_read inventories_write maintenence_admin metrics_delete metrics_read metrics_write oauth_admin pdus_control pdus_delete pdus_read pdus_write preferences_read preferences_write racks_control racks_delete racks_read racks_write thresholds_admin thresholds_read traps_write traps_read units_control units_delete units_read units_write users_delete users_read users_self_read users_self_write users_write values_read views_delete views_read views_write\", \"refresh_token\": \"9S4JfjWHt5BH7161HvSviBgEfRRMIl\", \"version\": \"0.1.0\"}");
 
-    std::cout << token.get_access_token() << std::endl;
-    std::cout << token.get_refresh_token() << std::endl;    
-*/
+        std::cout << token.get_access_token() << std::endl;
+        std::cout << token.get_refresh_token() << std::endl;
+    */
     // XCAT TOKEN
-/*
-    SessionToken token;
-    token.set_keys_by_token_type(SESSION_TOKEN_KEYS_XCAT);
-    token.set_date_parse_descr("%Y-%m-%d %H:%M:%S");
-    int error = token.read_token("{\"token\":{\"expire\":\"2021-8-27 14:00:18\",\"id\":\"2bbee803-7d0d-497e-a472-e62254cd1e30\"}}");
-    
-    std::cout << "error: " << error << std::endl;
+    /*
+        SessionToken token;
+        token.set_keys_by_token_type(SESSION_TOKEN_KEYS_XCAT);
+        token.set_date_parse_descr("%Y-%m-%d %H:%M:%S");
+        int error = token.read_token("{\"token\":{\"expire\":\"2021-8-27 14:00:18\",\"id\":\"2bbee803-7d0d-497e-a472-e62254cd1e30\"}}");
 
-    std::cout << token.get_expire_date()-time(nullptr) << std::endl;
+        std::cout << "error: " << error << std::endl;
 
-    std::cout << "get_access_token: " << token.get_access_token() << std::endl;
-*/
+        std::cout << token.get_expire_date()-time(nullptr) << std::endl;
+
+        std::cout << "get_access_token: " << token.get_access_token() << std::endl;
+    */
 
     return 0;
 }

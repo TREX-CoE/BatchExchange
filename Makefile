@@ -1,10 +1,10 @@
-TARGET := restClient
+TARGET := batchExchange
 SOURCES := $(wildcard src/*.c src/*.cpp)
 OBJECTS := $(patsubst %.c,%.o, $(patsubst %.cpp,%.o,$(SOURCES)))
 
 INCLUDE := -Isrc
 LIBPATH :=
-LIBS := -lcurl -lboost_system -lpthread
+LIBS := -lcurl -lboost_system -lpthread -lboost_program_options
 
 CXX := g++
 

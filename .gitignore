@@ -4,7 +4,7 @@ venv/
 __pycache__/
 # executable/object files
 *.o
-restClient
+batchExchange
 
 # loginfile
 testLogins

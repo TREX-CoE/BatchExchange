@@ -8,6 +8,7 @@
 #ifndef CBATCH_HPP
 #define CBATCH_HPP
 
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -21,11 +22,11 @@ class CBatch {
     virtual ~CBatch();
 
    protected:
-    virtual std::string getJobs(int);
-    virtual std::string getNodes(std::string);
-    virtual std::string getQueues(std::string);
-    virtual std::string getNodeStatus(std::string);
-    virtual int setNodeStatus(std::vector<std::string>, std::string);
+    virtual std::string getJobs(int) = 0;
+    virtual std::string getNodes(std::string = "") = 0;
+    virtual std::string getQueues(std::string = "") = 0;
+    virtual std::string getNodeStatus(std::string) = 0;
+    virtual int setNodeStatus(std::vector<std::string>, std::string) = 0;
 };
 
 #endif /* CBATCH_HPP */
