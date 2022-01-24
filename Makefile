@@ -4,7 +4,7 @@ OBJECTS := $(patsubst %.c,%.o, $(patsubst %.cpp,%.o,$(SOURCES)))
 
 INCLUDE := -Isrc
 LIBPATH :=
-LIBS := -lcurl -lboost_system -lpthread -lboost_program_options
+LIBS := -lcurl -lboost_system -lpthread
 
 CXX := g++
 

@@ -1,11 +1,11 @@
 /**
- * @file CBatchSlurm.hpp
+ * @file CBatchSlurm.h
  * @author Nico Tippmann
  * @brief CBatch Slurm implementation
  *
  ***********************************************/
 
-#include "CBatchSlurm.hpp"
+#include "CBatchSlurm.h"
 
 /**
  * @brief Constructor
@@ -28,7 +28,7 @@ int CBatchSlurm::login() {
     return slurmSession->login();
 }
 
-void CBatchSlurm::getApiVersion() {
+void CBatchSlurm::get_api_version() {
     /* api version already set */
     if (apiVersion.length()) return;
 
@@ -39,7 +39,7 @@ void CBatchSlurm::getApiVersion() {
     std::cout << response << std::endl;
 }
 
-std::string CBatchSlurm::getJobs(int jobId = -1) {
+std::string CBatchSlurm::get_jobs(int jobId = -1) {
     std::string header, response;
     slurmSession->get("slurm/v0.0.36/nodes", response, header);
     std::cout << header << std::endl;
@@ -53,7 +53,7 @@ std::string CBatchSlurm::getJobs(int jobId = -1) {
     }
 }
 
-std::string CBatchSlurm::getNodes(std::string node) {
+std::string CBatchSlurm::get_nodes(std::string node) {
     if (node == "") {
         // /slurm/{vApi}/nodes
     } else {
@@ -61,18 +61,18 @@ std::string CBatchSlurm::getNodes(std::string node) {
     }
 }
 
-std::string CBatchSlurm::getQueues(std::string queue) {
+std::string CBatchSlurm::get_queues(std::string queue) {
     if (queue == "") {
         // /slurm/{vApi}/partition
     } else {
         // /slurm/{vApi}/partitions/{queue}
     }
 }
-std::string CBatchSlurm::getNodeStatus(std::string) {
+std::string CBatchSlurm::get_node_state(std::string) {
     //
 }
 
-int CBatchSlurm::setNodeStatus(std::vector<std::string> nodeList, std::string status) {
+int CBatchSlurm::set_node_state(std::vector<std::string> nodeList, std::string status) {
     // custom webserver
     // [POST] /v1/slurm/status?nodes=a,b
 }

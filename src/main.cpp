@@ -1,6 +1,5 @@
 #include <curl/curl.h>
 
-#include <boost/program_options.hpp>
 #include <ctime>
 #include <exception>
 #include <iomanip>
@@ -8,64 +7,65 @@
 #include <sstream>
 #include <string>
 
-#include "CBatchSlurm.hpp"
+#include "CBatchSlurm.h"
+#include "clipp.h"
 #include "restClient.h"
 #include "sessionTokenTypes.h"
 #include "utils.h"
 #include "webserver.h"
 #include "xcat.h"
 
-namespace po = boost::program_options;
-
 int main(int argc, char** argv) {
-    po::options_description desc("Options");
-    desc.add_options()("help", "show this message")("login-path,l", po::value<std::string>(), "File (CSV) to be read for login data")("batch-type,b", po::value<std::string>()->default_value("slurm"), "Batch System [slurm, pbs]")("nodeinfo", po::value<std::string>(), "Test");
+    // variables storing the parsing result; initialized with their default values
+    enum class mode { info,
+                      state,
+    };
+    mode selected = mode::info;
 
-    /* TODO find way to address these settings for each service
-    ("host,h", po::value<std::string>(), "Host or IP")
-    ("port,p", po::value<std::string>(), "Port for communication with host")
-    ("username,u", po::value<std::string>(), "Username for host")
-    ("password,p", po::value<std::string>(), "Password for host")
-    */
+    std::string loginPath = "";
+    bool help = false;
+    bool json = true;
+    std::string batchSystem;
+    std::string nodes = "";
+    std::string state = "";
+    auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
+                        clipp::option("--json").set(json) % "Output as json",
+                        (clipp::option("-b", "--batch") & (clipp::required("slurm") | clipp::required("pbs"))) % "Batch System",
+                        (clipp::option("-l", "--loginFile") & clipp::value("path", loginPath)) % "Path for login data");
 
-    po::positional_options_description p;
-    p.add("nodeinfo", -1);
+    auto infoOpt = (clipp::command("info").set(selected, mode::info), clipp::opt_value("nodes", nodes)) % "Get basic information for <nodes>";
+    auto stateOpt = (clipp::command("state").set(selected, mode::info), clipp::opt_value("nodes", nodes), clipp::opt_value("state", state)) % "Get/Set status for <nodes>";
 
-    po::variables_map vm;
-    po::store(po::command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
+    auto cli = ((infoOpt | stateOpt), generalOpts);
 
-    try {
-        po::notify(vm);
-    } catch (std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
+    if (!clipp::parse(argc, argv, cli)) {
+        std::cout << "Invalid" << std::endl;
+        std::cout << make_man_page(cli, argv[0]) << '\n';
         return 1;
     }
 
-    if (vm.count("help")) {
-        std::cout << desc << std::endl;
+    if (help) {
+        std::cout << clipp::make_man_page(cli, argv[0]);
         return 0;
     }
 
-    loginData megwareLogin, xCatLogin, slurmLogin;
-    if (!vm.count("login-path")) {
-        std::cerr << "Missing path to login data" << std::endl;
-        return 1;
-    }
+    // TODO implement EITHER loginFile or manualy specification of all login parameters (can be solved using groups)
+    // if (!loginPath.length) {
+    //     std::cout << "Please specify login file" << std::endl;
+    //     return 1;
+    // }
 
-    std::string loginPath = vm["login-path"].as<std::string>();
-    std::cout << "Reading login data from " << loginPath << std::endl;
+    // std::cout << "Reading login data from " << loginPath << std::endl;
+    // utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin);
 
-    // TODO
-    read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin);
+    // ////// slurm
 
-    ////// slurm
+    // CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
 
-    CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
+    // int errorCode = slurmSession.login();
 
-    int errorCode = slurmSession.login();
-
-    std::cout << "login error code: " << errorCode << std::endl;
-    std::cout << slurmSession.getNodes() << std::endl;
+    // std::cout << "login error code: " << errorCode << std::endl;
+    // std::cout << slurmSession.get_nodes() << std::endl;
 
     // slurmSession.logout();
 

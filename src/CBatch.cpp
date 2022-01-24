@@ -1,5 +1,4 @@
-#include "CBatch.hpp"
+#include "CBatch.h"
 
-// TODO move definition to hpp
 CBatch::~CBatch() {
 }
