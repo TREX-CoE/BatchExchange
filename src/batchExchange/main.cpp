@@ -8,7 +8,6 @@
 #include "utils.h"
 #include "sessionTokenTypes.h"
 #include "restClient.h"
-#include "webserver.h"
 #include "xcat.h"
 #include "slurm.h"
 

@@ -1,6 +1,8 @@
-# exclude editor stuff
+# exclude editor and build stuff
 .vscode/
 venv/
+cbuild/
+build/
 
 # executable/object files
 *.o
