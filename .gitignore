@@ -1,10 +1,13 @@
-# exclude editor stuff
+# exclude editor and build stuff
 .vscode/
 venv/
 __pycache__/
+cbuild/
+build/
+
 # executable/object files
 *.o
-batchExchange
+TREX
 
 # loginfile
 testLogins

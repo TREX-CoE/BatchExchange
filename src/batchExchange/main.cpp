@@ -12,7 +12,6 @@
 #include "restClient.h"
 #include "sessionTokenTypes.h"
 #include "utils.h"
-#include "webserver.h"
 #include "xcat.h"
 
 int main(int argc, char** argv) {
