@@ -1,15 +1,16 @@
 #ifndef RESTCLIENT_H
 #define RESTCLIENT_H
 
-#include <string>
-#include <set>
 #include <curl/curl.h>
+
+#include <set>
+#include <string>
 
 #include "httpSession.h"
 
 class RestClient {
-private:
-    int         authType;
+   private:
+    int authType;
     HttpSession *httpSession;
 
     // login credentials
@@ -33,18 +34,18 @@ private:
 
     void rest_helper_pre(
         const std::string httpMethod,
-        const std::string &restPath,
+        const std::string restPath,
         std::string &response,
         std::string &header,
         const std::string &postData);
     void rest_helper_post();
 
-public:
+   public:
     RestClient(const int authTypeIn);
     ~RestClient();
 
     int login();
-    void logout();
+    int logout();
 
     // setter
     void set_user_credentials(const std::string &usernameIn, const std::string &passwordIn);
@@ -53,11 +54,11 @@ public:
     void useragent(const std::string &useragent);
 
     // REST-calls
-    int get(const std::string &restPath, std::string &response, std::string &header);
-    int post(const std::string &restPath, const std::string &postData, std::string &response, std::string &header);
-    int del(const std::string &restPath, std::string &response, std::string &header);
-    int patch(const std::string &restPath, const std::string &postData, std::string &response, std::string &header);
-    int put(const std::string &restPath, const std::string &postData, std::string &response, std::string &header);
+    int get(std::string restPath, std::string &response, std::string &header);
+    int post(std::string restPath, const std::string &postData, std::string &response, std::string &header);
+    int del(std::string restPath, std::string &response, std::string &header);
+    int patch(std::string restPath, const std::string &postData, std::string &response, std::string &header);
+    int put(std::string restPath, const std::string &postData, std::string &response, std::string &header);
 
     // information about last request
     long get_last_http_code();
@@ -65,4 +66,4 @@ public:
     std::string get_last_url();
 };
 
-#endif // RESTCLIENT_H
+#endif  // RESTCLIENT_H

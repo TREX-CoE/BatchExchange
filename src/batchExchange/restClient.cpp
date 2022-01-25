@@ -91,7 +91,7 @@ void RestClient::set_host_config(const std::string &serverAddressIn, const std::
 /**
  * \brief Simple setter if ssl certificate should be checked or not
  *
- * \param verfiy true if ssl certificate should be checked
+ * \param sslVerifyIn true if ssl certificate should be checked
  */
 void RestClient::ssl_verify(bool sslVerifyIn) {
     this->sslVerify = sslVerifyIn;
@@ -121,11 +121,11 @@ void RestClient::useragent(const std::string &useragent) {
  *         -100 unknown authentication method
  */
 int RestClient::login() {
-    int errorCode;
-
-    if (this->authType == SESSION_TOKEN_NONE || this->authType == SESSION_TOKEN_BASIC_AUTH) {
+    if (this->authType == SESSION_TOKEN_NONE || this->authType == SESSION_TOKEN_BASIC_AUTH)
         return 0;
-    } else if (this->authType == SESSION_TOKEN_MEGWARE) {
+
+    int errorCode;
+    if (this->authType == SESSION_TOKEN_MEGWARE) {
         this->httpSession = new HttpSession(this->username, this->password, this->serverAddress, this->serverPort);
         this->httpSession->set_token_type(SESSION_TOKEN_MEGWARE);
         this->httpSession->set_login_path("/oauth/token");
@@ -156,13 +156,13 @@ int RestClient::login() {
 /**
  * \brief Removes login tokens and frees sessions
  */
-void RestClient::logout() {
-    if (this->httpSession == nullptr) {
-        return;
-    }
+int RestClient::logout() {
+    int res = 0;
+    if (this->httpSession == nullptr)
+        return res;
 
     if (this->authType == SESSION_TOKEN_MEGWARE) {
-        this->httpSession->logout();
+        res = this->httpSession->logout();
         delete this->httpSession;
         this->httpSession = nullptr;
     } else if (this->authType == SESSION_TOKEN_XCAT) {
@@ -170,6 +170,8 @@ void RestClient::logout() {
         delete this->httpSession;
         this->httpSession = nullptr;
     }
+
+    return res;
 }
 
 /**
@@ -179,10 +181,9 @@ void RestClient::logout() {
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::get(const std::string &restPath, std::string &response, std::string &header) {
-    if (!curl) {
+int RestClient::get(const std::string restPath, std::string &response, std::string &header) {
+    if (!curl)
         return -1;
-    }
 
     rest_helper_pre("GET", restPath, response, header, "");
 
@@ -206,7 +207,7 @@ int RestClient::get(const std::string &restPath, std::string &response, std::str
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::post(const std::string &restPath, const std::string &postData, std::string &response, std::string &header) {
+int RestClient::post(const std::string restPath, const std::string &postData, std::string &response, std::string &header) {
     if (!curl) {
         return -1;
     }
@@ -233,7 +234,7 @@ int RestClient::post(const std::string &restPath, const std::string &postData, s
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::del(const std::string &restPath, std::string &response, std::string &header) {
+int RestClient::del(const std::string restPath, std::string &response, std::string &header) {
     if (!curl) {
         return -1;
     }
@@ -260,7 +261,7 @@ int RestClient::del(const std::string &restPath, std::string &response, std::str
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::patch(const std::string &restPath, const std::string &postData, std::string &response, std::string &header) {
+int RestClient::patch(const std::string restPath, const std::string &postData, std::string &response, std::string &header) {
     if (!curl) {
         return -1;
     }
@@ -287,7 +288,7 @@ int RestClient::patch(const std::string &restPath, const std::string &postData, 
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::put(const std::string &restPath, const std::string &postData, std::string &response, std::string &header) {
+int RestClient::put(const std::string restPath, const std::string &postData, std::string &response, std::string &header) {
     if (!curl) {
         return -1;
     }
@@ -318,12 +319,18 @@ int RestClient::put(const std::string &restPath, const std::string &postData, st
  */
 void RestClient::rest_helper_pre(
     const std::string httpMethod,
-    const std::string &restPath,
+    std::string restPath,
     std::string &response,
     std::string &header,
     const std::string &postData) {
-    // build ressource url for request
-    const std::string url = "https://" + this->serverAddress + ":" + this->serverPort + "/" + restPath;
+    if (restPath.at(0) != '/')
+        restPath = "/" + restPath;
+
+    const std::string url = "https://" + this->serverAddress + ":" + this->serverPort + restPath;
+    std::cout << url << std::endl;
+    /* curl verbosity */
+    // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, httpMethod.c_str());

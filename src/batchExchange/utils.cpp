@@ -1,3 +1,9 @@
+/**
+ * @file utils.cpp
+ * @brief Collection of helper functions
+ *
+ ***********************************************/
+
 #include "utils.h"
 
 #include <fstream>
@@ -27,6 +33,11 @@ void utils::str_split(const std::string &input, const std::string delimiter, std
     }
 }
 
+/**
+ * @brief Reads login data from loginFile
+ * TODO rework
+ *
+ */
 void utils::read_login_data(const std::string &path, utils::loginData &megware, utils::loginData &xcat, utils::loginData &slurm, bool ignoreHeader) {
     std::string fileContent;
     utils::read_file_to_string(path, fileContent);

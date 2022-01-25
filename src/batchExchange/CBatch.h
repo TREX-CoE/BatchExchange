@@ -1,6 +1,5 @@
 /**
  * @file CBatch.h
- * @author Nico Tippmann
  * @brief Interface definition for inheriting batch classes
  *
  ***********************************************/
@@ -22,10 +21,10 @@ class CBatch {
     virtual ~CBatch();
 
    protected:
-    virtual std::string get_jobs(int) = 0;
-    virtual std::string get_nodes(std::string = "") = 0;
-    virtual std::string get_queues(std::string = "") = 0;
-    virtual std::string get_node_state(std::string) = 0;
+    virtual int get_jobs(int) = 0;
+    virtual int get_nodes(std::string, std::string&, bool) = 0;
+    virtual int get_queues(std::string) = 0;
+    virtual int get_node_state(std::string) = 0;
     virtual int set_node_state(std::vector<std::string>, std::string) = 0;
 };
 

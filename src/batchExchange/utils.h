@@ -1,3 +1,9 @@
+/**
+ * @file utils.h
+ * @brief Header for utils.cpp
+ *
+ ***********************************************/
+
 #ifndef UTILS_H
 #define UTILS_H
 

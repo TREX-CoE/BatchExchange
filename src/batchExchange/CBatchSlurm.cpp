@@ -1,6 +1,5 @@
 /**
  * @file CBatchSlurm.h
- * @author Nico Tippmann
  * @brief CBatch Slurm implementation
  *
  ***********************************************/
@@ -11,68 +10,104 @@
  * @brief Constructor
  */
 CBatchSlurm::CBatchSlurm(std::string host, std::string port, std::string username, std::string password, bool sslVerify) {
-    slurmSession = new RestClient(SESSION_TOKEN_BASIC_AUTH);
-    slurmSession->set_user_credentials(username, password);
-    slurmSession->set_host_config(host, port);
-    slurmSession->ssl_verify(sslVerify);
+    /*
+     * The /openapi API calls require a different RestClient session as somehow
+     * every API call that comes after them fails with curl error code 1.
+     *
+     * TODO find solution to resolve this issues within curl
+     */
+    openapiSession = new RestClient(SESSION_TOKEN_BASIC_AUTH);
+    openapiSession->set_user_credentials(username, password);
+    openapiSession->set_host_config(host, port);
+    openapiSession->ssl_verify(sslVerify);
+
+    session = new RestClient(SESSION_TOKEN_BASIC_AUTH);
+    session->set_user_credentials(username, password);
+    session->set_host_config(host, port);
+    session->ssl_verify(sslVerify);
 }
 
 /**
  * @brief Destructor
  */
 CBatchSlurm::~CBatchSlurm() {
-    delete this->slurmSession;
+    delete this->openapiSession;
+    delete this->session;
 }
 
 int CBatchSlurm::login() {
-    return slurmSession->login();
+    int res = session->login();
+    get_api_version();
+    return res;
 }
 
-void CBatchSlurm::get_api_version() {
-    /* api version already set */
-    if (apiVersion.length()) return;
+int CBatchSlurm::logout() {
+    return session->logout();
+}
 
+int CBatchSlurm::get_api_version() {
     std::string header, response;
 
-    slurmSession->get("/openapi.json", response, header);
-    std::cout << header << std::endl;
-    std::cout << response << std::endl;
+    int res = openapiSession->get("/openapi.json", response, header);
+    if (res != 0 && res != 200) {
+        std::cerr << "Error fetching slurm api version: " << res << std::endl;
+        return 1;
+    }
+
+    rapidjson::Document doc;
+    doc.Parse(response.c_str());
+
+    if (!doc.HasMember("info") || !doc["info"].HasMember("version")) {
+        std::cerr << "Unable to determine api version from /openapi.json" << std::endl;
+        return 1;
+    }
+
+    this->apiVersion = "v" + static_cast<std::string>(doc["info"]["version"].GetString());
+    std::cout << "API-Version: " << apiVersion << std::endl;
+    return 0;
 }
 
-std::string CBatchSlurm::get_jobs(int jobId = -1) {
+int CBatchSlurm::get_jobs(int jobId = -1) {
+    // std::string header, response;
+    // session->get("/slurm/" + apiVersion + "/jobs", response, header);
+    // std::cout << header << std::endl;
+    // std::cout << response << std::endl;
+
+    return 0;
+}
+
+/**
+ * @brief Get basic node information
+ *
+ * Slurm currently does not provide a way to query multiple specified nodes with a single call.
+ * Therefore all nodes are queried and then filtered.
+ * @param nodes Node(s)
+ * @return 0 Success
+ * @return 1 Error
+ */
+int CBatchSlurm::get_nodes(std::string nodes, std::string& output, bool json) {
     std::string header, response;
-    slurmSession->get("slurm/v0.0.36/nodes", response, header);
+    std::cout << this->apiVersion << std::endl;
+    int res = session->get("/slurm/v0.0.36/nodes", response, header);
+    if (res != 0 && res != 200) {
+        std::cerr << "Error fetching nodes: " << res << std::endl;
+        return 1;
+    }
     std::cout << header << std::endl;
     std::cout << response << std::endl;
 
-    return response;
-    if (jobId != -1) {
-        // /slurm/{vApi}/jobs
-    } else {
-        // /slurm/{vApi}/job/{jobId}
-    }
+    return 0;
 }
 
-std::string CBatchSlurm::get_nodes(std::string node) {
-    if (node == "") {
-        // /slurm/{vApi}/nodes
-    } else {
-        // /slurm/{vApi}/node/{node}
-    }
+int CBatchSlurm::get_queues(std::string queue) {
+    return 0;
 }
-
-std::string CBatchSlurm::get_queues(std::string queue) {
-    if (queue == "") {
-        // /slurm/{vApi}/partition
-    } else {
-        // /slurm/{vApi}/partitions/{queue}
-    }
-}
-std::string CBatchSlurm::get_node_state(std::string) {
-    //
+int CBatchSlurm::get_node_state(std::string) {
+    return 0;
 }
 
 int CBatchSlurm::set_node_state(std::vector<std::string> nodeList, std::string status) {
     // custom webserver
     // [POST] /v1/slurm/status?nodes=a,b
+    return 0;
 }

@@ -1,3 +1,9 @@
+/**
+ * @file main.cpp
+ * @brief CLI
+ *
+ ***********************************************/
+
 #include <curl/curl.h>
 
 #include <ctime>
@@ -15,58 +21,78 @@
 #include "xcat.h"
 
 int main(int argc, char** argv) {
-    // variables storing the parsing result; initialized with their default values
-    enum class mode { info,
+    enum class mode { nodes,
+                      jobs,
                       state,
+                      queues
     };
-    mode selected = mode::info;
 
-    std::string loginPath = "";
-    bool help = false;
-    bool json = true;
-    std::string batchSystem;
-    std::string nodes = "";
-    std::string state = "";
+    mode selected;
+    bool help = false, json = true;
+    std::string batchSystem = "slurm", loginPath = "", nodes = "", state = "", jobs = "", queues = "";
+
     auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
                         clipp::option("--json").set(json) % "Output as json",
                         (clipp::option("-b", "--batch") & (clipp::required("slurm") | clipp::required("pbs"))) % "Batch System",
                         (clipp::option("-l", "--loginFile") & clipp::value("path", loginPath)) % "Path for login data");
 
-    auto infoOpt = (clipp::command("info").set(selected, mode::info), clipp::opt_value("nodes", nodes)) % "Get basic information for <nodes>";
-    auto stateOpt = (clipp::command("state").set(selected, mode::info), clipp::opt_value("nodes", nodes), clipp::opt_value("state", state)) % "Get/Set status for <nodes>";
+    auto nodesOpt = (clipp::command("nodes").set(selected, mode::nodes), clipp::opt_value("nodes", nodes)) % "Get node information [for <nodes>]";
+    auto stateOpt = (clipp::command("state").set(selected, mode::state), clipp::opt_value("nodes", nodes), clipp::opt_value("state", state)) % "Get/Set status [for <nodes>]";
+    auto jobsOpt = (clipp::command("jobs").set(selected, mode::jobs), clipp::opt_value("jobIDs", jobs)) % "Get job info [for <jobIDs>]";
+    auto queueOpt = (clipp::command("queues").set(selected, mode::queues), clipp::opt_value("queues", queues)) % "Get queue information [for <queues>]";
 
-    auto cli = ((infoOpt | stateOpt), generalOpts);
+    auto cli = ((nodesOpt | stateOpt | jobsOpt | queueOpt), generalOpts);
 
-    if (!clipp::parse(argc, argv, cli)) {
-        std::cout << "Invalid" << std::endl;
-        std::cout << make_man_page(cli, argv[0]) << '\n';
+    if (!clipp::parse(argc, argv, cli) || help) {
+        std::cout << make_man_page(cli, argv[0]) << std::endl;
         return 1;
     }
 
-    if (help) {
-        std::cout << clipp::make_man_page(cli, argv[0]);
-        return 0;
+    // TODO implement EITHER loginFile OR manualy specification of all login parameters (can be solved using groups)
+    if (!loginPath.length()) {
+        std::cout << "Please specify login file" << std::endl;
+        return 1;
     }
 
-    // TODO implement EITHER loginFile or manualy specification of all login parameters (can be solved using groups)
-    // if (!loginPath.length) {
-    //     std::cout << "Please specify login file" << std::endl;
-    //     return 1;
-    // }
+    std::cout << "Reading login data from " << loginPath << std::endl;
+    utils::loginData megwareLogin, xCatLogin, slurmLogin;
+    utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin);
 
-    // std::cout << "Reading login data from " << loginPath << std::endl;
-    // utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin);
+    CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
 
-    // ////// slurm
+    if (slurmSession.login() != 0) {
+        std::cerr << "Slurm Login failed on " << slurmLogin.host << ":" << slurmLogin.port << " failed" << std::endl;
+        return 1;
+    }
+    std::string output;
+    switch (selected) {
+        case mode::nodes: {
+            if (slurmSession.get_nodes(nodes, output, json) != 0)
+                return 1;
+            break;
+        }
+        // case mode::state: {
+        //     if (slurmSession.get_node_state(nodes, output, json) != 0)
+        //         return 1;
+        //     break;
+        // }
+        // case mode::jobs: {
+        //     if (slurmSession.get_jobs(nodes, output, json) != 0)
+        //         return 1;
+        //     break;
+        // }
+        // case mode::queues: {
+        //     if (slurmSession.get_jobs(nodes, output, json) != 0)
+        //         return 1;
+        //     break;
+        // }
+        default:
+            break;
+    }
 
-    // CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
+    // std::cout << output << std::endl;
 
-    // int errorCode = slurmSession.login();
-
-    // std::cout << "login error code: " << errorCode << std::endl;
-    // std::cout << slurmSession.get_nodes() << std::endl;
-
-    // slurmSession.logout();
+    slurmSession.logout();
 
     ////// xCat
 
@@ -86,38 +112,6 @@ int main(int argc, char** argv) {
     // xCat.reboot_node("cn1");
 
     // xCat.logout();
-
-    // Check command line arguments.
-    /*if (argc != 4)
-    {
-        std::cerr <<
-            "Usage: websocket-server-async <address> <port> <threads>\n" <<
-            "Example:\n" <<
-            "    websocket-server-async 0.0.0.0 8080 1\n";
-        return EXIT_FAILURE;
-    }
-    auto const address = net::ip::make_address(argv[1]);
-    auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
-    auto const threads = std::max<int>(1, std::atoi(argv[3]));
-
-    // The io_context is required for all I/O
-    net::io_context ioc{threads};
-
-    // Create and launch a listening port
-    std::make_shared<listener>(ioc, tcp::endpoint{address, port})->run();
-
-    // Run the I/O service on the requested number of threads
-    std::vector<std::thread> v;
-    v.reserve(threads - 1);
-    for(auto i = threads - 1; i > 0; --i)
-        v.emplace_back(
-        [&ioc]
-        {
-            ioc.run();
-        });
-    ioc.run();
-
-    return EXIT_SUCCESS;*/
 
     /****************** REST Tests ********************/
 
