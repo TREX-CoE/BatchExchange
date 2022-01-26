@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "utils.h"
+
 /**
  * @class CBatch
  * @brief Interface
@@ -21,11 +23,11 @@ class CBatch {
     virtual ~CBatch();
 
    protected:
-    virtual int get_jobs(int) = 0;
-    virtual int get_nodes(std::string, std::string&, bool) = 0;
-    virtual int get_queues(std::string) = 0;
-    virtual int get_node_state(std::string) = 0;
-    virtual int set_node_state(std::vector<std::string>, std::string) = 0;
+    virtual int get_jobs(std::string, std::string &) = 0;
+    virtual int get_nodes(std::string, std::string &) = 0;
+    virtual int get_queues(std::string, std::string &) = 0;
+    virtual int get_node_state(std::string, std::string &) = 0;
+    virtual int set_node_state(std::string, std::string) = 0;
 };
 
 #endif /* CBATCH_HPP */

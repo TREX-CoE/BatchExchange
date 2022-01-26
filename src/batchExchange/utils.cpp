@@ -6,9 +6,11 @@
 
 #include "utils.h"
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <string>
 
 /**
  * @brief Split string at delimiter
@@ -126,4 +128,9 @@ int utils::write_to_file(std::string path, const std::string &data) {
 void utils::erase_lines_from_start(std::string &data, int lineCount) {
     for (int i = 0; i < lineCount; i++)
         data.erase(0, data.find("\n") + 1);
+}
+
+void utils::to_lower(std::string& s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
 }

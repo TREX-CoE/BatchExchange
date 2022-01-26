@@ -1,3 +1,3 @@
-def setState(nodes, state):
-    print(nodes, state)
+def setState():
+    print("SETSTATE")
     return 200, {}

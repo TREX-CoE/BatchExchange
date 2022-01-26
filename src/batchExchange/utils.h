@@ -18,10 +18,42 @@ struct loginData {
     std::string port;
 };
 
+const std::vector<std::string> slurmNodeStates = {"alloc",
+                                                  "allocated",
+                                                  "cloud",
+                                                  "comp",
+                                                  "completing",
+                                                  "down",
+                                                  "drain",
+                                                  "drained",
+                                                  "draining",
+                                                  "fail",
+                                                  "future",
+                                                  "futr",
+                                                  "idle",
+                                                  "maint",
+                                                  "mix",
+                                                  "mixed",
+                                                  "no_respond",
+                                                  "npc",
+                                                  "perfctrs",
+                                                  "planned",
+                                                  "power_down",
+                                                  "powering_down",
+                                                  "powered_down",
+                                                  "powering_up",
+                                                  "reboot_issued",
+                                                  "reboot_requested",
+                                                  "resv",
+                                                  "reserved",
+                                                  "unk",
+                                                  "unknown"};
+
 void str_split(const std::string &input, const std::string delimiter, std::vector<std::string> &ret);
 void read_login_data(const std::string &path, utils::loginData &megware, utils::loginData &xcat, utils::loginData &slurm, bool ignoreHeader = true);
 int read_file_to_string(std::string, std::string &);
 int write_to_file(std::string, const std::string &);
 void erase_lines_from_start(std::string &, int);
+void to_lower(std::string &);
 }  // namespace utils
 #endif  // UTILS_H

@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
                         (clipp::option("-l", "--loginFile") & clipp::value("path", loginPath)) % "Path for login data");
 
     auto nodesOpt = (clipp::command("nodes").set(selected, mode::nodes), clipp::opt_value("nodes", nodes)) % "Get node information [for <nodes>]";
-    auto stateOpt = (clipp::command("state").set(selected, mode::state), clipp::opt_value("nodes", nodes), clipp::opt_value("state", state)) % "Get/Set status [for <nodes>]";
+    auto stateOpt = (clipp::command("state").set(selected, mode::state), clipp::opt_value("nodes", nodes) & clipp::opt_value("state", state)) % "Get/Set status [for <nodes>]";
     auto jobsOpt = (clipp::command("jobs").set(selected, mode::jobs), clipp::opt_value("jobIDs", jobs)) % "Get job info [for <jobIDs>]";
     auto queueOpt = (clipp::command("queues").set(selected, mode::queues), clipp::opt_value("queues", queues)) % "Get queue information [for <queues>]";
 
@@ -64,33 +64,39 @@ int main(int argc, char** argv) {
         std::cerr << "Slurm Login failed on " << slurmLogin.host << ":" << slurmLogin.port << " failed" << std::endl;
         return 1;
     }
+
     std::string output;
     switch (selected) {
         case mode::nodes: {
-            if (slurmSession.get_nodes(nodes, output, json) != 0)
+            if (slurmSession.get_nodes(nodes, output) != 0)
                 return 1;
             break;
         }
-        // case mode::state: {
-        //     if (slurmSession.get_node_state(nodes, output, json) != 0)
-        //         return 1;
-        //     break;
-        // }
-        // case mode::jobs: {
-        //     if (slurmSession.get_jobs(nodes, output, json) != 0)
-        //         return 1;
-        //     break;
-        // }
-        // case mode::queues: {
-        //     if (slurmSession.get_jobs(nodes, output, json) != 0)
-        //         return 1;
-        //     break;
-        // }
+        case mode::jobs: {
+            if (slurmSession.get_jobs(nodes, output) != 0)
+                return 1;
+            break;
+        }
+        case mode::queues: {
+            if (slurmSession.get_queues(nodes, output) != 0)
+                return 1;
+            break;
+        }
+        case mode::state: {
+            if (nodes.length() && state.length()) {
+                if (slurmSession.set_node_state(nodes, state) != 0)
+                    return 1;
+            } else {
+                if (slurmSession.get_node_state(nodes, output) != 0)
+                    return 1;
+            }
+            break;
+        }
         default:
             break;
     }
 
-    // std::cout << output << std::endl;
+    std::cout << output << std::endl;
 
     slurmSession.logout();
 
