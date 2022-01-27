@@ -7,7 +7,8 @@ function print_help {
     echo -e "-h|--help\tprints this"
     echo ""
     echo -e "-d|--dir\tpath for rpm packages"
-    echo -e "-e|--executor\t[docker|podman] podman is default value"
+    echo -e "-e|--executor\t[docker|podman] executer (default: podman)"
+    echo -e "--rm\tremove image after execution"
 }
 
 if [[ $1 == "-h" || $1 == "--help" ]]; then

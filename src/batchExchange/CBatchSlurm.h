@@ -28,7 +28,7 @@ class CBatchSlurm : public CBatch {
     int get_nodes(std::string, std::string &);
     int get_queues(std::string, std::string &);
     int get_node_state(std::string, std::string &);
-    int set_node_state(std::string, std::string);
+    int set_node_state(const std::vector<std::string> &, std::string);
 
    private:
     int get(std::string path, std::string &output);

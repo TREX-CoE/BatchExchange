@@ -1,0 +1,13 @@
+[Unit]
+Description=Docker container serving TREX Rest Server
+After=network.target
+
+[Service]
+Environment="TREX_PORT=7100"
+ExecStart=podman run --rm -e "PORT=${TREX_PORT}" --expose=${TREX_PORT} -p ${TREX_PORT}:${TREX_PORT} --name trex_server_container --network host trex_server
+ExecStop=podman stop -t 10 trex_server_container
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

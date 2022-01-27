@@ -160,15 +160,15 @@ int CBatchSlurm::get_node_state(std::string nodes, std::string& output) {
     return 0;
 }
 
-int CBatchSlurm::set_node_state(std::string nodes, std::string state) {
-    if (!nodes.length()) {
+int CBatchSlurm::set_node_state(const std::vector<std::string>& nodeList, std::string state) {
+    if (!nodeList.size()) {
         std::cerr << "Error - Missing nodes" << std::endl;
         return 1;
     }
 
     utils::to_lower(state);
     if (!(std::find(utils::slurmNodeStates.begin(), utils::slurmNodeStates.end(), state) != utils::slurmNodeStates.end())) {
-        std::cerr << "Error - Invalid node state" << std::endl;
+        std::cerr << "Error - " << state << " is not a valid node state" << std::endl;
         return 1;
     }
 
@@ -176,17 +176,25 @@ int CBatchSlurm::set_node_state(std::string nodes, std::string state) {
     auto& allocator = doc.GetAllocator();
     doc.SetObject();
 
-    // doc.AddMember(
-    //     rapidjson::Value("state", allocator).Move(),
-    //     rapidjson::Value(state, allocator).Move(),
-    //     allocator);
+    doc.AddMember(
+        rapidjson::StringRef("state"),
+        rapidjson::StringRef(state.c_str()),
+        allocator);
+
+    rapidjson::Value nodes(rapidjson::kArrayType);
+
+    for (const auto& v : nodeList)
+        nodes.PushBack(rapidjson::Value{}.SetString(v.c_str(), v.length(), allocator), allocator);
+
+    doc.AddMember("nodes", nodes, allocator);
 
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     doc.Accept(writer);
 
     std::string postData = buffer.GetString();
-
+    std::cout << "POSTDATA\n"
+              << postData << std::endl;
     std::string header, response;
     const std::string path = "/slurm/nodes/state";
     int res = session->post("/slurm/nodes/state", postData, response, header);

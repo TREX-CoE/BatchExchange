@@ -65,6 +65,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    std::vector<std::string> nodeList;
+
+    // TODO handle brace notation and node1,ibp*
+    utils::str_split(nodes, ",", nodeList);
+
     std::string output;
     switch (selected) {
         case mode::nodes: {
@@ -84,7 +89,7 @@ int main(int argc, char** argv) {
         }
         case mode::state: {
             if (nodes.length() && state.length()) {
-                if (slurmSession.set_node_state(nodes, state) != 0)
+                if (slurmSession.set_node_state(nodeList, state) != 0)
                     return 1;
             } else {
                 if (slurmSession.get_node_state(nodes, output) != 0)

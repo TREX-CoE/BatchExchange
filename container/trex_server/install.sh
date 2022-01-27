@@ -1,0 +1,42 @@
+#!/bin/bash
+
+if [ "$EUID" -ne 0 ]
+  then echo "This script must be run as root!"
+  exit
+fi
+
+function print_help {
+    echo "Usage: install.sh <OPTIONS>"
+    echo ""
+    echo "OPTIONS:"
+    echo -e "-h|--help\tprints this"
+    echo ""
+    echo -e "-e|--executor\t[docker|podman] executer (default: podman)"
+}
+
+SERVICE_NAME="trex_server"
+EXECUTOR="podman"
+while [[ $# -gt 1 ]]; do
+    key="$1"
+    echo $key
+    case $key in
+        -h|--help)
+        print_help
+        exit 0
+        ;;
+        -e|--executor)
+        EXECUTOR="$2"
+        shift
+        shift
+        ;;
+    esac
+done
+
+INSTALL_PATH="/usr/local/share/${SERVICE_NAME}/container"
+mkdir -p $INSTALL_PATH
+
+${EXECUTOR} build --network=host --no-cache -t ${SERVICE_NAME}_container -f ./Dockerfile ../../
+
+cp 	${SERVICE_NAME}.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now ${SERVICE_NAME}
