@@ -42,7 +42,7 @@ done
 INSTALL_PATH="/usr/local/share/${SERVICE_NAME}/container"
 mkdir -p $INSTALL_PATH
 
-${EXECUTOR} build --network=host --build-arg PORT=${PORT} --no-cache -t ${SERVICE_NAME}_image -f ./Dockerfile ../../
+${EXECUTOR} build --build-arg PORT=${PORT} --no-cache -t ${SERVICE_NAME} -f ./Dockerfile ../../
 
 cp 	${SERVICE_NAME}.service /etc/systemd/system/
 systemctl daemon-reload
