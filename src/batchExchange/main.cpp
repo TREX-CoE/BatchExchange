@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 
     mode selected;
     bool help = false, json = true;
-    std::string batchSystem = "slurm", loginPath = "", nodes = "", state = "", jobs = "", queues = "";
+    std::string batchSystem = "slurm", loginPath = "", nodes = "", state = "", jobs = "", queues = "", reason = "";
 
     auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
                         clipp::option("--json").set(json) % "Output as json",
@@ -65,34 +65,36 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::vector<std::string> nodeList;
+    std::vector<std::string> nodeList, jobList, queueList;
 
     // TODO handle brace notation and node1,ibp*
     utils::str_split(nodes, ",", nodeList);
+    utils::str_split(queues, ",", queueList);
+    utils::str_split(jobs, ",", jobList);
 
     std::string output;
     switch (selected) {
         case mode::nodes: {
-            if (slurmSession.get_nodes(nodes, output) != 0)
+            if (slurmSession.get_nodes(nodeList, output) != 0)
                 return 1;
             break;
         }
         case mode::jobs: {
-            if (slurmSession.get_jobs(nodes, output) != 0)
+            if (slurmSession.get_jobs(jobList, output) != 0)
                 return 1;
             break;
         }
         case mode::queues: {
-            if (slurmSession.get_queues(nodes, output) != 0)
+            if (slurmSession.get_queues(queueList, output) != 0)
                 return 1;
             break;
         }
         case mode::state: {
             if (nodes.length() && state.length()) {
-                if (slurmSession.set_node_state(nodeList, state) != 0)
+                if (slurmSession.set_node_state(nodeList, state, reason) != 0)
                     return 1;
             } else {
-                if (slurmSession.get_node_state(nodes, output) != 0)
+                if (slurmSession.get_node_state(nodeList, output) != 0)
                     return 1;
             }
             break;

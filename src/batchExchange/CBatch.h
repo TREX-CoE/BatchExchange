@@ -23,11 +23,11 @@ class CBatch {
     virtual ~CBatch();
 
    protected:
-    virtual int get_jobs(std::string, std::string &) = 0;
-    virtual int get_nodes(std::string, std::string &) = 0;
-    virtual int get_queues(std::string, std::string &) = 0;
-    virtual int get_node_state(std::string, std::string &) = 0;
-    virtual int set_node_state(const std::vector<std::string> &, std::string) = 0;
+    virtual int get_jobs(const std::vector<std::string> &, std::string &) = 0;
+    virtual int get_nodes(const std::vector<std::string> &, std::string &) = 0;
+    virtual int get_queues(const std::vector<std::string> &, std::string &) = 0;
+    virtual int get_node_state(const std::vector<std::string> &, std::string &) = 0;
+    virtual int set_node_state(const std::vector<std::string> &, std::string, std::string) = 0;
 };
 
 #endif /* CBATCH_HPP */

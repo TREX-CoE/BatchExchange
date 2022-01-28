@@ -2,6 +2,9 @@
  * @file CBatchSlurm.h
  * @brief CBatch Slurm implementation
  *
+ * Slurm currently does not provide a way to query multiple specified resources with a single call.
+ * Therefore the whole collection is queried and then filtered.
+ *
  ***********************************************/
 
 #include "CBatchSlurm.h"
@@ -89,14 +92,12 @@ int CBatchSlurm::get(std::string path, std::string& output) {
 /**
  * @brief Get job information
  *
- * Slurm currently does not provide a way to query multiple specified jobs with a single call.
- * Therefore all jobs are queried and then filtered.
- * @param jobIds Job Id(s)
+ * @param jobs Job Id(s)
  * @param output Reference for output
  * @return 0 Success
  * @return 1 Error
  */
-int CBatchSlurm::get_jobs(std::string jobIds, std::string& output) {
+int CBatchSlurm::get_jobs(const std::vector<std::string>& jobs, std::string& output) {
     // TODO implement filter
     return get("/slurm/" + apiVersion + "/jobs", output);
 }
@@ -104,14 +105,12 @@ int CBatchSlurm::get_jobs(std::string jobIds, std::string& output) {
 /**
  * @brief Get node information
  *
- * Slurm currently does not provide a way to query multiple specified nodes with a single call.
- * Therefore all nodes are queried and then filtered.
- * @param jobIds Nodes(s)
+ * @param nodes Nodes(s)
  * @param output Reference for output
  * @return 0 Success
  * @return 1 Error
  */
-int CBatchSlurm::get_nodes(std::string nodes, std::string& output) {
+int CBatchSlurm::get_nodes(const std::vector<std::string>& nodes, std::string& output) {
     // TODO implement filter
     return get("/slurm/" + apiVersion + "/nodes", output);
 }
@@ -119,19 +118,25 @@ int CBatchSlurm::get_nodes(std::string nodes, std::string& output) {
 /**
  * @brief Get queue information
  *
- * Slurm currently does not provide a way to query multiple specified queues with a single call.
- * Therefore all queues are queried and then filtered.
  * @param queues Queue(s)
  * @param output Reference for output
  * @return 0 Success
  * @return 1 Error
  */
-int CBatchSlurm::get_queues(std::string queues, std::string& output) {
+int CBatchSlurm::get_queues(const std::vector<std::string>& queues, std::string& output) {
     // TODO implement filter
     return get("/slurm/" + apiVersion + "/partitions", output);
 }
 
-int CBatchSlurm::get_node_state(std::string nodes, std::string& output) {
+/**
+ * @brief Get node states
+ *
+ * @param nodes Nodes(s)
+ * @param output Reference for output
+ * @return 0 Success
+ * @return 1 Error
+ */
+int CBatchSlurm::get_node_state(const std::vector<std::string>& nodes, std::string& output) {
     std::string nodeData;
     if (get_nodes(nodes, nodeData) != 0)
         return 1;
@@ -157,18 +162,28 @@ int CBatchSlurm::get_node_state(std::string nodes, std::string& output) {
     stateDoc.Accept(writer);
 
     output = buffer.GetString();
+    // TODO implement filter
     return 0;
 }
 
-int CBatchSlurm::set_node_state(const std::vector<std::string>& nodeList, std::string state) {
-    if (!nodeList.size()) {
+/**
+ * @brief Set node information
+ *
+ * @param queues nodes list of nodes
+ * @param state State to be set
+ * @param reason Reason for state change
+ * @return 0 Success
+ * @return 1 Error
+ */
+int CBatchSlurm::set_node_state(const std::vector<std::string>& nodes, std::string state, std::string reason) {
+    if (!nodes.size()) {
         std::cerr << "Error - Missing nodes" << std::endl;
         return 1;
     }
 
     utils::to_lower(state);
     if (!(std::find(utils::slurmNodeStates.begin(), utils::slurmNodeStates.end(), state) != utils::slurmNodeStates.end())) {
-        std::cerr << "Error - " << state << " is not a valid node state" << std::endl;
+        std::cerr << "Error - '" << state << "' is not a valid state option [" << utils::joinVector(utils::slurmNodeStates, "|") << "]" << std::endl;
         return 1;
     }
 
@@ -181,12 +196,17 @@ int CBatchSlurm::set_node_state(const std::vector<std::string>& nodeList, std::s
         rapidjson::StringRef(state.c_str()),
         allocator);
 
-    rapidjson::Value nodes(rapidjson::kArrayType);
+    doc.AddMember(
+        rapidjson::StringRef("reason"),
+        rapidjson::StringRef(reason.c_str()),
+        allocator);
 
-    for (const auto& v : nodeList)
-        nodes.PushBack(rapidjson::Value{}.SetString(v.c_str(), v.length(), allocator), allocator);
+    rapidjson::Value nodeList(rapidjson::kArrayType);
 
-    doc.AddMember("nodes", nodes, allocator);
+    for (const auto& v : nodes)
+        nodeList.PushBack(rapidjson::Value{}.SetString(v.c_str(), v.length(), allocator), allocator);
+
+    doc.AddMember("nodes", nodeList, allocator);
 
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -197,13 +217,10 @@ int CBatchSlurm::set_node_state(const std::vector<std::string>& nodeList, std::s
               << postData << std::endl;
     std::string header, response;
     const std::string path = "/slurm/nodes/state";
-    int res = session->post("/slurm/nodes/state", postData, response, header);
+    int res = session->post(path, postData, response, header);
     if (res != 0 && res != 200) {
         std::cerr << "Error calling POST" << path << "(" << res << ")" << std::endl;
         return 1;
     }
-
-    // custom webserver
-    // [POST] /v1/slurm/state?nodes=a,b
     return 0;
 }

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <string>
 
@@ -130,7 +131,17 @@ void utils::erase_lines_from_start(std::string &data, int lineCount) {
         data.erase(0, data.find("\n") + 1);
 }
 
-void utils::to_lower(std::string& s) {
+void utils::to_lower(std::string &s) {
     std::transform(s.begin(), s.end(), s.begin(),
                    [](unsigned char c) { return std::tolower(c); });
+}
+
+std::string utils::joinVector(const std::vector<std::string> &vec, const std::string delim) {
+    std::string ret;
+    for (const auto &s : vec) {
+        if (!ret.empty())
+            ret += delim;
+        ret += s;
+    }
+    return ret;
 }

@@ -43,39 +43,22 @@ components:
         nodes:
           type: array
         state:
-          $ref: "#/components/schemas/EnumSlurmStates"
-    EnumSlurmStates:
+          $ref: "#/components/schemas/EnumSlurmScontrolStateOptions"
+        reason:
+          type: string
+    EnumSlurmScontrolStateOptions:
       type: string
       enum:
-        - alloc
-        - allocated
-        - cloud
-        - comp
-        - completing
-        - down-drain
-        - drained
-        - draining
+        - cancel_reboot
+        - down
+        - drain
         - fail
         - future
-        - futr
-        - idle
-        - maint
-        - mix
-        - mixed
-        - no_respond
-        - npc
-        - perfctrs
-        - planned
+        - resume
+        - noresp
         - power_down
-        - powering_down
-        - powered_down
-        - powering_up
-        - reboot_issued
-        - reboot_requested
-        - resv
-        - reserved
-        - unk
-        - unknown
+        - power_up
+        - undrain
   parameters:
     NodeList:
       name: nodes
@@ -87,6 +70,6 @@ components:
       name: state
       in: query
       schema:
-        $ref: "#/components/schemas/EnumSlurmStates"
+        $ref: "#/components/schemas/EnumSlurmScontrolStateOptions"
       description: State to be set  
           

@@ -24,11 +24,11 @@ class CBatchSlurm : public CBatch {
     virtual ~CBatchSlurm();
     int login();
     int logout();
-    int get_jobs(std::string, std::string &);
-    int get_nodes(std::string, std::string &);
-    int get_queues(std::string, std::string &);
-    int get_node_state(std::string, std::string &);
-    int set_node_state(const std::vector<std::string> &, std::string);
+    int get_jobs(const std::vector<std::string> &, std::string &);
+    int get_nodes(const std::vector<std::string> &, std::string &);
+    int get_queues(const std::vector<std::string> &, std::string &);
+    int get_node_state(const std::vector<std::string> &, std::string &);
+    int set_node_state(const std::vector<std::string> &, std::string, std::string);
 
    private:
     int get(std::string path, std::string &output);
