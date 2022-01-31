@@ -339,7 +339,6 @@ void RestClient::rest_helper_pre(
     if (httpMethod.compare("POST") == 0 || httpMethod.compare("PATCH") == 0 || httpMethod.compare("PUT") == 0) {
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
         curl_easy_setopt(curl, CURLOPT_POST, 1);
-        // remove body from previous requests if request type doesn't allow body
     } else {
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, nullptr);
         curl_easy_setopt(curl, CURLOPT_POST, 0);
@@ -353,31 +352,25 @@ void RestClient::rest_helper_pre(
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, this->sslVerify);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, this->sslVerify);
 
+    // Remove a header curl would otherwise add by itself
+    this->chunk = curl_slist_append(this->chunk, "Content-Type: application/json");
+
     switch (this->authType) {
         case SESSION_TOKEN_BASIC_AUTH:
-            // Remove a header curl would otherwise add by itself
-            this->chunk = curl_slist_append(this->chunk, "Content-Type: application/json");
             this->chunk = curl_slist_append(this->chunk, ("Authorization: Basic " + base64_encode(this->username + ":" + this->password)).c_str());
-            // set our custom set of headers
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, this->chunk);
             break;
         case SESSION_TOKEN_MEGWARE:
-            // Remove a header curl would otherwise add by itself
-            this->chunk = curl_slist_append(this->chunk, "Content-Type: application/json");
             this->chunk = curl_slist_append(this->chunk, ("Authorization: Bearer " + httpSession->get_access_token()).c_str());
-            // set our custom set of headers
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, this->chunk);
             break;
         case SESSION_TOKEN_XCAT:
-            // Remove a header curl would otherwise add by itself
-            this->chunk = curl_slist_append(this->chunk, "Content-Type: application/json");
             this->chunk = curl_slist_append(this->chunk, ("X-Auth-Token:" + httpSession->get_access_token()).c_str());
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, this->chunk);
             break;
-
         default:
             break;
     }
+
+    // set our custom set of headers
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, this->chunk);
 }
 
 /**

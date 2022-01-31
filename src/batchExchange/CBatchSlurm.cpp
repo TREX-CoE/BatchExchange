@@ -216,11 +216,13 @@ int CBatchSlurm::set_node_state(const std::vector<std::string>& nodes, std::stri
     std::cout << "POSTDATA\n"
               << postData << std::endl;
     std::string header, response;
-    const std::string path = "/slurm/nodes/state";
+    const std::string path = "v1/slurm/nodes/state";
     int res = session->post(path, postData, response, header);
     if (res != 0 && res != 200) {
-        std::cerr << "Error calling POST" << path << "(" << res << ")" << std::endl;
+        std::cerr << "Error calling POST " << path << "(" << res << ")" << std::endl;
         return 1;
     }
+
+    std::cout << header << response << std::endl;
     return 0;
 }
