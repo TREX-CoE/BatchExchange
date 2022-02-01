@@ -46,19 +46,49 @@ components:
           $ref: "#/components/schemas/EnumSlurmScontrolStateOptions"
         reason:
           type: string
+    # According to the Slurm documentation only a subset of the below listed states can actually be set via scontrol.
+    # However, the documentation differs substantially from the actual behaviour of scontrol.
+    # Therefore all possible node states are allowed for now.
     EnumSlurmScontrolStateOptions:
       type: string
       enum:
+        - alloc
+        - allocated
         - cancel_reboot
+        - cloud
+        - comp
+        - completing
         - down
+        - down-drain
         - drain
+        - drained
+        - draining
         - fail
+        - futr
         - future
-        - resume
+        - idle
+        - maint
+        - mix
+        - mixed
+        - no_respond
         - noresp
+        - npc
+        - perfctrs
+        - planned
         - power_down
         - power_up
+        - powered_down
+        - powering_down
+        - powering_up
+        - reboot_issued
+        - reboot_requested
+        - reserved
+        - resume
+        - resv
         - undrain
+        - unk
+        - unknown
+
   parameters:
     NodeList:
       name: nodes

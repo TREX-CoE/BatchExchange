@@ -131,12 +131,24 @@ void utils::erase_lines_from_start(std::string &data, int lineCount) {
         data.erase(0, data.find("\n") + 1);
 }
 
+/**
+ * @brief Converts string to lowercase
+ *
+ * @param s String reference to be transformed
+ */
 void utils::to_lower(std::string &s) {
     std::transform(s.begin(), s.end(), s.begin(),
                    [](unsigned char c) { return std::tolower(c); });
 }
 
-std::string utils::joinVector(const std::vector<std::string> &vec, const std::string delim) {
+/**
+ * @brief Join all elements of a string-vector to a single string with delimiter
+ *
+ * @param vec Vector to be joined
+ * @param delim Delimiter
+ * @return joined string
+ */
+std::string utils::join_vector_to_string(const std::vector<std::string> &vec, const std::string delim) {
     std::string ret;
     for (const auto &s : vec) {
         if (!ret.empty())

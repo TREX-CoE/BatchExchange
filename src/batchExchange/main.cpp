@@ -37,14 +37,17 @@ int main(int argc, char** argv) {
                         (clipp::option("-l", "--loginFile") & clipp::value("path", loginPath)) % "Path for login data");
 
     auto nodesOpt = (clipp::command("nodes").set(selected, mode::nodes), clipp::opt_value("nodes", nodes)) % "Get node information [for <nodes>]";
-    auto stateOpt = (clipp::command("state").set(selected, mode::state), clipp::opt_value("nodes", nodes) & clipp::opt_value("state", state)) % "Get/Set status [for <nodes>]";
+    auto stateOpt = (clipp::command("state").set(selected, mode::state), clipp::opt_value("nodes", nodes) & clipp::opt_value("state", state) & (clipp::option("--reason") & clipp::value("reason", reason))) % "Get/Set status [for <nodes>]";
     auto jobsOpt = (clipp::command("jobs").set(selected, mode::jobs), clipp::opt_value("jobIDs", jobs)) % "Get job info [for <jobIDs>]";
     auto queueOpt = (clipp::command("queues").set(selected, mode::queues), clipp::opt_value("queues", queues)) % "Get queue information [for <queues>]";
-
-    auto cli = ((nodesOpt | stateOpt | jobsOpt | queueOpt), generalOpts);
+    auto cli = ("COMMANDS\n" % (nodesOpt | stateOpt | jobsOpt | queueOpt), "OPTIONS\n" % generalOpts);
 
     if (!clipp::parse(argc, argv, cli) || help) {
-        std::cout << make_man_page(cli, argv[0]) << std::endl;
+        // std::cout << make_man_page(cli, argv[0]) << std::endl;
+        std::cout << "USAGE:\n"
+                  << clipp::usage_lines(cli, argv[0]) << "\n\n\n"
+                  << "PARAMETERS:\n\n"
+                  << clipp::documentation(cli) << std::endl;
         return 1;
     }
 
@@ -67,7 +70,7 @@ int main(int argc, char** argv) {
 
     std::vector<std::string> nodeList, jobList, queueList;
 
-    // TODO handle brace notation and node1,ibp*
+    // TODO handle brace notation and wildcards
     utils::str_split(nodes, ",", nodeList);
     utils::str_split(queues, ",", queueList);
     utils::str_split(jobs, ",", jobList);
