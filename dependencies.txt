@@ -1,3 +1,2 @@
 libcurl
 rapidjson
-libboost
