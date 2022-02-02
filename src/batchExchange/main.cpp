@@ -36,10 +36,10 @@ int main(int argc, char** argv) {
                         (clipp::option("-b", "--batch") & (clipp::required("slurm") | clipp::required("pbs"))) % "Batch System",
                         (clipp::option("-l", "--loginFile") & clipp::value("path", loginPath)) % "Path for login data");
 
-    auto nodesOpt = (clipp::command("nodes").set(selected, mode::nodes), clipp::opt_value("nodes", nodes)) % "Get node information [for <nodes>]";
-    auto stateOpt = (clipp::command("state").set(selected, mode::state), clipp::opt_value("nodes", nodes) & clipp::opt_value("state", state) & (clipp::option("--reason") & clipp::value("reason", reason))) % "Get/Set status [for <nodes>]";
-    auto jobsOpt = (clipp::command("jobs").set(selected, mode::jobs), clipp::opt_value("jobIDs", jobs)) % "Get job info [for <jobIDs>]";
-    auto queueOpt = (clipp::command("queues").set(selected, mode::queues), clipp::opt_value("queues", queues)) % "Get queue information [for <queues>]";
+    auto nodesOpt = (clipp::command("nodes").set(selected, mode::nodes), clipp::opt_value("nodes", nodes)) % "Get node information [of <nodes>]";
+    auto jobsOpt = (clipp::command("jobs").set(selected, mode::jobs), clipp::opt_value("jobIDs", jobs)) % "Get job info [of <jobIDs>]";
+    auto stateOpt = (clipp::command("state").set(selected, mode::state), (clipp::opt_value("nodes", nodes), (clipp::option("--state") & clipp::value("state", state), (clipp::option("--reason") & clipp::value("reason", reason))))) % "Get/Set state [of <nodes>]";
+    auto queueOpt = (clipp::command("queues").set(selected, mode::queues), clipp::opt_value("queues", queues)) % "Get queue information [of <queues>]";
     auto cli = ("COMMANDS\n" % (nodesOpt | stateOpt | jobsOpt | queueOpt), "OPTIONS\n" % generalOpts);
 
     if (!clipp::parse(argc, argv, cli) || help) {
@@ -93,9 +93,17 @@ int main(int argc, char** argv) {
             break;
         }
         case mode::state: {
+            // TODO check for reason for certain states
             if (nodes.length() && state.length()) {
                 if (slurmSession.set_node_state(nodeList, state, reason) != 0)
                     return 1;
+                else {
+                    std::cout << "State for '" << nodes << "' set to '" << state << "'";
+                    if (reason.length())
+                        std::cout << "(" << reason << ")";
+                    std::cout << std::endl;
+                    return 0;
+                }
             } else {
                 if (slurmSession.get_node_state(nodeList, output) != 0)
                     return 1;

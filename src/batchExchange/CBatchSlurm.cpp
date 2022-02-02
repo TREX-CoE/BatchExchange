@@ -71,9 +71,8 @@ int CBatchSlurm::logout() {
  * @return 0 No errors
  * @return 1 Errors found
  */
-int CBatchSlurm::check_errors(std::string& o) {
+int CBatchSlurm::check_errors(const std::string& o) {
     rapidjson::Document d;
-
     if (d.Parse(o.c_str()).HasParseError()) {
         std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
         return 1;
@@ -122,7 +121,7 @@ int CBatchSlurm::filter_output(const std::vector<std::string>& filter, const std
         for (rapidjson::SizeType i = 0; i < nodeEntries.Size(); i++) {
             if (nodeEntries[i].HasMember(identifier.c_str())) {
                 std::string name = nodeEntries[i][identifier.c_str()].GetString();
-                if (utils::vector_contains(filter, name))
+                if (!filter.size() || utils::vector_contains(filter, name))
                     fd.PushBack(nodeEntries[i].GetObject(), allocator);
             }
         }
@@ -211,7 +210,6 @@ int CBatchSlurm::get_jobs(const std::vector<std::string>& filter, std::string& o
  */
 int CBatchSlurm::get_nodes(const std::vector<std::string>& filter, std::string& output) {
     std::string response;
-
     if (get("/slurm/" + apiVersion + "/nodes", response) != 0)
         return 1;
 
@@ -260,14 +258,12 @@ int CBatchSlurm::get_node_state(const std::vector<std::string>& filter, std::str
     stateDoc.SetObject();
     doc.Parse(nodeData.c_str());
 
-    if (doc.HasMember("nodes")) {
-        for (auto& v : doc["nodes"].GetArray()) {
-            if (!v.HasMember("state") || !v.HasMember("hostname"))
-                continue;
-            stateDoc.AddMember(rapidjson::Value(v["hostname"].GetString(), allocator).Move(),
-                               rapidjson::Value(v["state"].GetString(), allocator).Move(),
-                               allocator);
-        }
+    for (auto& v : doc.GetArray()) {
+        if (!v.HasMember("state") || !v.HasMember("hostname"))
+            continue;
+        stateDoc.AddMember(rapidjson::Value(v["hostname"].GetString(), allocator).Move(),
+                           rapidjson::Value(v["state"].GetString(), allocator).Move(),
+                           allocator);
     }
 
     rapidjson::StringBuffer buffer;

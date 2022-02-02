@@ -39,7 +39,7 @@ class CBatchSlurm : public CBatch {
     void set_user_credentials(std::string username, std::string password);
     void set_host_config(std::string host, std::string port);
     void ssl_verify(bool sslVerify);
-    int check_errors(std::string &);
+    int check_errors(const std::string &);
     int filter_output(const std::vector<std::string> &, const std::string &, std::string &, std::string, std::string);
 
     RestClient *openapiSession;
