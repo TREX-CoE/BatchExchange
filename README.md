@@ -16,8 +16,8 @@ make -j $(nproc)
 ```
 USAGE:
         ./TREX nodes [<nodes>] [-h] [--json] [-b (slurm|pbs)] [-l <path>]
-        ./TREX state [<nodes> [<state>] [--reason <reason>]] [-h] [--json] [-b (slurm|pbs)] [-l
-               <path>]
+        ./TREX state [<nodes>] [--state <state>] [--reason <reason>] [-h] [--json] [-b (slurm|pbs)]
+               [-l <path>]
 
         ./TREX jobs [<jobIDs>] [-h] [--json] [-b (slurm|pbs)] [-l <path>]
         ./TREX queues [<queues>] [-h] [--json] [-b (slurm|pbs)] [-l <path>]
@@ -28,16 +28,16 @@ PARAMETERS:
         COMMANDS
 
             nodes <nodes>
-                    Get node information [for <nodes>]
+                    Get node information [of <nodes>]
 
-            state [<nodes> [<state>] [--reason <reason>]]
-                    Get/Set status [for <nodes>]
+            state <nodes> [--state <state>] [--reason <reason>]
+                    Get/Set state [of <nodes>]
 
             jobs <jobIDs>
-                    Get job info [for <jobIDs>]
+                    Get job info [of <jobIDs>]
 
             queues <queues>
-                    Get queue information [for <queues>]
+                    Get queue information [of <queues>]
 
         OPTIONS
 
