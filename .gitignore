@@ -1,12 +1,13 @@
 # exclude editor and build stuff
 .vscode/
 venv/
+__pycache__/
 cbuild/
 build/
 
 # executable/object files
 *.o
-restClient
+TREX
 
 # loginfile
 testLogins

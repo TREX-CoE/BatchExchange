@@ -1,0 +1,6 @@
+v0.1.0 - 2022-02-
+
+- add script to automatically build slurm rpms
+- use cmake for building process
+- add CLI
+- implement interaction with slurm api + filtering of results

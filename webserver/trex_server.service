@@ -1,0 +1,16 @@
+[Unit]
+Description=TREX Rest Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+Environment="TREX_PORT=7100"
+WorkingDirectory=/usr/local/share/trex_server
+ExecStart=/usr/local/share/trex_server/start_trex_server.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

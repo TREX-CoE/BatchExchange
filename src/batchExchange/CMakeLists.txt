@@ -1,19 +1,22 @@
 set(TREX_LIB_SRC
     base64.cpp
+	CBatch.cpp
+	CBatchSlurm.cpp
     httpSession.cpp
     restClient.cpp
-    slurm.cpp
     utils.cpp
     xcat.cpp
 )
 
 set(TREX_LIB_HDR
     base64.h
+	CBatch.h
+	CBatchSlurm.h
+	clipp.h
     curlHelper.h
     httpSession.h
     restClient.h
     sessionTokenTypes.h
-    slurm.h
     utils.h
     xcat.h
 )
