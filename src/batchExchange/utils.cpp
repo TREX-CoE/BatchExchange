@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <regex>
 #include <sstream>
 #include <string>
 
@@ -34,6 +35,69 @@ void utils::str_split(const std::string &input, const std::string delimiter, std
     if (posStartSearch < input.length()) {
         ret.push_back(input.substr(posStartSearch));
     }
+}
+
+void utils::str_extract_regex_occurances(std::string input, const std::string regex, std::vector<std::string> &ret) {
+    std::regex rgx(regex);
+    std::smatch res;
+
+    while (std::regex_search(input, res, rgx)) {
+        ret.push_back(res[0]);
+        input = res.suffix();
+    }
+}
+
+bool utils::is_number(const std::string &s) {
+    return s.find_first_not_of("0123456789") == std::string::npos;
+}
+
+void utils::decode_brace(const std::string &input, std::vector<std::string> &ret) {
+    std::vector<std::string> split;
+    utils::str_extract_regex_occurances(input, "[a-zA-Z][a-zA-Z0-9]+(\[[0-9,-]*\])?[a-zA-Z0-9]*", split);
+
+    for (auto &v : split) {
+        std::cout << v << std::endl;
+        size_t braceStart = v.find_first_of("[");
+        size_t braceEnd = v.find_first_of("]");
+        ssize_t braceContentLen = braceEnd - braceStart - 1;
+
+        if (braceStart != std::string::npos && braceEnd != std::string::npos && braceStart < braceEnd && braceContentLen > 0) {
+            std::string prefix = v.substr(0, braceStart);
+            std::string braceContent = v.substr(braceStart + 1, braceContentLen);
+            std::string suffix = v.substr(braceEnd + 1, v.length() - braceEnd);
+
+            std::vector<std::string> braceList;
+            utils::str_split(braceContent, ",", braceList);
+            std::vector<std::string> expanded;
+            for (auto &b : braceList) {
+                if (utils::is_number(b)) {
+                    expanded.push_back(b);
+                } else {
+                    std::vector<std::string> range;
+                    utils::str_split(b, "-", range);
+                    if (range.size() == 2 && utils::is_number(range[0]) && utils::is_number(range[1])) {
+                        int start = std::stoi(range[0]);
+                        int stop = std::stoi(range[1]);
+                        if (stop < start) {
+                            int tmp = start;
+                            start = stop;
+                            stop = tmp;
+                        }
+                        for (int i = start; i <= stop; i++) {
+                            expanded.push_back(std::to_string(i));
+                        }
+                    }
+                }
+                for (auto &e : expanded) {
+                    ret.push_back(prefix + e + suffix);
+                }
+            }
+
+        } else {
+            ret.push_back(v);
+        }
+    }
+    return;
 }
 
 /**
