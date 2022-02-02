@@ -34,7 +34,7 @@ class RestClient {
 
     void rest_helper_pre(
         const std::string httpMethod,
-        const std::string restPath,
+        std::string restPath,
         std::string &response,
         std::string &header,
         const std::string &postData);
@@ -54,11 +54,11 @@ class RestClient {
     void useragent(const std::string &useragent);
 
     // REST-calls
-    int get(std::string restPath, std::string &response, std::string &header);
-    int post(std::string restPath, const std::string &postData, std::string &response, std::string &header);
-    int del(std::string restPath, std::string &response, std::string &header);
-    int patch(std::string restPath, const std::string &postData, std::string &response, std::string &header);
-    int put(std::string restPath, const std::string &postData, std::string &response, std::string &header);
+    int get(const std::string &restPath, std::string &response, std::string &header);
+    int post(const std::string &restPath, const std::string &postData, std::string &response, std::string &header);
+    int del(const std::string &restPath, std::string &response, std::string &header);
+    int patch(const std::string &restPath, const std::string &postData, std::string &response, std::string &header);
+    int put(const std::string &restPath, const std::string &postData, std::string &response, std::string &header);
 
     // information about last request
     long get_last_http_code();

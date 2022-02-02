@@ -181,7 +181,7 @@ int RestClient::logout() {
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::get(const std::string restPath, std::string &response, std::string &header) {
+int RestClient::get(const std::string &restPath, std::string &response, std::string &header) {
     if (!curl)
         return -1;
 
@@ -207,7 +207,7 @@ int RestClient::get(const std::string restPath, std::string &response, std::stri
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::post(const std::string restPath, const std::string &postData, std::string &response, std::string &header) {
+int RestClient::post(const std::string &restPath, const std::string &postData, std::string &response, std::string &header) {
     if (!curl) {
         return -1;
     }
@@ -234,7 +234,7 @@ int RestClient::post(const std::string restPath, const std::string &postData, st
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::del(const std::string restPath, std::string &response, std::string &header) {
+int RestClient::del(const std::string &restPath, std::string &response, std::string &header) {
     if (!curl) {
         return -1;
     }
@@ -261,7 +261,7 @@ int RestClient::del(const std::string restPath, std::string &response, std::stri
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::patch(const std::string restPath, const std::string &postData, std::string &response, std::string &header) {
+int RestClient::patch(const std::string &restPath, const std::string &postData, std::string &response, std::string &header) {
     if (!curl) {
         return -1;
     }
@@ -288,7 +288,7 @@ int RestClient::patch(const std::string restPath, const std::string &postData, s
  *         >100 http error codes
  *         -1 no libcurl handle
  */
-int RestClient::put(const std::string restPath, const std::string &postData, std::string &response, std::string &header) {
+int RestClient::put(const std::string &restPath, const std::string &postData, std::string &response, std::string &header) {
     if (!curl) {
         return -1;
     }
@@ -323,6 +323,7 @@ void RestClient::rest_helper_pre(
     std::string &response,
     std::string &header,
     const std::string &postData) {
+        
     if (restPath.at(0) != '/')
         restPath = "/" + restPath;
 
