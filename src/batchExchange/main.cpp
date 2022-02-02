@@ -69,16 +69,14 @@ int main(int argc, char **argv) {
     }
 
     std::vector<std::string> nodeList, jobList, queueList;
-    std::vector<std::string> testlist;
-    utils::decode_brace(nodes, testlist);
-    for (auto &e : testlist) {
+
+    // TODO handle wildcards
+    utils::decode_brace(nodes, nodeList);
+    for (auto &e : nodeList) {
         std::cout << e << std::endl;
     }
-
-    // TODO handle brace notation and wildcards
-    utils::str_split(nodes, ",", nodeList);
-    utils::str_split(queues, ",", queueList);
-    utils::str_split(jobs, ",", jobList);
+    utils::decode_brace(queues, queueList);
+    utils::decode_brace(jobs, jobList);
 
     std::string output;
     switch (selected) {
