@@ -14,17 +14,18 @@
 #include <string>
 
 #include "CBatchSlurm.h"
+#include "CXCat.h"
 #include "clipp.h"
 #include "restClient.h"
 #include "sessionTokenTypes.h"
 #include "utils.h"
-#include "xcat.h"
 
 int main(int argc, char** argv) {
     enum class mode { nodes,
                       jobs,
                       state,
-                      queues
+                      queues,
+                      images
     };
 
     mode selected;
@@ -40,7 +41,8 @@ int main(int argc, char** argv) {
     auto jobsOpt = (clipp::command("jobs").set(selected, mode::jobs), clipp::opt_value("jobIDs", jobs)) % "Get job info [of <jobIDs>]";
     auto stateOpt = (clipp::command("state").set(selected, mode::state), (clipp::opt_value("nodes", nodes), (clipp::option("--state") & clipp::value("state", state), (clipp::option("--reason") & clipp::value("reason", reason))))) % "Get/Set state [of <nodes>]";
     auto queueOpt = (clipp::command("queues").set(selected, mode::queues), clipp::opt_value("queues", queues)) % "Get queue information [of <queues>]";
-    auto cli = ("COMMANDS\n" % (nodesOpt | stateOpt | jobsOpt | queueOpt), "OPTIONS\n" % generalOpts);
+    auto imageOpt = (clipp::command("images").set(selected, mode::images)) % "Get available images";
+    auto cli = ("COMMANDS\n" % (nodesOpt | stateOpt | jobsOpt | queueOpt | imageOpt), "OPTIONS\n" % generalOpts);
 
     if (!clipp::parse(argc, argv, cli) || help) {
         // std::cout << make_man_page(cli, argv[0]) << std::endl;
@@ -62,9 +64,16 @@ int main(int argc, char** argv) {
     utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin);
 
     CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
+    CXCat xcatSession(xCatLogin.host, xCatLogin.port, xCatLogin.username, xCatLogin.password, false);
 
+    // TODO log in only when really needed
     if (slurmSession.login() != 0) {
         std::cerr << "Slurm Login failed on " << slurmLogin.host << ":" << slurmLogin.port << " failed" << std::endl;
+        return 1;
+    }
+
+    if (xcatSession.login() != 0) {
+        std::cerr << "xCAT Login failed on " << xCatLogin.host << ":" << xCatLogin.port << " failed" << std::endl;
         return 1;
     }
 
@@ -110,6 +119,10 @@ int main(int argc, char** argv) {
             }
             break;
         }
+        case mode::images: {
+            std::cout << xcatSession.get_os_image("cn1") << std::endl;
+            break;
+        }
         default:
             break;
     }
@@ -120,7 +133,7 @@ int main(int argc, char** argv) {
 
     ////// xCat
 
-    /*Xcat xCat;
+    /*CXCat xCat;
     xCat.set_user_credentials(xCatLogin.username, xCatLogin.password);
     xCat.set_host_config(xCatLogin.host, xCatLogin.port);
     xCat.ssl_verify(false);

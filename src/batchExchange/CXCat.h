@@ -3,16 +3,17 @@
 
 #include <string>
 
-#include "sessionTokenTypes.h"
 #include "restClient.h"
+#include "sessionTokenTypes.h"
 
-class Xcat {
-private:
-    RestClient *xCatSession;
+class CXCat {
+   private:
+    RestClient *session;
 
-public:
-    Xcat();
-    ~Xcat();
+   public:
+    CXCat(std::string host, std::string port, std::string username, std::string password, bool sslVerify);
+
+    ~CXCat();
 
     void set_user_credentials(std::string username, std::string password);
     void set_host_config(std::string host, std::string port);
@@ -27,4 +28,4 @@ public:
     void reboot_node(std::string node);
 };
 
-#endif //XCAT_H
+#endif  // XCAT_H

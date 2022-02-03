@@ -36,8 +36,8 @@ CBatchSlurm::CBatchSlurm(std::string host, std::string port, std::string usernam
  * @brief Destructor
  */
 CBatchSlurm::~CBatchSlurm() {
-    delete this->openapiSession;
-    delete this->session;
+    delete openapiSession;
+    delete session;
 }
 
 /**
@@ -160,7 +160,7 @@ int CBatchSlurm::get_api_version() {
         return 1;
     }
 
-    this->apiVersion = "v" + static_cast<std::string>(doc["info"]["version"].GetString());
+    apiVersion = "v" + static_cast<std::string>(doc["info"]["version"].GetString());
     std::cout << "API-Version: " << apiVersion << std::endl;
     return 0;
 }
