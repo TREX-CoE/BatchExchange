@@ -70,11 +70,7 @@ int main(int argc, char **argv) {
 
     std::vector<std::string> nodeList, jobList, queueList;
 
-    // TODO handle wildcards
     utils::decode_brace(nodes, nodeList);
-    for (auto &e : nodeList) {
-        std::cout << e << std::endl;
-    }
     utils::decode_brace(queues, queueList);
     utils::decode_brace(jobs, jobList);
 

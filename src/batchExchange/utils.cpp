@@ -10,16 +10,15 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <regex>
 #include <sstream>
 #include <string>
 
 /**
  * @brief Split string at delimiter
  *
- * @param input Input string reference
+ * @param input Input string
  * @param delimiter Delimiter
- * @param ret Reference for output vector
+ * @param ret Output vector
  */
 void utils::str_split(const std::string &input, const std::string delimiter, std::vector<std::string> &ret) {
     const size_t lengthDelimiter = delimiter.length();
@@ -37,23 +36,110 @@ void utils::str_split(const std::string &input, const std::string delimiter, std
     }
 }
 
-void utils::str_extract_regex_occurances(std::string input, const std::string regex, std::vector<std::string> &ret) {
-    std::regex rgx(regex);
+/**
+ * @brief Check if string ends with <suffix>
+ *
+ * @param s Input string
+ * @param suffix Suffix
+ * @return 0 Suffix not present
+ * @return 1 Suffix present
+ */
+bool utils::ends_with(const std::string &s, const std::string &suffix) {
+    return s.size() >= suffix.size() && 0 == s.compare(s.size() - suffix.size(), suffix.size(), suffix);
+}
+
+/**
+ * @brief Check if string starts with <prefix>
+ *
+ * @param s Input string
+ * @param prefix Prefix
+ * @return 0 Prefix not present
+ * @return 1 Prefix present
+ */
+bool utils::starts_with(const std::string &s, const std::string &prefix) {
+    return s.size() >= prefix.size() && 0 == s.compare(0, prefix.size(), prefix);
+}
+
+/**
+ * @brief Check if string matches wildcard-string
+ *
+ * @param pattern Wildcard pattern
+ * @param target Target to be checked
+ * @return 0 No match
+ * @return 1 Match
+ */
+bool utils::str_match_wildcard(const std::string &pattern, const std::string &target) {
+    if (pattern.find("*") == std::string::npos)
+        return pattern == target;
+
+    std::vector<std::string> split;
+    utils::str_split(pattern, "*", split);
+
+    // trailing "*" is lost at split -> replace with empty string
+    if (utils::ends_with(pattern, "*"))
+        split.push_back("");
+
+    std::string regexStr = utils::join_vector_to_string(split, "[\\w\\d_-]*");
+
+    std::regex regex(regexStr);
+    return std::regex_match(target, regex);
+}
+
+/**
+ * @brief Check if string matches any wildcard-string of vector
+ *
+ * @param pattern Wildcard pattern vector
+ * @param target Target to be checked
+ * @return 0 No match
+ * @return 1 Match
+ */
+bool utils::str_match_any_wildcard(const std::vector<std::string> &wildcards, const std::string &target) {
+    for (auto &v : wildcards) {
+        if (utils::str_match_wildcard(v, target))
+            return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Extract all regex matches from string
+ *
+ * @param input Input string to be checked
+ * @param regex Regex
+ * @param ret Vector of matches
+ */
+void utils::str_extract_regex_occurances(std::string input, const std::regex &regex, std::vector<std::string> &ret) {
     std::smatch res;
 
-    while (std::regex_search(input, res, rgx)) {
+    while (std::regex_search(input, res, regex)) {
         ret.push_back(res[0]);
         input = res.suffix();
     }
 }
 
+/**
+ * @brief Check if string contains only numbers (integer only)
+ *
+ * @param pattern Wildcard pattern vector
+ * @param target Target to be checked
+ * @return 0 NaN
+ * @return 1 Is number
+ */
 bool utils::is_number(const std::string &s) {
+    // TODO floating point support
     return s.find_first_not_of("0123456789") == std::string::npos;
 }
 
+/**
+ * @brief Decode brace notation
+ *
+ * @param input String to be decoded
+ * @param ret Vector of decoded strings
+ */
 void utils::decode_brace(const std::string &input, std::vector<std::string> &ret) {
     std::vector<std::string> split;
-    utils::str_extract_regex_occurances(input, "[a-zA-Z][a-zA-Z0-9]+(\[[0-9,-]*\])?[a-zA-Z0-9]*", split);
+    std::regex regex("[a-zA-Z][a-zA-Z0-9\\*]*(\\[[0-9,-]*\\])?[a-zA-Z0-9\\*]*");
+    utils::str_extract_regex_occurances(input, regex, split);
 
     for (auto &v : split) {
         std::cout << v << std::endl;
