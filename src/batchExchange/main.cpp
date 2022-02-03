@@ -20,7 +20,7 @@
 #include "utils.h"
 #include "xcat.h"
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     enum class mode { nodes,
                       jobs,
                       state,
@@ -70,10 +70,9 @@ int main(int argc, char** argv) {
 
     std::vector<std::string> nodeList, jobList, queueList;
 
-    // TODO handle brace notation and wildcards
-    utils::str_split(nodes, ",", nodeList);
-    utils::str_split(queues, ",", queueList);
-    utils::str_split(jobs, ",", jobList);
+    utils::decode_brace(nodes, nodeList);
+    utils::decode_brace(queues, queueList);
+    utils::decode_brace(jobs, jobList);
 
     std::string output;
     switch (selected) {

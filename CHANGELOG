@@ -4,3 +4,4 @@ v0.1.0 - 2022-02-
 - use cmake for building process
 - add CLI
 - implement interaction with slurm api + filtering of results
+- support for brace notation and wildcards in filtering
