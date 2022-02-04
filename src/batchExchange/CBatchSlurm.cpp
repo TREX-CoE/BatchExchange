@@ -65,37 +65,6 @@ int CBatchSlurm::logout() {
 }
 
 /**
- * @brief Check slurm output for errors
- *
- * @param o output
- * @return 0 No errors
- * @return 1 Errors found
- */
-int CBatchSlurm::check_errors(const std::string& o) {
-    rapidjson::Document d;
-    if (d.Parse(o.c_str()).HasParseError()) {
-        std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
-        return 1;
-    }
-
-    if (d.HasMember("errors")) {
-        if (d["errors"].IsString()) {
-            std::string err = d["errors"].GetString();
-            if (err.length()) {
-                std::cerr << err << std::endl;
-                return 1;
-            }
-        } else if (d["errors"].IsArray()) {
-            auto err = d["errors"].GetArray();
-            for (rapidjson::SizeType i = 0; i < err.Size(); i++)
-                if (err[i].IsString())
-                    std::cerr << err[i].GetString() << std::endl;
-        }
-    }
-    return 0;
-}
-
-/**
  * @brief Filter entries from JSON
  *
  * @param filter
@@ -141,13 +110,10 @@ int CBatchSlurm::filter_output(const std::vector<std::string>& filter, const std
  * @return 1 Error
  */
 int CBatchSlurm::get_api_version() {
-    std::string _, response;
+    std::string response;
 
-    int res = openapiSession->get("/openapi.json", response, _);
-    if (res != 0 && res != 200) {
-        std::cerr << "Error fetching slurm api version: " << res << std::endl;
+    if (openapiSession->call("GET", "/openapi.json", response) != 0)
         return 1;
-    }
 
     rapidjson::Document doc;
     if (doc.Parse(response.c_str()).HasParseError()) {
@@ -166,24 +132,6 @@ int CBatchSlurm::get_api_version() {
 }
 
 /**
- * @brief Wrapper for get-requests
- *
- * @param path API path
- * @param output  output
- * @return 0 Success
- * @return 1 Error
- */
-int CBatchSlurm::get(std::string path, std::string& output) {
-    std::string _;
-    int res = session->get(path, output, _);
-    if (res != 0 && res != 200) {
-        std::cerr << "Error calling GET " << path << "(" << res << ")" << std::endl;
-        return 1;
-    }
-    return 0;
-}
-
-/**
  * @brief Get job information
  *
  * @param jobs Job Id(s)
@@ -193,9 +141,9 @@ int CBatchSlurm::get(std::string path, std::string& output) {
  */
 int CBatchSlurm::get_jobs(const std::vector<std::string>& filter, std::string& output) {
     std::string response;
-    if (get("/slurm/" + apiVersion + "/jobs", response) != 0)
+    if (session->call("GET", "/slurm/" + apiVersion + "/jobs", response) != 0)
         return 1;
-    if (check_errors(response) != 0)
+    if (utils::check_errors(response) != 0)
         return 1;
     return filter_output(filter, response, output, "jobs", "job_id");
 }
@@ -210,10 +158,10 @@ int CBatchSlurm::get_jobs(const std::vector<std::string>& filter, std::string& o
  */
 int CBatchSlurm::get_nodes(const std::vector<std::string>& filter, std::string& output) {
     std::string response;
-    if (get("/slurm/" + apiVersion + "/nodes", response) != 0)
+    if (session->call("GET", "/slurm/" + apiVersion + "/nodes", response) != 0)
         return 1;
 
-    if (check_errors(response) != 0)
+    if (utils::check_errors(response) != 0)
         return 1;
 
     return filter_output(filter, response, output, "nodes", "name");
@@ -229,10 +177,10 @@ int CBatchSlurm::get_nodes(const std::vector<std::string>& filter, std::string& 
  */
 int CBatchSlurm::get_queues(const std::vector<std::string>& filter, std::string& output) {
     std::string response;
-    if (get("/slurm/" + apiVersion + "/partitions", response) != 0)
+    if (session->call("GET", "/slurm/" + apiVersion + "/partitions", response) != 0)
         return 1;
 
-    if (check_errors(response) != 0)
+    if (utils::check_errors(response) != 0)
         return 1;
 
     return filter_output(filter, response, output, "partitions", "name");
@@ -323,11 +271,7 @@ int CBatchSlurm::set_node_state(const std::vector<std::string>& nodes, std::stri
     std::string postData = buffer.GetString();
     std::string _, response;
     const std::string path = "/v1/slurm/nodes/state";
-    int res = session->post(path, postData, response, _);
-    if (res != 0 && res != 200) {
-        std::cerr << "Error calling POST " << path << "(" << res << ")" << std::endl;
-        return 1;
-    }
+    session->call("POST", path, postData, response);
 
-    return check_errors(response);
+    return utils::check_errors(response);
 }

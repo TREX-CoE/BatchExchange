@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#define INVALID_JSON_ERROR_MSG "Error - Response is not valid JSON"
+
 namespace utils {
 struct loginData {
     std::string username;
@@ -68,7 +70,9 @@ int read_file_to_string(std::string, std::string &);
 int write_to_file(std::string, const std::string &);
 void erase_lines_from_start(std::string &, int);
 void to_lower(std::string &);
+void to_upper(std::string &);
 std::string join_vector_to_string(const std::vector<std::string> &, const std::string);
+int check_errors(const std::string &);
 
 /**
  * @brief Template function to check whether a vector contains the specified element

@@ -9,23 +9,23 @@
 class CXCat {
    private:
     RestClient *session;
+    void set_user_credentials(std::string, std::string);
+    void set_host_config(std::string, std::string);
+    void ssl_verify(bool);
 
    public:
-    CXCat(std::string host, std::string port, std::string username, std::string password, bool sslVerify);
+    CXCat(std::string, std::string, std::string, std::string, bool);
 
     ~CXCat();
 
-    void set_user_credentials(std::string username, std::string password);
-    void set_host_config(std::string host, std::string port);
-    void ssl_verify(bool sslVerify);
-
-    int  login();
-    void logout();
-
-    std::string get_os_image(std::string node);
-    void set_os_image(std::string node, std::string osImage);
-    void set_os_image_n_reboot(std::string node, std::string osImage);
-    void reboot_node(std::string node);
+    int login();
+    int logout();
+    int get_os_images(std::vector<std::string> &, std::string &);
+    int get_bootstate(std::vector<std::string> &, std::string &);
+    int get_nodes(std::string &);
+    int set_os_image(std::vector<std::string> &, std::string);
+    int set_os_image_n_reboot(std::vector<std::string> &, std::string);
+    int reboot_node(std::vector<std::string> &);
 };
 
 #endif  // XCAT_H

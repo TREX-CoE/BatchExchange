@@ -13,6 +13,10 @@
 #include <sstream>
 #include <string>
 
+#include "rapidjson/document.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
+
 /**
  * @brief Split string at delimiter
  *
@@ -134,11 +138,21 @@ void utils::erase_lines_from_start(std::string &data, int lineCount) {
 /**
  * @brief Converts string to lowercase
  *
- * @param s String reference to be transformed
+ * @param s String to be transformed
  */
 void utils::to_lower(std::string &s) {
     std::transform(s.begin(), s.end(), s.begin(),
                    [](unsigned char c) { return std::tolower(c); });
+}
+
+/**
+ * @brief Converts string to uppercase
+ *
+ * @param s String to be transformed
+ */
+void utils::to_upper(std::string &s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return std::toupper(c); });
 }
 
 /**
@@ -156,4 +170,44 @@ std::string utils::join_vector_to_string(const std::vector<std::string> &vec, co
         ret += s;
     }
     return ret;
+}
+
+/**
+ * @brief Check json output for errors
+ *
+ * @param o output
+ * @return 0 No errors
+ * @return 1 Errors found
+ */
+int utils::check_errors(const std::string &o) {
+    rapidjson::Document d;
+    if (d.Parse(o.c_str()).HasParseError()) {
+        std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
+        return 1;
+    }
+
+    if (!d.IsObject())
+        return 0;
+
+    std::string errorKey = "";
+    if (d.HasMember("errors"))
+        errorKey = "errors";
+    else if (d.HasMember("error"))
+        errorKey = "error";
+
+    if (errorKey.length()) {
+        if (d["errors"].IsString()) {
+            std::string err = d["errors"].GetString();
+            if (err.length()) {
+                std::cerr << err << std::endl;
+                return 1;
+            }
+        } else if (d["errors"].IsArray()) {
+            auto err = d["errors"].GetArray();
+            for (rapidjson::SizeType i = 0; i < err.Size(); i++)
+                if (err[i].IsString())
+                    std::cerr << err[i].GetString() << std::endl;
+        }
+    }
+    return 0;
 }

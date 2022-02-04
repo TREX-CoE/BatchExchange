@@ -14,8 +14,6 @@
 #include "restClient.h"
 #include "sessionTokenTypes.h"
 
-#define INVALID_JSON_ERROR_MSG "Error - Response is not valid JSON"
-
 /**
  * @class CBatchSlurm
  * @brief Slurm Class
@@ -34,12 +32,10 @@ class CBatchSlurm : public CBatch {
     int set_node_state(const std::vector<std::string> &, std::string, std::string);
 
    private:
-    int get(std::string path, std::string &output);
     int get_api_version();
     void set_user_credentials(std::string username, std::string password);
     void set_host_config(std::string host, std::string port);
     void ssl_verify(bool sslVerify);
-    int check_errors(const std::string &);
     int filter_output(const std::vector<std::string> &, const std::string &, std::string &, std::string, std::string);
 
     RestClient *openapiSession;

@@ -33,33 +33,40 @@ class RestClient {
     long lastHttpCode;
 
     void rest_helper_pre(
-        const std::string httpMethod,
-        std::string restPath,
-        std::string &response,
-        std::string &header,
-        const std::string &postData);
+        const std::string,
+        std::string,
+        std::string &,
+        std::string &,
+        const std::string &);
     void rest_helper_post();
 
+    const std::vector<std::string> httpMethods = {
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"};
+
    public:
-    RestClient(const int authTypeIn);
+    RestClient(const int);
     ~RestClient();
 
     int login();
     int logout();
 
     // setter
-    void set_user_credentials(const std::string &usernameIn, const std::string &passwordIn);
-    void set_host_config(const std::string &serverAddressIn, const std::string &serverPortIn);
-    void ssl_verify(bool sslVerifyIn);
-    void useragent(const std::string &useragent);
+    void set_user_credentials(const std::string &, const std::string &);
+    void set_host_config(const std::string &, const std::string &);
+    void ssl_verify(bool);
+    void useragent(const std::string &);
 
     // REST-calls
-    int get(const std::string &restPath, std::string &response, std::string &header);
-    int post(const std::string &restPath, const std::string &postData, std::string &response, std::string &header);
-    int del(const std::string &restPath, std::string &response, std::string &header);
-    int patch(const std::string &restPath, const std::string &postData, std::string &response, std::string &header);
-    int put(const std::string &restPath, const std::string &postData, std::string &response, std::string &header);
-
+    int get(const std::string &, std::string &, std::string &);
+    int post(const std::string &, const std::string &, std::string &, std::string &);
+    int del(const std::string &, std::string &, std::string &);
+    int patch(const std::string &, const std::string &, std::string &, std::string &);
+    int put(const std::string &, const std::string &, std::string &, std::string &);
+    int call(std::string, const std::string &, std::string &, const std::string & = "");
     // information about last request
     long get_last_http_code();
     double get_last_execution_time();

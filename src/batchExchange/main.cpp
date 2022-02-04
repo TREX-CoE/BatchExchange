@@ -25,12 +25,13 @@ int main(int argc, char** argv) {
                       jobs,
                       state,
                       queues,
-                      images
+                      images,
+                      bootstate
     };
 
     mode selected;
     bool help = false, json = true;
-    std::string batchSystem = "slurm", loginPath = "", nodes = "", state = "", jobs = "", queues = "", reason = "";
+    std::string batchSystem = "slurm", loginPath = "", nodes = "", state = "", jobs = "", queues = "", reason = "", images = "";
 
     auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
                         clipp::option("--json").set(json) % "Output as json",
@@ -41,8 +42,9 @@ int main(int argc, char** argv) {
     auto jobsOpt = (clipp::command("jobs").set(selected, mode::jobs), clipp::opt_value("jobIDs", jobs)) % "Get job info [of <jobIDs>]";
     auto stateOpt = (clipp::command("state").set(selected, mode::state), (clipp::opt_value("nodes", nodes), (clipp::option("--state") & clipp::value("state", state), (clipp::option("--reason") & clipp::value("reason", reason))))) % "Get/Set state [of <nodes>]";
     auto queueOpt = (clipp::command("queues").set(selected, mode::queues), clipp::opt_value("queues", queues)) % "Get queue information [of <queues>]";
-    auto imageOpt = (clipp::command("images").set(selected, mode::images)) % "Get available images";
-    auto cli = ("COMMANDS\n" % (nodesOpt | stateOpt | jobsOpt | queueOpt | imageOpt), "OPTIONS\n" % generalOpts);
+    auto imageOpt = (clipp::command("images").set(selected, mode::images), clipp::opt_value("images", images)) % "Get available images";
+    auto bootStateOpt = (clipp::command("bootstate").set(selected, mode::bootstate), clipp::opt_value("nodes", nodes)) % "Get bootstate [of <nodes>";
+    auto cli = ("COMMANDS\n" % (nodesOpt | stateOpt | jobsOpt | queueOpt | imageOpt | bootStateOpt), "OPTIONS\n" % generalOpts);
 
     if (!clipp::parse(argc, argv, cli) || help) {
         // std::cout << make_man_page(cli, argv[0]) << std::endl;
@@ -77,12 +79,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::vector<std::string> nodeList, jobList, queueList;
+    std::vector<std::string> nodeList, jobList, queueList, imageList;
 
     // TODO handle brace notation and wildcards
     utils::str_split(nodes, ",", nodeList);
     utils::str_split(queues, ",", queueList);
     utils::str_split(jobs, ",", jobList);
+    utils::str_split(images, ",", imageList);
 
     std::string output;
     switch (selected) {
@@ -120,7 +123,13 @@ int main(int argc, char** argv) {
             break;
         }
         case mode::images: {
-            std::cout << xcatSession.get_os_image("cn1") << std::endl;
+            if (xcatSession.get_os_images(imageList, output) != 0)
+                return 1;
+
+            break;
+        }
+        case mode::bootstate: {
+            std::cout << xcatSession.get_bootstate(nodeList, output) << std::endl;
             break;
         }
         default:
@@ -140,7 +149,7 @@ int main(int argc, char** argv) {
 
     int errorCode = xCat.login();
 
-    std::string currentImage = xCat.get_os_image("cn1");*/
+    std::string currentImage = xCat.get_bootstate("cn1");*/
     // if (currentImage.find("centos8-x86_64-netboot-compute") == std::string::npos) {
     // xCat.set_os_image("cn1", "compute-alma8-diskless");
     //} else {
