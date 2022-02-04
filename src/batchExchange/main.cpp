@@ -20,7 +20,7 @@
 #include "sessionTokenTypes.h"
 #include "utils.h"
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     enum class mode { nodes,
                       jobs,
                       state,
@@ -81,11 +81,10 @@ int main(int argc, char** argv) {
 
     std::vector<std::string> nodeList, jobList, queueList, imageList;
 
-    // TODO handle brace notation and wildcards
-    utils::str_split(nodes, ",", nodeList);
-    utils::str_split(queues, ",", queueList);
-    utils::str_split(jobs, ",", jobList);
-    utils::str_split(images, ",", imageList);
+    utils::decode_brace(nodes, nodeList);
+    utils::decode_brace(queues, queueList);
+    utils::decode_brace(jobs, jobList);
+    utils::decode_brace(images, imageList);
 
     std::string output;
     switch (selected) {

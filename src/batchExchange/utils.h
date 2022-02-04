@@ -8,6 +8,7 @@
 #define UTILS_H
 
 #include <algorithm>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -73,6 +74,13 @@ void to_lower(std::string &);
 void to_upper(std::string &);
 std::string join_vector_to_string(const std::vector<std::string> &, const std::string);
 int check_errors(const std::string &);
+void str_extract_regex_occurances(std::string, const std::regex &, std::vector<std::string> &);
+bool is_number(const std::string &);
+void decode_brace(const std::string &, std::vector<std::string> &);
+bool str_match_wildcard(const std::string &, const std::string &);
+bool ends_with(const std::string &, const std::string &);
+bool starts_with(const std::string &, const std::string &);
+bool str_match_any_wildcard(const std::vector<std::string>&, const std::string &);
 
 /**
  * @brief Template function to check whether a vector contains the specified element

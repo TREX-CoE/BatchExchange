@@ -90,7 +90,7 @@ int CBatchSlurm::filter_output(const std::vector<std::string>& filter, const std
         for (rapidjson::SizeType i = 0; i < nodeEntries.Size(); i++) {
             if (nodeEntries[i].HasMember(identifier.c_str())) {
                 std::string name = nodeEntries[i][identifier.c_str()].GetString();
-                if (!filter.size() || utils::vector_contains(filter, name))
+                if (!filter.size() || utils::str_match_any_wildcard(filter, name))
                     fd.PushBack(nodeEntries[i].GetObject(), allocator);
             }
         }
