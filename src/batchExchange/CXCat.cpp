@@ -98,7 +98,7 @@ int CXCat::set_os_image_n_reboot(std::vector<std::string> &nodes, std::string os
     return 0;
 }
 
-int CXCat::reboot_node(std::vector<std::string> &nodes) {
+int CXCat::reboot_nodes(std::vector<std::string> &nodes) {
     if (!nodes.size())
         return 1;
     std::string response;
