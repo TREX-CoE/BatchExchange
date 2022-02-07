@@ -73,4 +73,4 @@ class RestClient {
     std::string get_last_url();
 };
 
-#endif  // RESTCLIENT_H
+#endif  //RESTCLIENT_H

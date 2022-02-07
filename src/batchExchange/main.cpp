@@ -5,13 +5,17 @@
  ***********************************************/
 
 #include <curl/curl.h>
+#include <signal.h>
+#include <unistd.h>
 
+#include <chrono>
 #include <ctime>
 #include <exception>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "CBatchSlurm.h"
 #include "CXCat.h"
@@ -20,7 +24,36 @@
 #include "sessionTokenTypes.h"
 #include "utils.h"
 
+#define DRAIN_SLEEP 5000
+
+bool canceled(false);
+
+/**
+ * @brief Handle caught signal
+ *
+ * This function is called when SIGINT is caught.
+ *
+ * @param signal Number of signal
+ */
+void sigHandler(int signal) {
+    std::cout << "Caught signal " << signal << std::endl;
+
+    // only exit on second SIGINT
+    if (canceled) {
+        exit(EXIT_FAILURE);
+    }
+    canceled = true;
+}
+
 int main(int argc, char **argv) {
+    struct sigaction sigIntHandler;
+
+    sigIntHandler.sa_handler = sigHandler;
+    sigemptyset(&sigIntHandler.sa_mask);
+    sigIntHandler.sa_flags = 0;
+
+    sigaction(SIGINT, &sigIntHandler, NULL); /* for CTRL+C */
+
     enum class mode { nodes,
                       jobs,
                       state,
@@ -120,7 +153,7 @@ int main(int argc, char **argv) {
                     return 0;
                 }
             } else {
-                if (slurmSession.get_node_state(nodeList, output) != 0)
+                if (slurmSession.get_node_states(nodeList, output) != 0)
                     return 1;
             }
             break;
@@ -142,6 +175,80 @@ int main(int argc, char **argv) {
             break;
         }
         case mode::deploy: {
+            // check validity of chosen image or generate image options
+            std::vector<std::string> availableImages;
+            xcatSession.get_os_image_names(availableImages);
+
+            if (!availableImages.size()) {
+                std::cerr << "No deployable images found!" << std::endl;
+                return 1;
+            }
+
+            if (image.length() && !utils::vector_contains(availableImages, image)) {
+                std::cerr << "Unknown Image" << std::endl;
+                image = "";
+            }
+
+            if (!image.length()) {
+                std::cout << "Please select one of the following images (by number):\n\n";
+                for (size_t i = 1; i <= availableImages.size(); i++) {
+                    std::cout << "(" << i << ")\t" << availableImages[i - 1] << std::endl;
+                }
+                std::cout << "\n";
+                std::cin >> image;
+                bool valid = utils::is_number(image);
+                int imageNr;
+                if (valid) {
+                    imageNr = std::stoi(image);
+                    if (imageNr < 1 || imageNr > static_cast<int>(availableImages.size()))
+                        valid = false;
+                }
+
+                if (!valid) {
+                    std::cerr << "Invalid selection" << std::endl;
+                    return 1;
+                }
+
+                image = availableImages[imageNr - 1];
+
+                // TODO handle cancellation or errors during deployment! (rollback?)
+
+                std::cout << "\nDraining nodes" << std::endl;
+                if (slurmSession.drain_nodes(nodeList, "redeployment") != 0)
+                    return 1;
+
+                unsigned int drained = 0;
+                unsigned int nodeCount = nodeList.size();
+
+                while (drained != nodeCount && !canceled) {
+                    if (slurmSession.drained(nodeList, drained) != 0)
+                        return 1;
+                    std::cout << "\x1b[A"
+                              << "Draining nodes [" << drained << "/" << nodeCount << "]" << std::endl;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(DRAIN_SLEEP));
+                }
+
+                if (canceled)
+                    return 1;
+
+                std::cout << "\x1b[A"
+                          << "Draining complete.\n"
+                          << std::endl;
+
+                if (xcatSession.set_os_image(nodeList, image) != 0)
+                    return 1;
+                std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
+
+                if (xcatSession.reboot_nodes(nodeList) != 0)
+                    return 1;
+
+				// TODO postscripts
+
+				// TODO wait until reboot is complete
+				// either xcat provides an api for that
+				// or check boot status 
+            }
+
             break;
         }
         default:

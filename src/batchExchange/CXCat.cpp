@@ -51,6 +51,25 @@ int CXCat::get_os_images(std::vector<std::string> &images, std::string &output) 
     return 0;
 }
 
+int CXCat::get_os_image_names(std::vector<std::string> &output) {
+    std::string response;
+	std::vector<std::string> images;
+    if (get_os_images(images, response) != 0)
+        return 1;
+
+    rapidjson::Document d;
+
+    d.Parse(response.c_str());
+
+    for (auto &i : d.GetObject()) {
+        output.push_back(i.name.GetString());
+    }
+
+	std::sort(output.begin(), output.end());
+
+    return 0;
+}
+
 int CXCat::get_bootstate(std::vector<std::string> &nodes, std::string &output) {
     // this uri does not provide a way to query all nodes at once -> fetch all nodes and join to {noderange}
     std::string nodeRange = "";
@@ -89,12 +108,6 @@ int CXCat::set_os_image(std::vector<std::string> &nodes, std::string osImage) {
     if (session->call("PUT", "xcatws/nodes/" + utils::join_vector_to_string(nodes, ",") + "/bootstate", response, "{\"osimage\":\"" + osImage + "\"}") != 0)
         return 1;
     std::cout << response << std::endl;
-    return 0;
-}
-
-int CXCat::set_os_image_n_reboot(std::vector<std::string> &nodes, std::string osImage) {
-    // set_os_image(node, osImage);
-    // reboot_node(node);
     return 0;
 }
 

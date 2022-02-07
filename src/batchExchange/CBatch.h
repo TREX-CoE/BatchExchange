@@ -26,8 +26,8 @@ class CBatch {
     virtual int get_jobs(const std::vector<std::string> &, std::string &) = 0;
     virtual int get_nodes(const std::vector<std::string> &, std::string &) = 0;
     virtual int get_queues(const std::vector<std::string> &, std::string &) = 0;
-    virtual int get_node_state(const std::vector<std::string> &, std::string &) = 0;
+    virtual int get_node_states(const std::vector<std::string> &, std::string &) = 0;
     virtual int set_node_state(const std::vector<std::string> &, std::string, std::string) = 0;
 };
 
-#endif /* CBATCH_HPP */
+#endif //CBATCH_HPP

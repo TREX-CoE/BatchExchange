@@ -6,7 +6,7 @@ import subprocess
 def setState():
     data = f.request.get_json()
     if not len(data["nodes"]):
-        return 400, {"errors": "missing node names"}
+        return {"errors": "missing node names"}, 400
 
     command = "scontrol update nodename={} state={} reason={}".format(
         ",".join(data["nodes"]), data["state"], data["reason"])

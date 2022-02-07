@@ -25,7 +25,7 @@ paths:
             schema:
               type: object
               items:
-                $ref: "#/components/schemas/NodeStates"
+                $ref: "#/components/schemas/NodeStateChange"
         required: true
       summary: "Set node(s) state"
       description: "Sets the slurm state for all specified nodes"
@@ -37,7 +37,7 @@ paths:
           
 components:
   schemas:
-    NodeStates:
+    NodeStateChange:
       description: Node States
       properties:
         nodes:

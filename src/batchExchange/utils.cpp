@@ -202,36 +202,39 @@ void utils::read_login_data(const std::string &path, utils::loginData &megware, 
     std::string line;
     std::vector<std::string> tmpLoginData;
 
-    if (ignoreHeader) {
+    if (ignoreHeader)
         utils::erase_lines_from_start(fileContent, 1);
-    }
 
     std::istringstream iss(fileContent);
 
     std::getline(iss, line);
     utils::str_split(line, ",", tmpLoginData);
-    megware.username = tmpLoginData[1];
-    megware.password = tmpLoginData[2];
-    megware.host = tmpLoginData[3];
-    megware.port = tmpLoginData[4];
+    if (tmpLoginData[0] == "clustware") {
+        megware.username = tmpLoginData[1];
+        megware.password = tmpLoginData[2];
+        megware.host = tmpLoginData[3];
+        megware.port = tmpLoginData[4];
+    }
 
     tmpLoginData.clear();
-
     std::getline(iss, line);
     utils::str_split(line, ",", tmpLoginData);
-    xcat.username = tmpLoginData[1];
-    xcat.password = tmpLoginData[2];
-    xcat.host = tmpLoginData[3];
-    xcat.port = tmpLoginData[4];
+    if (tmpLoginData[0] == "xcat") {
+        xcat.username = tmpLoginData[1];
+        xcat.password = tmpLoginData[2];
+        xcat.host = tmpLoginData[3];
+        xcat.port = tmpLoginData[4];
+    }
 
     tmpLoginData.clear();
-
     std::getline(iss, line);
     utils::str_split(line, ",", tmpLoginData);
-    slurm.username = tmpLoginData[1];
-    slurm.password = tmpLoginData[2];
-    slurm.host = tmpLoginData[3];
-    slurm.port = tmpLoginData[4];
+    if (tmpLoginData[0] == "slurmOverNginx") {
+        slurm.username = tmpLoginData[1];
+        slurm.password = tmpLoginData[2];
+        slurm.host = tmpLoginData[3];
+        slurm.port = tmpLoginData[4];
+    }
 }
 
 /**

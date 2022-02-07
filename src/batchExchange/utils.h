@@ -95,4 +95,4 @@ bool vector_contains(const std::vector<T> &v, const T &e) {
     return (std::find(v.begin(), v.end(), e) != v.end());
 }
 }  // namespace utils
-#endif  // UTILS_H
+#endif  //UTILS_H

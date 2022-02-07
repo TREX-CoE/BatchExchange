@@ -28,14 +28,16 @@ class CBatchSlurm : public CBatch {
     int get_jobs(const std::vector<std::string> &, std::string &);
     int get_nodes(const std::vector<std::string> &, std::string &);
     int get_queues(const std::vector<std::string> &, std::string &);
-    int get_node_state(const std::vector<std::string> &, std::string &);
+    int get_node_states(const std::vector<std::string> &, std::string &);
     int set_node_state(const std::vector<std::string> &, std::string, std::string);
+    int drain_nodes(std::vector<std::string> &, const std::string &);
+    int drained(std::vector<std::string> &, unsigned int &);
 
    private:
     int get_api_version();
-    void set_user_credentials(std::string username, std::string password);
-    void set_host_config(std::string host, std::string port);
-    void ssl_verify(bool sslVerify);
+    void set_user_credentials(std::string, std::string);
+    void set_host_config(std::string, std::string);
+    void ssl_verify(bool);
     int filter_output(const std::vector<std::string> &, const std::string &, std::string &, std::string, std::string);
 
     RestClient *openapiSession;
@@ -43,4 +45,4 @@ class CBatchSlurm : public CBatch {
     std::string apiVersion = "";
 };
 
-#endif /* CBATCHSLURM_HPP */
+#endif //CBATCHSLURM_HPP

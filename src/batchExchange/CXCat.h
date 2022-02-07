@@ -24,8 +24,8 @@ class CXCat {
     int get_bootstate(std::vector<std::string> &, std::string &);
     int get_nodes(std::string &);
     int set_os_image(std::vector<std::string> &, std::string);
-    int set_os_image_n_reboot(std::vector<std::string> &, std::string);
     int reboot_nodes(std::vector<std::string> &);
+    int get_os_image_names(std::vector<std::string> &);
 };
 
-#endif  // XCAT_H
+#endif //XCAT_H

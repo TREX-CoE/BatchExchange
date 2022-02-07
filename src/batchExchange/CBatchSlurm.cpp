@@ -194,7 +194,7 @@ int CBatchSlurm::get_queues(const std::vector<std::string>& filter, std::string&
  * @return 0 Success
  * @return 1 Error
  */
-int CBatchSlurm::get_node_state(const std::vector<std::string>& filter, std::string& output) {
+int CBatchSlurm::get_node_states(const std::vector<std::string>& filter, std::string& output) {
     std::string nodeData;
     if (get_nodes(filter, nodeData) != 0)
         return 1;
@@ -269,9 +269,58 @@ int CBatchSlurm::set_node_state(const std::vector<std::string>& nodes, std::stri
     doc.Accept(writer);
 
     std::string postData = buffer.GetString();
+    std::cout << "postData: " << postData << std::endl;
     std::string _, response;
     const std::string path = "/v1/slurm/nodes/state";
-    session->call("POST", path, postData, response);
+    if (session->call("POST", path, response, postData) != 0)
+        return 1;
 
     return utils::check_errors(response);
+}
+
+int CBatchSlurm::drain_nodes(std::vector<std::string>& filter, const std::string& reason) {
+    std::string nodeStates;
+    if (get_node_states(filter, nodeStates) != 0)
+        return 1;
+
+    rapidjson::Document d;
+    d.Parse(nodeStates.c_str());
+    std::vector<std::string> undrainedNodes;
+    for (auto& n : d.GetObject()) {
+        std::string state = n.value.GetString();
+        utils::to_lower(state);
+        if (state != "drained" || state != "down")
+            undrainedNodes.push_back(n.name.GetString());
+    }
+
+    if (set_node_state(undrainedNodes, "drain", reason) != 0)
+        return 1;
+
+    return 0;
+}
+
+int CBatchSlurm::drained(std::vector<std::string>& filter, unsigned int& drainedCount) {
+    drainedCount = 0;
+    std::string nodeStates;
+    if (get_node_states(filter, nodeStates) != 0)
+        return 1;
+
+    rapidjson::Document d;
+    d.Parse(nodeStates.c_str());
+
+    for (auto& n : filter) {
+        // count all nodes not found within slurm as drained
+        if (!d.HasMember(n.c_str())) {
+            drainedCount += 1;
+            continue;
+        }
+
+        std::string state = d[n.c_str()].GetString();
+        utils::to_lower(state);
+        if (state == "drained" || state == "down") {
+            drainedCount += 1;
+        }
+    }
+
+    return 0;
 }
