@@ -66,7 +66,18 @@ int main(int argc, char **argv) {
 
     mode selected;
     bool help = false, json = true;
-    std::string batchSystem = "slurm", loginPath = "", nodes = "", state = "", jobs = "", queues = "", reason = "", images = "", image = "";
+    std::string batchSystem = "slurm",
+                loginPath = "",
+                nodes = "",
+                state = "",
+                jobs = "",
+                queues = "",
+                reason = "",
+                images = "",
+                image = "",
+                prescripts = "",
+                postscripts = "",
+                groups = "";
 
     auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
                         clipp::option("--json").set(json) % "Output as json",
@@ -80,7 +91,7 @@ int main(int argc, char **argv) {
     auto imageOpt = (clipp::command("images").set(selected, mode::images), clipp::opt_value("images", images)) % "Get information for available images [<images>]";
     auto bootStateOpt = (clipp::command("bootstate").set(selected, mode::bootstate), clipp::opt_value("nodes", nodes)) % "Get bootstate [of <nodes>]";
     auto rebootOpt = (clipp::command("reboot").set(selected, mode::reboot), clipp::value("nodes", nodes)) % "Reboot <nodes>";
-    auto deployOpt = (clipp::command("deploy").set(selected, mode::deploy), clipp::value("nodes", nodes) & (clipp::option("--image") & clipp::value("image", image))) % "Deploy <image> on <nodes>";
+    auto deployOpt = (clipp::command("deploy").set(selected, mode::deploy), (clipp::value("nodes", nodes) | clipp::value("groups", groups)) & (clipp::option("--image") & clipp::value("image", image)) & (clipp::option("--prescripts") & clipp::value("prescripts", prescripts)) & (clipp::option("--postscripts") & clipp::value("postscripts", postscripts))) % "Deploy <image> on <nodes/groups>";
     auto cli = ("COMMANDS\n" % (deployOpt | nodesOpt | stateOpt | jobsOpt | queueOpt | imageOpt | bootStateOpt | rebootOpt), "OPTIONS\n" % generalOpts);
 
     if (!clipp::parse(argc, argv, cli) || help) {
@@ -116,12 +127,13 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    std::vector<std::string> nodeList, jobList, queueList, imageList;
+    std::vector<std::string> nodeList, jobList, queueList, imageList, groupList;
 
     utils::decode_brace(nodes, nodeList);
     utils::decode_brace(queues, queueList);
     utils::decode_brace(jobs, jobList);
     utils::decode_brace(images, imageList);
+    utils::decode_brace(groups, groupList);
 
     std::string output;
     switch (selected) {
@@ -175,9 +187,16 @@ int main(int argc, char **argv) {
             break;
         }
         case mode::deploy: {
+            // xCat groups are not known to slurm -> get members of group
+            std::string groupMembers;
+            if (xcatSession.get_group_members(groupList, groupMembers) != 0)
+                return 1;
+            // TODO parse group members into nodelist
+
             // check validity of chosen image or generate image options
             std::vector<std::string> availableImages;
-            xcatSession.get_os_image_names(availableImages);
+            if (xcatSession.get_os_image_names(availableImages) != 0)
+                return 1;
 
             if (!availableImages.size()) {
                 std::cerr << "No deployable images found!" << std::endl;
@@ -188,6 +207,8 @@ int main(int argc, char **argv) {
                 std::cerr << "Unknown Image" << std::endl;
                 image = "";
             }
+
+            // TODO handle cin cancel
 
             if (!image.length()) {
                 std::cout << "Please select one of the following images (by number):\n\n";
@@ -211,43 +232,56 @@ int main(int argc, char **argv) {
 
                 image = availableImages[imageNr - 1];
 
-                // TODO handle cancellation or errors during deployment! (rollback?)
-
-                std::cout << "\nDraining nodes" << std::endl;
-                if (slurmSession.drain_nodes(nodeList, "redeployment") != 0)
-                    return 1;
-
-                unsigned int drained = 0;
-                unsigned int nodeCount = nodeList.size();
-
-                while (drained != nodeCount && !canceled) {
-                    if (slurmSession.drained(nodeList, drained) != 0)
-                        return 1;
-                    std::cout << "\x1b[A"
-                              << "Draining nodes [" << drained << "/" << nodeCount << "]" << std::endl;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(DRAIN_SLEEP));
+                if (!prescripts.length()) {
+                    std::cout << "Prescripts: ";
+                    std::cin >> prescripts;
+                    std::cout << "\n";
                 }
 
-                if (canceled)
-                    return 1;
-
-                std::cout << "\x1b[A"
-                          << "Draining complete.\n"
-                          << std::endl;
-
-                if (xcatSession.set_os_image(nodeList, image) != 0)
-                    return 1;
-                std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
-
-                if (xcatSession.reboot_nodes(nodeList) != 0)
-                    return 1;
-
-				// TODO postscripts
-
-				// TODO wait until reboot is complete
-				// either xcat provides an api for that
-				// or check boot status 
+                if (!postscripts.length()) {
+                    std::cout << "Postscripts: ";
+                    std::cin >> postscripts;
+                    std::cout << "\n";
+                }
             }
+
+            return 0;
+
+            // TODO handle cancellation or errors during deployment! (rollback?)
+
+            std::cout << "\nDraining nodes" << std::endl;
+            if (slurmSession.drain_nodes(nodeList, "redeployment") != 0)
+                return 1;
+
+            unsigned int drained = 0;
+            unsigned int nodeCount = nodeList.size();
+
+            while (drained != nodeCount && !canceled) {
+                if (slurmSession.drained(nodeList, drained) != 0)
+                    return 1;
+                std::cout << "\x1b[A"
+                          << "Draining nodes [" << drained << "/" << nodeCount << "]" << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(DRAIN_SLEEP));
+            }
+
+            if (canceled)
+                return 1;
+
+            std::cout << "\x1b[A"
+                      << "Draining complete.\n"
+                      << std::endl;
+
+            if (xcatSession.set_os_image(nodeList, image) != 0)
+                return 1;
+            std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
+            // TODO postscripts
+
+            if (xcatSession.reboot_nodes(nodeList) != 0)
+                return 1;
+
+            // TODO wait until reboot is complete
+            // either xcat provides an api for that
+            // or check boot status
 
             break;
         }

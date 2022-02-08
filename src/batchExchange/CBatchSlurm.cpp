@@ -1,5 +1,5 @@
 /**
- * @file CBatchSlurm.h
+ * @file CBatchSlurm.cpp
  * @brief CBatch Slurm implementation
  *
  * Slurm currently does not provide a way to query multiple specified resources with a single call.

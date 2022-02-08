@@ -69,7 +69,7 @@ class RestClient {
     int call(std::string, const std::string &, std::string &, const std::string & = "");
     // information about last request
     long get_last_http_code();
-    double get_last_execution_time();
+    double get_last_request_time();
     std::string get_last_url();
 };
 

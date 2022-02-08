@@ -394,7 +394,7 @@ void RestClient::rest_helper_post() {
 }
 
 /**
- * \brief Simple getter for http return code of last request
+ * \brief Getter for http return code of last request
  *
  * \return code of last request
  */
@@ -403,16 +403,16 @@ long RestClient::get_last_http_code() {
 }
 
 /**
- * \brief Simple getter for execution time of last request
+ * \brief Getter for execution time of last request
  *
  * \return execution time of last request
  */
-double RestClient::get_last_execution_time() {
+double RestClient::get_last_request_time() {
     return this->lastRequestTime;
 }
 
 /**
- * \brief Simple getter for url of last request
+ * \brief Getter for url of last request
  *
  * \return url of last request
  */

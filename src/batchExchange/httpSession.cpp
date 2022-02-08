@@ -1,83 +1,72 @@
-#include <cctype>
 #include <rapidjson/document.h>
 
+#include <cctype>
 #include <iostream>
 namespace json = rapidjson;
 
-#include "httpSession.h"
 #include "curlHelper.h"
+#include "httpSession.h"
 
 ///////////////////////// SessionToken /////////////////////////
 
 /**
- * \brief Standard constructor
+ * \brief Constructor
  */
-SessionToken::SessionToken() {
-    // nothing todo
-}
-
+SessionToken::SessionToken() {}
 
 /**
- * \brief Standard destructor
+ * \brief Destructor
  */
-SessionToken::~SessionToken() {
-    // nothing todo
-}
-
+SessionToken::~SessionToken() {}
 
 /**
- * \brief Simple setter
- * 
+ * \brief Set token type
+ *
  * \param keysTokenTypeIn contains keys of json file where to find the token type ["token", "tokenType"]
  */
 void SessionToken::set_keys_token_type(const std::vector<std::string> &keysTokenTypeIn) {
     this->keysTokenType = keysTokenTypeIn;
 }
 
-
 /**
- * \brief Simple setter
- * 
+ * \brief Set access token
+ *
  * \param keysAccessTokenIn contains keys of json file where to find the access token ["token", "accessToken"]
  */
 void SessionToken::set_keys_access_token(const std::vector<std::string> &keysAccessTokenIn) {
     this->keysAccessToken = keysAccessTokenIn;
 }
 
-
 /**
- * \brief Simple setter
- * 
+ * \brief Set refresh token
+ *
  * \param keysRefreshTokenIn contains keys of json file where to find the refresh token ["token", "refreshToken"]
  */
 void SessionToken::set_keys_refresh_token(const std::vector<std::string> &keysRefreshTokenIn) {
     this->keysRefreshToken = keysRefreshTokenIn;
 }
 
-
 /**
- * \brief Simple setter
- * 
+ * \brief Set expire time
+ *
  * \param keysExpireTimeIn contains keys of json file where to find the expire time ["token", "time"]
  */
 void SessionToken::set_keys_expire_time(const std::vector<std::string> &keysExpireTimeIn) {
     this->keysExpireTime = keysExpireTimeIn;
 }
 
-
 /**
- * \brief Simple setter
- * 
+ * \brief Set expire date
+ *
  * \param keysExpireDateIn contains keys of json file where to find the expire date ["token", "date"]
  */
 void SessionToken::set_keys_expire_date(const std::vector<std::string> &keysExpireDateIn) {
     this->keysExpireDate = keysExpireDateIn;
 }
 
-
 /**
  * \brief Sets keys to extract session token more easyly
- * 
+ *
  * \param token struct with json keys for token attributes
  */
 void SessionToken::set_keys_by_token_type(const SessionTokenTypes token) {
@@ -88,127 +77,115 @@ void SessionToken::set_keys_by_token_type(const SessionTokenTypes token) {
     set_keys_expire_date(token.keysExpireDate);
 }
 
-
 /**
  * \brief Wrapper for reading token data from json object
- * 
+ *
  * \param token the token data as json containted in a string
- * 
+ *
  * \return error code
  */
 int SessionToken::read_token(const std::string &token) {
     int errorCode;
     errorCode = read_token_helper(token, &tokenType, keysTokenType, HTTPSESSTION_TYPE_STRING);
     if (errorCode != 0) return errorCode;
-    errorCode = read_token_helper(token, &accessToken,  keysAccessToken,  HTTPSESSTION_TYPE_STRING);
+    errorCode = read_token_helper(token, &accessToken, keysAccessToken, HTTPSESSTION_TYPE_STRING);
     if (errorCode != 0) return errorCode;
     errorCode = read_token_helper(token, &refreshToken, keysRefreshToken, HTTPSESSTION_TYPE_STRING);
     if (errorCode != 0) return errorCode;
-    errorCode = read_token_helper(token, &expireTime,   keysExpireTime,   HTTPSESSTION_TYPE_INT);
+    errorCode = read_token_helper(token, &expireTime, keysExpireTime, HTTPSESSTION_TYPE_INT);
     // work with expire time is more general than time
     // makes it easier to determine when token is expired
     if (expireTime != -1) {
         expireDate = time(nullptr) + expireTime;
     }
     if (errorCode != 0) return errorCode;
-    errorCode = read_token_helper(token, &expireDate,   keysExpireDate,   HTTPSESSTION_TYPE_TIMESTAMP);
+    errorCode = read_token_helper(token, &expireDate, keysExpireDate, HTTPSESSTION_TYPE_TIMESTAMP);
 
     return errorCode;
 }
 
-
 /**
  * \brief Resturns if token is expired
- * 
+ *
  * \return simple bool true == expired
  */
 bool SessionToken::token_expired() {
     return token_time_to_expire() <= 0;
 }
 
-
 /**
  * \brief Delivers time in seconds when how long the token is valid
- * 
+ *
  * \return time in seconds
  */
 int SessionToken::token_time_to_expire() {
     return expireTime - time(nullptr);
 }
 
-
 /**
  * \brief Setter for data format.
- * 
+ *
  * Must have a format like it is described in strtime.
  * https://www.cplusplus.com/reference/ctime/strftime/
- * 
+ *
  * \param formatDesc strtime like date description
  */
 void SessionToken::set_date_parse_descr(std::string formatDesc) {
     this->dateParseDescr = formatDesc;
 }
 
-
 /**
- * \brief Simple getter
- * 
- * \return Type of the token e.g X-Auth, Bearer, ...
+ * \brief Get token type
+ *
+ * \return Type of the token
  */
 std::string SessionToken::get_token_type() {
     return this->tokenType;
 }
 
-
 /**
- * \brief Simple getter
- * 
- * \return the access token itself
+ * \brief Get access token
+ *
+ * \return access token
  */
 std::string SessionToken::get_access_token() {
     return this->accessToken;
 }
 
-
 /**
- * \brief Simple getter
- * 
+ * \brief Get refresh token
+ *
  * \return a refresh token to request a new access token
  */
 std::string SessionToken::get_refresh_token() {
     return this->refreshToken;
 }
 
-
 /**
- * \brief Simple getter
- * 
+ * \brief Get expire time of token
+ *
  * \return expire time of the access token in seconds
  */
 int SessionToken::get_expire_time() {
     return this->expireTime;
 }
 
-
 /**
- * \brief Simple getter
- * 
+ * \brief Get expire date
+ *
  * \return expire date of the access token as unix timestamp
  */
 time_t SessionToken::get_expire_date() {
     return this->expireDate;
 }
 
-
-///// private
-
 /**
  * \brief Reads sinlge token vars from the response of the server
- * 
+ *
  * \param token server response with session token in json format
  * \param value member var for extracted value
  * \param type data type of the member var to cast void* to the right pointer
- * 
+ *
  * \return -1 json couldn't be parsed
  *         -2 key not found
  *         -3 key is not an object
@@ -247,8 +224,8 @@ int SessionToken::read_token_helper(const std::string &token, void *value, std::
     // step over keys that represents the json objects
     if (keylist.size()) {
         std::vector<std::string>::iterator it;
-        for (it = keylist.begin(); it != keylist.end()-1; ++it) {
-            const char* key = it->c_str();
+        for (it = keylist.begin(); it != keylist.end() - 1; ++it) {
+            const char *key = it->c_str();
             if (!tmpObject.HasMember(key)) {
                 return -2;
             }
@@ -257,7 +234,7 @@ int SessionToken::read_token_helper(const std::string &token, void *value, std::
             }
             tmpObject = tmpObject[key].GetObject();
         }
-        
+
         // write value in member var
         const char *key = it->c_str();
         if (type == HTTPSESSTION_TYPE_STRING) {
@@ -277,9 +254,9 @@ int SessionToken::read_token_helper(const std::string &token, void *value, std::
 
             // parse date in tm data structure
             std::tm tmp;
-            const char* res = strptime(tmpObject[key].GetString(), dateParseDescr.c_str(), &tmp);
+            const char *res = strptime(tmpObject[key].GetString(), dateParseDescr.c_str(), &tmp);
             if (res == nullptr) {
-                //std::cout << "Parse error" << std::endl;
+                // std::cout << "Parse error" << std::endl;
                 return -10;
             }
             *(static_cast<time_t *>(value)) = mktime(&tmp);
@@ -293,26 +270,22 @@ int SessionToken::read_token_helper(const std::string &token, void *value, std::
 
 /**
  * \brief Constructor
- * 
+ *
  * Constructor with necessary parameters for function. Initililizes libcurl
  * handle too.
- * 
+ *
  * \param usernameIn        login name of user
  * \param passwordIn        login password of user
  * \param serverAddressIn   url of server
  * \param serverPortIn      port of server
- * 
+ *
  */
 HttpSession::HttpSession(
-        const std::string &usernameIn,
-        const std::string &passwordIn,
-        const std::string &serverAddressIn,
-        const std::string &serverPortIn)
-    : username(usernameIn)
-    , password(passwordIn)
-    , serverAddress(serverAddressIn)
-    , serverPort(serverPortIn) {
-
+    const std::string &usernameIn,
+    const std::string &passwordIn,
+    const std::string &serverAddressIn,
+    const std::string &serverPortIn)
+    : username(usernameIn), password(passwordIn), serverAddress(serverAddressIn), serverPort(serverPortIn) {
     this->clientId = "wf_" + usernameIn;
     this->loginPath = "";
     this->logoutPath = "";
@@ -327,26 +300,25 @@ HttpSession::HttpSession(
     this->sslVerify = true;
 }
 
-
 /**
  * \brief Destructor
- * 
+ *
  * Frees session if not done yet and libcurl ressources.
- * 
+ *
  */
 HttpSession::~HttpSession() {
     switch (this->tokenType) {
-    case SESSION_TOKEN_XCAT:
-        // do nothing
-        // it isn't possible to logout @ xCAT
-        break;
-    
-    default:
-        // auto logout if the explicit logout was forgotten
-        if (this->loggedIn) {
-            logout();
-        }
-        break;
+        case SESSION_TOKEN_XCAT:
+            // do nothing
+            // it isn't possible to logout @ xCAT
+            break;
+
+        default:
+            // auto logout if the explicit logout was forgotten
+            if (this->loggedIn) {
+                logout();
+            }
+            break;
     }
 
     if (curl) {
@@ -355,91 +327,84 @@ HttpSession::~HttpSession() {
     curl = nullptr;
 }
 
-
 /**
  * \brief Sets keys to extract session token more easyly
- * 
+ *
  * \param tokenTypeIn defines which type of token should be used
  * \param sessionTokenTypes struct with json keys for token attributes
  */
 int HttpSession::set_token_type(int tokenTypeIn, const SessionTokenTypes *sessionTokenTypes) {
     this->tokenType = tokenTypeIn;
-    
+
     switch (this->tokenType) {
-    case SESSION_TOKEN_CUSTOM:
-        sessionToken.set_keys_by_token_type(*sessionTokenTypes);
-        break;    
-    case SESSION_TOKEN_MEGWARE:
-        sessionToken.set_keys_by_token_type(SESSION_TOKEN_KEYS_MEGWARE);
-        break;
-    case SESSION_TOKEN_XCAT:
-        sessionToken.set_keys_by_token_type(SESSION_TOKEN_KEYS_XCAT);
-        break;
-    
-    default:
-        return -1;
+        case SESSION_TOKEN_CUSTOM:
+            sessionToken.set_keys_by_token_type(*sessionTokenTypes);
+            break;
+        case SESSION_TOKEN_MEGWARE:
+            sessionToken.set_keys_by_token_type(SESSION_TOKEN_KEYS_MEGWARE);
+            break;
+        case SESSION_TOKEN_XCAT:
+            sessionToken.set_keys_by_token_type(SESSION_TOKEN_KEYS_XCAT);
+            break;
+
+        default:
+            return -1;
     }
 
     return 0;
 }
 
-
 /**
  * \brief Setter for data format.
- * 
+ *
  * Must have a format like it is described in strtime.
  * https://www.cplusplus.com/reference/ctime/strftime/
- * 
+ *
  * \param formatDesc strtime like date description
  */
 void HttpSession::set_date_parse_descr(const std::string formatDesc) {
     sessionToken.set_date_parse_descr(formatDesc);
 }
 
-
 /**
  * \brief Defines the URL path for login
- * 
+ *
  * \param loginPathIn URL path (leading / is needed)
  */
 void HttpSession::set_login_path(const std::string loginPathIn) {
     this->loginPath = loginPathIn;
 }
 
-
 /**
  * \brief Defines the URL path for logout
- * 
+ *
  * \param logoutPathIn URL path (leading / is needed)
  */
 void HttpSession::set_logout_path(const std::string logoutPathIn) {
     this->logoutPath = logoutPathIn;
 }
 
-
 /**
  * \brief Simple setter if ssl certificate should be checked or not
- * 
+ *
  * \param verfiy true if ssl certificate should be checked
  */
 void HttpSession::ssl_verify(bool verfiy) {
     this->sslVerify = verfiy;
 }
 
-
 /**
- * \brief Simple getter
- * 
+ * \brief Get access token
+ *
  * \return the access token itself
  */
 std::string HttpSession::get_access_token() {
     return sessionToken.get_access_token();
 }
 
-
 /**
  * \brief Gets authentification token
- * 
+ *
  * \return 0-100 error codes from libcurl
  *         >100 http error codes
  *         -1 no libcurl handle
@@ -449,7 +414,7 @@ std::string HttpSession::get_access_token() {
  *         -5 already logged in
  *         -10 could'n extract token
  *         -100 unknown session type
- * 
+ *
  * \param loginPathIn REST path to login endpoint (leading / is needed e.g. "/token")
  */
 int HttpSession::login() {
@@ -471,17 +436,17 @@ int HttpSession::login() {
 
     std::string url;
     switch (this->tokenType) {
-    case SESSION_TOKEN_MEGWARE:
-        url = "https://" + this->serverAddress + ":" + this->serverPort + this->loginPath;
-        break;
-    case SESSION_TOKEN_XCAT:
-        url = "https://" + this->serverAddress + ":" + this->serverPort + this->loginPath + "?userName=" + this->username + "&userPW=" + this->password;
-        break;
-    case SESSION_TOKEN_CUSTOM:
-        break;
+        case SESSION_TOKEN_MEGWARE:
+            url = "https://" + this->serverAddress + ":" + this->serverPort + this->loginPath;
+            break;
+        case SESSION_TOKEN_XCAT:
+            url = "https://" + this->serverAddress + ":" + this->serverPort + this->loginPath + "?userName=" + this->username + "&userPW=" + this->password;
+            break;
+        case SESSION_TOKEN_CUSTOM:
+            break;
 
-    default:
-        break;
+        default:
+            break;
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -499,17 +464,17 @@ int HttpSession::login() {
     // fill in post field of http request with login credentials
     std::string postfields;
     switch (this->tokenType) {
-    case SESSION_TOKEN_CUSTOM:
-        // todo not implemented
-        break;
-    case SESSION_TOKEN_MEGWARE:
-        postfields = "grant_type=password&client_id=" + this->clientId + "&username=" + this->username + "&password=" + this->password;
-        break;
-    case SESSION_TOKEN_XCAT:
-        postfields = "";
-        break;
-    default:
-        return -100;
+        case SESSION_TOKEN_CUSTOM:
+            // todo not implemented
+            break;
+        case SESSION_TOKEN_MEGWARE:
+            postfields = "grant_type=password&client_id=" + this->clientId + "&username=" + this->username + "&password=" + this->password;
+            break;
+        case SESSION_TOKEN_XCAT:
+            postfields = "";
+            break;
+        default:
+            return -100;
     }
 
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields.c_str());
@@ -517,19 +482,19 @@ int HttpSession::login() {
     // Remove a header curl would otherwise add by itself
     struct curl_slist *chunk = NULL;
     switch (this->tokenType) {
-    case SESSION_TOKEN_CUSTOM:
-        break;
-    case SESSION_TOKEN_MEGWARE:
-        chunk = curl_slist_append(chunk, "Content-Type: application/x-www-form-urlencoded");
-        chunk = curl_slist_append(chunk, ("Authorization: Basic " + this->username + ":" + this->password).c_str());
-        curl_easy_setopt(curl, CURLOPT_POST, 1);
-        break;
-    case SESSION_TOKEN_XCAT:
-        chunk = curl_slist_append(chunk, "Content-Type: application/x-www-form-urlencoded");
-        chunk = curl_slist_append(chunk, ("Authorization: Basic " + this->username + ":" + this->password).c_str());
-        break;
-    default:
-        return -100;
+        case SESSION_TOKEN_CUSTOM:
+            break;
+        case SESSION_TOKEN_MEGWARE:
+            chunk = curl_slist_append(chunk, "Content-Type: application/x-www-form-urlencoded");
+            chunk = curl_slist_append(chunk, ("Authorization: Basic " + this->username + ":" + this->password).c_str());
+            curl_easy_setopt(curl, CURLOPT_POST, 1);
+            break;
+        case SESSION_TOKEN_XCAT:
+            chunk = curl_slist_append(chunk, "Content-Type: application/x-www-form-urlencoded");
+            chunk = curl_slist_append(chunk, ("Authorization: Basic " + this->username + ":" + this->password).c_str());
+            break;
+        default:
+            return -100;
     }
     // set our custom set of headers
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
@@ -562,10 +527,9 @@ int HttpSession::login() {
     return curlErrorCode;
 }
 
-
 /**
  * \brief Frees authentification token
- * 
+ *
  * \return 0-100 error codes from libcurl
  *         >100 http error codes
  */
@@ -575,18 +539,18 @@ int HttpSession::logout() {
 
     std::string postfields;
     switch (tokenType) {
-    case SESSION_TOKEN_CUSTOM:
-        // todo not implemented
-        break;
-    case SESSION_TOKEN_MEGWARE:
-        postfields = "client_id=" + this->clientId + "&token=" + sessionToken.get_access_token();
-        break;
-    case SESSION_TOKEN_XCAT:
-        this->loggedIn = false;
-        return 0;
-    
-    default:
-        break;
+        case SESSION_TOKEN_CUSTOM:
+            // todo not implemented
+            break;
+        case SESSION_TOKEN_MEGWARE:
+            postfields = "client_id=" + this->clientId + "&token=" + sessionToken.get_access_token();
+            break;
+        case SESSION_TOKEN_XCAT:
+            this->loggedIn = false;
+            return 0;
+
+        default:
+            break;
     }
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields.c_str());
 
