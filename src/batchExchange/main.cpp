@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
                 images = "",
                 image = "",
                 prescripts = "",
-                postscripts = "",
+                postbootscripts = "",
                 groups = "";
 
     auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
     auto imageOpt = (clipp::command("images").set(selected, mode::images), clipp::opt_value("images", images)) % "Get information for available images [<images>]";
     auto bootStateOpt = (clipp::command("bootstate").set(selected, mode::bootstate), clipp::opt_value("nodes", nodes)) % "Get bootstate [of <nodes>]";
     auto rebootOpt = (clipp::command("reboot").set(selected, mode::reboot), clipp::value("nodes", nodes)) % "Reboot <nodes>";
-    auto deployOpt = (clipp::command("deploy").set(selected, mode::deploy), (clipp::value("nodes", nodes) | clipp::value("groups", groups)) & (clipp::option("--image") & clipp::value("image", image)) & (clipp::option("--prescripts") & clipp::value("prescripts", prescripts)) & (clipp::option("--postscripts") & clipp::value("postscripts", postscripts))) % "Deploy <image> on <nodes/groups>";
+    auto deployOpt = (clipp::command("deploy").set(selected, mode::deploy), clipp::value("nodes/groups", nodes), (clipp::option("--image") & clipp::value("image", image)), (clipp::option("--prescripts") & clipp::value("prescripts", prescripts)), (clipp::option("--postbootscripts") & clipp::value("postbootscripts", postbootscripts))) % "Deploy <image> on <nodes/groups>";
     auto cli = ("COMMANDS\n" % (deployOpt | nodesOpt | stateOpt | jobsOpt | queueOpt | imageOpt | bootStateOpt | rebootOpt), "OPTIONS\n" % generalOpts);
 
     if (!clipp::parse(argc, argv, cli) || help) {
@@ -127,13 +127,12 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    std::vector<std::string> nodeList, jobList, queueList, imageList, groupList;
+    std::vector<std::string> nodeList, jobList, queueList, imageList;
 
     utils::decode_brace(nodes, nodeList);
     utils::decode_brace(queues, queueList);
     utils::decode_brace(jobs, jobList);
     utils::decode_brace(images, imageList);
-    utils::decode_brace(groups, groupList);
 
     std::string output;
     switch (selected) {
@@ -187,14 +186,53 @@ int main(int argc, char **argv) {
             break;
         }
         case mode::deploy: {
-            // xCat groups are not known to slurm -> get members of group
-            std::string groupMembers;
-            if (xcatSession.get_group_members(groupList, groupMembers) != 0)
+            std::vector<std::string> availableGroups, targetNodes, targetGroups, combinedTargetNodes;
+            if (xcatSession.get_group_names(availableGroups) != 0)
                 return 1;
-            // TODO parse group members into nodelist
+
+            // check if specified targets are a groups or nodes
+            for (auto &entry : nodeList) {
+                if (!utils::vector_contains(availableGroups, entry))
+                    targetNodes.push_back(entry);
+                else {
+                    targetGroups.push_back(entry);
+                }
+            }
+
+            // nodeList now holds a list of all nodes even if they were specified as a group
+            nodeList = targetNodes;
+            for (auto &group : targetGroups) {
+                std::vector<std::string> members;
+                if (xcatSession.get_group_members(group, members) != 0)
+                    return 1;
+                for (auto &member : members)
+                    nodeList.push_back(member);
+            }
+
+            // TODO filter duplicates, evaluate if any further action is required. Groups should be prioritized over nodes
+            // Example input: "nodes,node1" where nodes is a group containing the member "nodes1" while node1 is also given seperately
+
+            std::cout << "TARGETNODES: \n";
+            for (auto &group : targetNodes) {
+                std::cout << group << std::endl;
+            }
+            std::cout << std::endl;
+
+            std::cout << "NODELIST: \n";
+            for (auto &group : nodeList) {
+                std::cout << group << std::endl;
+            }
+            std::cout << std::endl;
+
+            std::cout << "TARGETGROUPS: \n";
+            for (auto &group : targetGroups) {
+                std::cout << group << std::endl;
+            }
+            std::cout << std::endl;
 
             // check validity of chosen image or generate image options
             std::vector<std::string> availableImages;
+
             if (xcatSession.get_os_image_names(availableImages) != 0)
                 return 1;
 
@@ -231,21 +269,7 @@ int main(int argc, char **argv) {
                 }
 
                 image = availableImages[imageNr - 1];
-
-                if (!prescripts.length()) {
-                    std::cout << "Prescripts: ";
-                    std::cin >> prescripts;
-                    std::cout << "\n";
-                }
-
-                if (!postscripts.length()) {
-                    std::cout << "Postscripts: ";
-                    std::cin >> postscripts;
-                    std::cout << "\n";
-                }
             }
-
-            return 0;
 
             // TODO handle cancellation or errors during deployment! (rollback?)
 
@@ -271,13 +295,29 @@ int main(int argc, char **argv) {
                       << "Draining complete.\n"
                       << std::endl;
 
-            if (xcatSession.set_os_image(nodeList, image) != 0)
-                return 1;
-            std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
-            // TODO postscripts
+            // TODO add postscripts
 
-            if (xcatSession.reboot_nodes(nodeList) != 0)
-                return 1;
+            std::string payload = "{";
+            if (prescripts.length())
+                payload += "\"prescripts\"=\"" + prescripts + "\",";
+            if (postbootscripts.length())
+                payload += "\"postbootscripts\"=\"" + postbootscripts + "\",";
+            payload += "}";
+
+            for (auto &group : targetGroups) {
+                xcatSession.set_group_attributes(group, payload);
+            }
+
+            xcatSession.set_node_attributes(targetNodes, "");
+
+            // TODO check if os image can be set via group
+
+            // if (xcatSession.set_os_image(nodeList, image) != 0)
+            //     return 1;
+            std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
+
+            // if (xcatSession.reboot_nodes(nodeList) != 0)
+            //     return 1;
 
             // TODO wait until reboot is complete
             // either xcat provides an api for that
