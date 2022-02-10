@@ -328,7 +328,8 @@ void RestClient::rest_helper_pre(
         restPath = "/" + restPath;
 
     const std::string url = "https://" + this->serverAddress + ":" + this->serverPort + restPath;
-    std::cout << url << std::endl;
+    // std::cout << url << "\n"
+    //           << postData << std::endl;
     /* curl verbosity */
     // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
@@ -446,5 +447,6 @@ int RestClient::call(std::string method, const std::string &path, std::string &o
         std::cerr << "Error calling " << method << " " << path << " (" << res << ")" << std::endl;
         return 1;
     }
+
     return 0;
 }

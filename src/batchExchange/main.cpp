@@ -24,7 +24,7 @@
 #include "sessionTokenTypes.h"
 #include "utils.h"
 
-#define DRAIN_SLEEP 5000
+#define DRAIN_SLEEP 3000
 
 bool canceled(false);
 
@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
     };
 
     mode selected;
-    bool help = false, json = true;
+    bool help = false, json = true, deployTargetIsGroup = false;
     std::string batchSystem = "slurm",
                 loginPath = "",
                 nodes = "",
@@ -77,11 +77,11 @@ int main(int argc, char **argv) {
                 image = "",
                 prescripts = "",
                 postbootscripts = "",
-                groups = "";
+                postscripts = "";
 
     auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
                         clipp::option("--json").set(json) % "Output as json",
-                        (clipp::option("-b", "--batch") & (clipp::required("slurm") | clipp::required("pbs"))) % "Batch System",
+                        (clipp::option("-b", "--batch").set(batchSystem) & (clipp::required("slurm") | clipp::required("pbs"))) % "Batch System",
                         (clipp::option("-l", "--loginFile") & clipp::value("path", loginPath)) % "Path for login data");
 
     auto nodesOpt = (clipp::command("nodes").set(selected, mode::nodes), clipp::opt_value("nodes", nodes)) % "Get node information [of <nodes>]";
@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
     auto imageOpt = (clipp::command("images").set(selected, mode::images), clipp::opt_value("images", images)) % "Get information for available images [<images>]";
     auto bootStateOpt = (clipp::command("bootstate").set(selected, mode::bootstate), clipp::opt_value("nodes", nodes)) % "Get bootstate [of <nodes>]";
     auto rebootOpt = (clipp::command("reboot").set(selected, mode::reboot), clipp::value("nodes", nodes)) % "Reboot <nodes>";
-    auto deployOpt = (clipp::command("deploy").set(selected, mode::deploy), clipp::value("nodes/groups", nodes), (clipp::option("--image") & clipp::value("image", image)), (clipp::option("--prescripts") & clipp::value("prescripts", prescripts)), (clipp::option("--postbootscripts") & clipp::value("postbootscripts", postbootscripts))) % "Deploy <image> on <nodes/groups>";
+    auto deployOpt = (clipp::command("deploy").set(selected, mode::deploy), clipp::value("nodes", nodes), clipp::option("--group").set(deployTargetIsGroup), (clipp::option("--image") & clipp::value("image", image)), (clipp::option("--prescripts") & clipp::value("prescripts", prescripts)), (clipp::option("--postbootscripts") & clipp::value("postbootscripts", postbootscripts)), (clipp::option("--postscripts") & clipp::value("postscripts", postscripts))) % "Deploy <image> on <nodes/groups>";
     auto cli = ("COMMANDS\n" % (deployOpt | nodesOpt | stateOpt | jobsOpt | queueOpt | imageOpt | bootStateOpt | rebootOpt), "OPTIONS\n" % generalOpts);
 
     if (!clipp::parse(argc, argv, cli) || help) {
@@ -186,49 +186,22 @@ int main(int argc, char **argv) {
             break;
         }
         case mode::deploy: {
-            std::vector<std::string> availableGroups, targetNodes, targetGroups, combinedTargetNodes;
-            if (xcatSession.get_group_names(availableGroups) != 0)
-                return 1;
+            std::vector<std::string> targetNodes, targetGroups;
+            if (!deployTargetIsGroup)
+                targetNodes = nodeList;
+            else {
+                targetGroups = nodeList;
+                nodeList.clear();
 
-            // check if specified targets are a groups or nodes
-            for (auto &entry : nodeList) {
-                if (!utils::vector_contains(availableGroups, entry))
-                    targetNodes.push_back(entry);
-                else {
-                    targetGroups.push_back(entry);
+                // nodeList shall hold a list of all nodes even if they were specified as a group
+                for (auto &group : targetGroups) {
+                    std::vector<std::string> members;
+                    if (xcatSession.get_group_members(group, members) != 0)
+                        return 1;
+                    for (auto &member : members)
+                        nodeList.push_back(member);
                 }
             }
-
-            // nodeList now holds a list of all nodes even if they were specified as a group
-            nodeList = targetNodes;
-            for (auto &group : targetGroups) {
-                std::vector<std::string> members;
-                if (xcatSession.get_group_members(group, members) != 0)
-                    return 1;
-                for (auto &member : members)
-                    nodeList.push_back(member);
-            }
-
-            // TODO filter duplicates, evaluate if any further action is required. Groups should be prioritized over nodes
-            // Example input: "nodes,node1" where nodes is a group containing the member "nodes1" while node1 is also given seperately
-
-            std::cout << "TARGETNODES: \n";
-            for (auto &group : targetNodes) {
-                std::cout << group << std::endl;
-            }
-            std::cout << std::endl;
-
-            std::cout << "NODELIST: \n";
-            for (auto &group : nodeList) {
-                std::cout << group << std::endl;
-            }
-            std::cout << std::endl;
-
-            std::cout << "TARGETGROUPS: \n";
-            for (auto &group : targetGroups) {
-                std::cout << group << std::endl;
-            }
-            std::cout << std::endl;
 
             // check validity of chosen image or generate image options
             std::vector<std::string> availableImages;
@@ -273,18 +246,23 @@ int main(int argc, char **argv) {
 
             // TODO handle cancellation or errors during deployment! (rollback?)
 
-            std::cout << "\nDraining nodes" << std::endl;
+            std::cout << "\nDraining nodes"
+                      << std::endl;
             if (slurmSession.drain_nodes(nodeList, "redeployment") != 0)
                 return 1;
 
             unsigned int drained = 0;
             unsigned int nodeCount = nodeList.size();
 
+            if (slurmSession.drained(nodeList, drained) != 0)
+                return 1;
+
             while (drained != nodeCount && !canceled) {
                 if (slurmSession.drained(nodeList, drained) != 0)
                     return 1;
                 std::cout << "\x1b[A"
-                          << "Draining nodes [" << drained << "/" << nodeCount << "]" << std::endl;
+                          << "Draining nodes [" << drained << "/" << nodeCount << "]"
+                          << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(DRAIN_SLEEP));
             }
 
@@ -292,32 +270,47 @@ int main(int argc, char **argv) {
                 return 1;
 
             std::cout << "\x1b[A"
-                      << "Draining complete.\n"
+                      << "Draining complete."
                       << std::endl;
 
-            // TODO add postscripts
+            rapidjson::Document attributes;
+            attributes.SetObject();
+            auto &allocator = attributes.GetAllocator();
 
-            std::string payload = "{";
+            attributes.AddMember(rapidjson::StringRef("provmethod"),
+                                 rapidjson::StringRef(image.c_str()),
+                                 allocator);
+
             if (prescripts.length())
-                payload += "\"prescripts\"=\"" + prescripts + "\",";
+                attributes.AddMember(rapidjson::StringRef("prescripts"),
+                                     rapidjson::StringRef(prescripts.c_str()),
+                                     allocator);
             if (postbootscripts.length())
-                payload += "\"postbootscripts\"=\"" + postbootscripts + "\",";
-            payload += "}";
+                attributes.AddMember(rapidjson::StringRef("postbootscripts"),
+                                     rapidjson::StringRef(postbootscripts.c_str()),
+                                     allocator);
+            if (postscripts.length())
+                attributes.AddMember(rapidjson::StringRef("postscripts"),
+                                     rapidjson::StringRef(postscripts.c_str()),
+                                     allocator);
+
+            std::string attributesStr;
+            utils::rapidjson_doc_to_str(attributes, attributesStr);
+            std::cout << attributesStr << std::endl;
 
             for (auto &group : targetGroups) {
-                xcatSession.set_group_attributes(group, payload);
+                xcatSession.set_group_attributes(group, attributesStr);
             }
 
-            xcatSession.set_node_attributes(targetNodes, "");
+            if (targetNodes.size())
+                xcatSession.set_node_attributes(targetNodes, attributesStr);
 
-            // TODO check if os image can be set via group
-
-            // if (xcatSession.set_os_image(nodeList, image) != 0)
-            //     return 1;
             std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
 
-            // if (xcatSession.reboot_nodes(nodeList) != 0)
-            //     return 1;
+            if (xcatSession.reboot_nodes(nodeList) != 0)
+                return 1;
+
+            std::cout << "Node reset ordered\n";
 
             // TODO wait until reboot is complete
             // either xcat provides an api for that

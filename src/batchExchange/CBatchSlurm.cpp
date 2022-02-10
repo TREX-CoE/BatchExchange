@@ -94,11 +94,8 @@ int CBatchSlurm::filter_output(const std::vector<std::string>& filter, const std
                     fd.PushBack(nodeEntries[i].GetObject(), allocator);
             }
         }
-        rapidjson::StringBuffer buffer;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-        fd.Accept(writer);
 
-        output = buffer.GetString();
+        utils::rapidjson_doc_to_str(fd, output);
     }
     return 0;
 }
@@ -112,14 +109,13 @@ int CBatchSlurm::filter_output(const std::vector<std::string>& filter, const std
 int CBatchSlurm::get_api_version() {
     std::string response;
 
-    if (openapiSession->call("GET", "/openapi.json", response) != 0)
+    int res = openapiSession->call("GET", "/openapi.json", response);
+
+    if (utils::check_errors(response) || res != 0)
         return 1;
 
     rapidjson::Document doc;
-    if (doc.Parse(response.c_str()).HasParseError()) {
-        std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
-        return 1;
-    }
+    doc.Parse(response.c_str());
 
     if (!doc.HasMember("info") || !doc["info"].HasMember("version")) {
         std::cerr << "Unable to determine api version from /openapi.json" << std::endl;
@@ -141,10 +137,11 @@ int CBatchSlurm::get_api_version() {
  */
 int CBatchSlurm::get_jobs(const std::vector<std::string>& filter, std::string& output) {
     std::string response;
-    if (session->call("GET", "/slurm/" + apiVersion + "/jobs", response) != 0)
+    int res = session->call("GET", "/slurm/" + apiVersion + "/jobs", response);
+
+    if (utils::check_errors(response) || res != 0)
         return 1;
-    if (utils::check_errors(response) != 0)
-        return 1;
+
     return filter_output(filter, response, output, "jobs", "job_id");
 }
 
@@ -158,10 +155,9 @@ int CBatchSlurm::get_jobs(const std::vector<std::string>& filter, std::string& o
  */
 int CBatchSlurm::get_nodes(const std::vector<std::string>& filter, std::string& output) {
     std::string response;
-    if (session->call("GET", "/slurm/" + apiVersion + "/nodes", response) != 0)
-        return 1;
+    int res = session->call("GET", "/slurm/" + apiVersion + "/nodes", response);
 
-    if (utils::check_errors(response) != 0)
+    if (utils::check_errors(response) || res != 0)
         return 1;
 
     return filter_output(filter, response, output, "nodes", "name");
@@ -177,10 +173,9 @@ int CBatchSlurm::get_nodes(const std::vector<std::string>& filter, std::string& 
  */
 int CBatchSlurm::get_queues(const std::vector<std::string>& filter, std::string& output) {
     std::string response;
-    if (session->call("GET", "/slurm/" + apiVersion + "/partitions", response) != 0)
-        return 1;
+    int res = session->call("GET", "/slurm/" + apiVersion + "/partitions", response);
 
-    if (utils::check_errors(response) != 0)
+    if (utils::check_errors(response) || res != 0)
         return 1;
 
     return filter_output(filter, response, output, "partitions", "name");
@@ -214,11 +209,8 @@ int CBatchSlurm::get_node_states(const std::vector<std::string>& filter, std::st
                            allocator);
     }
 
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    stateDoc.Accept(writer);
+    utils::rapidjson_doc_to_str(stateDoc, output);
 
-    output = buffer.GetString();
     return 0;
 }
 
@@ -264,18 +256,16 @@ int CBatchSlurm::set_node_state(const std::vector<std::string>& nodes, std::stri
 
     doc.AddMember("nodes", nodeList, allocator);
 
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    doc.Accept(writer);
+    std::string postData, response;
+    utils::rapidjson_doc_to_str(doc, postData);
 
-    std::string postData = buffer.GetString();
-    std::cout << "postData: " << postData << std::endl;
-    std::string _, response;
     const std::string path = "/v1/slurm/nodes/state";
-    if (session->call("POST", path, response, postData) != 0)
+    int res = session->call("POST", path, response, postData);
+
+    if (utils::check_errors(response) || res != 0)
         return 1;
 
-    return utils::check_errors(response);
+    return 0;
 }
 
 int CBatchSlurm::drain_nodes(std::vector<std::string>& filter, const std::string& reason) {

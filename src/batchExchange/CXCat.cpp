@@ -59,10 +59,9 @@ int CXCat::logout() {
  * @return 1 Error
  */
 int CXCat::get_nodes(std::string &output) {
-    if (session->call("GET", "xcatws/nodes", output) != 0)
-        return 1;
+    int res = session->call("GET", "xcatws/nodes", output);
 
-    if (utils::check_errors(output) != 0)
+    if (res != 0 || utils::check_errors(output))
         return 1;
 
     return 0;
@@ -82,10 +81,9 @@ int CXCat::get_os_images(const std::vector<std::string> &filter, std::string &ou
     if (filter.size())
         imageRange = utils::join_vector_to_string(filter, ",");
 
-    if (session->call("GET", "xcatws/osimages/" + imageRange, output) != 0)
-        return 1;
+    int res = session->call("GET", "xcatws/osimages/" + imageRange, output);
 
-    if (utils::check_errors(output) != 0)
+    if (res != 0 || utils::check_errors(output))
         return 1;
 
     return 0;
@@ -120,8 +118,8 @@ int CXCat::get_os_image_names(std::vector<std::string> &output) {
 /**
  * @brief Get os images
  *
- * @param filter  filter
- * @param output  output
+ * @param filter filter
+ * @param output output
  * @return 0 Success
  * @return 1 Error
  */
@@ -147,10 +145,9 @@ int CXCat::get_bootstate(const std::vector<std::string> &filter, std::string &ou
             }
         }
     }
-    if (session->call("GET", "xcatws/nodes/" + nodeRange + "/bootstate", output) != 0)
-        return 1;
+    int res = session->call("GET", "xcatws/nodes/" + nodeRange + "/bootstate", output);
 
-    if (utils::check_errors(output) != 0)
+    if (res != 0 || utils::check_errors(output))
         return 1;
 
     return 0;
@@ -159,8 +156,8 @@ int CXCat::get_bootstate(const std::vector<std::string> &filter, std::string &ou
 /**
  * @brief Set os image
  *
- * @param filter  filter
- * @param output  output
+ * @param filter filter
+ * @param output output
  * @return 0 Success
  * @return 1 Error
  */
@@ -168,7 +165,9 @@ int CXCat::set_os_image(const std::vector<std::string> &filter, std::string osIm
     if (!filter.size() || !osImage.length())
         return 1;
     std::string response;
-    if (session->call("PUT", "xcatws/nodes/" + utils::join_vector_to_string(filter, ",") + "/bootstate", response, "{\"osimage\":\"" + osImage + "\"}") != 0)
+    int res = session->call("PUT", "xcatws/nodes/" + utils::join_vector_to_string(filter, ",") + "/bootstate", response, "{\"osimage\":\"" + osImage + "\"}");
+
+    if (utils::check_errors(response) || res != 0)
         return 1;
     std::cout << response << std::endl;
     return 0;
@@ -185,7 +184,9 @@ int CXCat::reboot_nodes(const std::vector<std::string> &filter) {
     if (!filter.size())
         return 1;
     std::string response;
-    if (session->call("PUT", "xcatws/nodes/" + utils::join_vector_to_string(filter, ",") + "/power", response, "{\"action\":\"reset\"}") != 0)
+    int res = session->call("PUT", "xcatws/nodes/" + utils::join_vector_to_string(filter, ",") + "/power", response, "{\"action\":\"reset\"}");
+
+    if (utils::check_errors(response) || res != 0)
         return 1;
     std::cout << response << std::endl;
     return 0;
@@ -195,7 +196,9 @@ int CXCat::set_group_attributes(std::string group, const std::string &attributes
     if (!group.length())
         return 1;
     std::string response;
-    if (session->call("PUT", "xcatws/groups/" + group, response, attributes) != 0)
+    int res = session->call("PUT", "xcatws/groups/" + group, response, attributes);
+
+    if (utils::check_errors(response) || res != 0)
         return 1;
 
     std::cout << response << std::endl;
@@ -214,17 +217,12 @@ int CXCat::set_node_attributes(const std::vector<std::string> &nodes, const std:
     }
 
     std::string response;
-    if (session->call("PUT", "xcatws/groups/" + nodeRange, response, attributes) != 0)
+    int res = session->call("PUT", "xcatws/groups/" + nodeRange, response, attributes);
+
+    if (utils::check_errors(response) || res != 0)
         return 1;
 
     std::cout << response << std::endl;
-
-    return 0;
-}
-
-int CXCat::set_postscript(const std::vector<std::string> &filter, std::string postscript) {
-    if (!filter.size() || !postscript.length())
-        return 1;
 
     return 0;
 }
@@ -239,10 +237,9 @@ int CXCat::set_postscript(const std::vector<std::string> &filter, std::string po
 int CXCat::get_group_names(std::vector<std::string> &output) {
     std::string response;
     std::vector<std::string> images;
-    if (session->call("GET", "xcatws/groups/", response) != 0)
-        return 1;
+    int res = session->call("GET", "xcatws/groups/", response);
 
-    if (utils::check_errors(response) != 0)
+    if (utils::check_errors(response) || res != 0)
         return 1;
 
     rapidjson::Document d;
@@ -260,10 +257,12 @@ int CXCat::get_group_names(std::vector<std::string> &output) {
 }
 
 int CXCat::get_group(std::string group, std::string &output) {
-    if (session->call("GET", "xcatws/groups/" + group, output) != 0)
+    int res = session->call("GET", "xcatws/groups/" + group, output);
+
+    if (res != 0 || utils::check_errors(output))
         return 1;
 
-    return utils::check_errors(output);
+    return 0;
 }
 
 int CXCat::get_group_members(std::string group, std::vector<std::string> &output) {

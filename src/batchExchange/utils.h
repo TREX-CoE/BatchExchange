@@ -12,6 +12,10 @@
 #include <string>
 #include <vector>
 
+#include "rapidjson/document.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
+
 #define INVALID_JSON_ERROR_MSG "Error - Response is not valid JSON"
 
 namespace utils {
@@ -80,7 +84,8 @@ void decode_brace(const std::string &, std::vector<std::string> &);
 bool str_match_wildcard(const std::string &, const std::string &);
 bool ends_with(const std::string &, const std::string &);
 bool starts_with(const std::string &, const std::string &);
-bool str_match_any_wildcard(const std::vector<std::string>&, const std::string &);
+bool str_match_any_wildcard(const std::vector<std::string> &, const std::string &);
+void rapidjson_doc_to_str(rapidjson::Document &, std::string &);
 
 /**
  * @brief Template function to check whether a vector contains the specified element
@@ -95,4 +100,4 @@ bool vector_contains(const std::vector<T> &v, const T &e) {
     return (std::find(v.begin(), v.end(), e) != v.end());
 }
 }  // namespace utils
-#endif  //UTILS_H
+#endif  // UTILS_H

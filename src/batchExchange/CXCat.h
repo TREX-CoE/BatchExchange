@@ -33,7 +33,6 @@ class CXCat {
     int get_nodes(std::string &);
     int set_os_image(const std::vector<std::string> &, std::string);
     int reboot_nodes(const std::vector<std::string> &);
-    int set_postscript(const std::vector<std::string> &, std::string);
     int set_group_attributes(std::string, const std::string &);
     int set_node_attributes(const std::vector<std::string> &, const std::string &);
     int get_group_members(std::string group, std::vector<std::string> &output);

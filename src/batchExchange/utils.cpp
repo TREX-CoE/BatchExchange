@@ -13,10 +13,6 @@
 #include <sstream>
 #include <string>
 
-#include "rapidjson/document.h"
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/writer.h"
-
 /**
  * @brief Split string at delimiter
  *
@@ -131,6 +127,8 @@ void utils::str_extract_regex_occurances(std::string input, const std::regex &re
  */
 bool utils::is_number(const std::string &s) {
     // TODO floating point support
+    if (!s.length())
+        return false;
     return s.find_first_not_of("0123456789") == std::string::npos;
 }
 
@@ -333,6 +331,9 @@ std::string utils::join_vector_to_string(const std::vector<std::string> &vec, co
  * @return 1 Errors found
  */
 int utils::check_errors(const std::string &o) {
+    if (!o.length())
+        return 0;
+
     rapidjson::Document d;
     if (d.Parse(o.c_str()).HasParseError()) {
         std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
@@ -342,25 +343,46 @@ int utils::check_errors(const std::string &o) {
     if (!d.IsObject())
         return 0;
 
-    std::string errorKey = "";
+    std::string key = "";
     if (d.HasMember("errors"))
-        errorKey = "errors";
+        key = "errors";
     else if (d.HasMember("error"))
-        errorKey = "error";
+        key = "error";
 
-    if (errorKey.length()) {
-        if (d["errors"].IsString()) {
-            std::string err = d["errors"].GetString();
+    const char *errorKey = key.c_str();
+    const char *errorCodeKey = "errorcode";
+    int errorCode = 0;
+    if (d.HasMember(errorCodeKey)) {
+        if (d[errorCodeKey].IsString())
+            errorCode = std::stoi(d[errorCodeKey].GetString());
+        else if (d[errorCodeKey].IsInt())
+            errorCode = d[errorCodeKey].GetInt();
+    }
+
+    if (errorCode != 0)
+        std::cerr << "Error Code " << errorCode << " - ";
+
+    if (key.length()) {
+        if (d[errorKey].IsString()) {
+            std::string err = d[errorKey].GetString();
             if (err.length()) {
                 std::cerr << err << std::endl;
                 return 1;
             }
-        } else if (d["errors"].IsArray()) {
-            auto err = d["errors"].GetArray();
+        } else if (d[errorKey].IsArray()) {
+            auto err = d[errorKey].GetArray();
             for (rapidjson::SizeType i = 0; i < err.Size(); i++)
                 if (err[i].IsString())
                     std::cerr << err[i].GetString() << std::endl;
         }
     }
     return 0;
+}
+
+void utils::rapidjson_doc_to_str(rapidjson::Document &d, std::string &output) {
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    d.Accept(writer);
+
+    output = buffer.GetString();
 }
