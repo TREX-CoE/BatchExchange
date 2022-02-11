@@ -176,7 +176,7 @@ int CXCat::set_os_image(const std::vector<std::string> &filter, std::string osIm
 /**
  * @brief Reboot nodes
  *
- * @param filter  filter
+ * @param filter filter
  * @return 0 Success
  * @return 1 Error
  */
@@ -192,6 +192,14 @@ int CXCat::reboot_nodes(const std::vector<std::string> &filter) {
     return 0;
 }
 
+/**
+ * @brief Set attributes of group
+ *
+ * @param group name of group
+ * @param attributes json attributes
+ * @return 0 Success
+ * @return 1 Error
+ */
 int CXCat::set_group_attributes(std::string group, const std::string &attributes) {
     if (!group.length())
         return 1;
@@ -206,15 +214,19 @@ int CXCat::set_group_attributes(std::string group, const std::string &attributes
     return 0;
 }
 
+/**
+ * @brief Set attributes of nodes
+ *
+ * @param nodes list of nodes
+ * @param attributes json attributes
+ * @return 0 Success
+ * @return 1 Error
+ */
 int CXCat::set_node_attributes(const std::vector<std::string> &nodes, const std::string &attributes) {
     if (!nodes.size())
         return 1;
     std::string nodeRange;
-    if (nodes.size())
-        nodeRange = utils::join_vector_to_string(nodes, ",");
-    else {
-        std::cout << "TODO implement get_node_names" << std::endl;
-    }
+    nodeRange = utils::join_vector_to_string(nodes, ",");
 
     std::string response;
     int res = session->call("PUT", "xcatws/groups/" + nodeRange, response, attributes);
@@ -228,7 +240,7 @@ int CXCat::set_node_attributes(const std::vector<std::string> &nodes, const std:
 }
 
 /**
- * @brief Get group names
+ * @brief Get names of all groups
  *
  * @param output output
  * @return 0 Success
@@ -256,6 +268,14 @@ int CXCat::get_group_names(std::vector<std::string> &output) {
     return 0;
 }
 
+/**
+ * @brief Get attributes of group
+ *
+ * @param group group
+ * @param output output
+ * @return 0 Success
+ * @return 1 Error
+ */
 int CXCat::get_group(std::string group, std::string &output) {
     int res = session->call("GET", "xcatws/groups/" + group, output);
 
@@ -265,6 +285,14 @@ int CXCat::get_group(std::string group, std::string &output) {
     return 0;
 }
 
+/**
+ * @brief Get all members of group
+ *
+ * @param group group
+ * @param output output
+ * @return 0 Success
+ * @return 1 Error
+ */
 int CXCat::get_group_members(std::string group, std::vector<std::string> &output) {
     std::string response;
     if (get_group(group, response) != 0)
