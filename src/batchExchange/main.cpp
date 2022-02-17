@@ -77,7 +77,8 @@ int main(int argc, char **argv) {
                 image = "",
                 prescripts = "",
                 postbootscripts = "",
-                postscripts = "";
+                postscripts = "",
+                provmethod = "";
 
     auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
                         clipp::option("--json").set(json) % "Output as json",
@@ -91,7 +92,7 @@ int main(int argc, char **argv) {
     auto imageOpt = (clipp::command("images").set(selected, mode::images), clipp::opt_value("images", images)) % "Get information for available images [<images>]";
     auto bootStateOpt = (clipp::command("bootstate").set(selected, mode::bootstate), clipp::opt_value("nodes", nodes)) % "Get bootstate [of <nodes>]";
     auto rebootOpt = (clipp::command("reboot").set(selected, mode::reboot), clipp::value("nodes", nodes)) % "Reboot <nodes>";
-    auto deployOpt = (clipp::command("deploy").set(selected, mode::deploy), clipp::value("nodes", nodes), clipp::option("--group").set(deployTargetIsGroup), (clipp::option("--image") & clipp::value("image", image)), (clipp::option("--prescripts") & clipp::value("prescripts", prescripts)), (clipp::option("--postbootscripts") & clipp::value("postbootscripts", postbootscripts)), (clipp::option("--postscripts") & clipp::value("postscripts", postscripts))) % "Deploy <image> on <nodes/groups>";
+    auto deployOpt = (clipp::command("deploy").set(selected, mode::deploy), clipp::value("nodes", nodes), clipp::option("--group").set(deployTargetIsGroup), (clipp::option("--image") & clipp::value("image", image)), (clipp::option("--prescripts") & clipp::value("prescripts", prescripts)), (clipp::option("--postbootscripts") & clipp::value("postbootscripts", postbootscripts)), (clipp::option("--postscripts") & clipp::value("postscripts", postscripts), (clipp::option("--provmethod") & clipp::value("provmethod", provmethod)))) % "Deploy <image> on <nodes/groups>";
     auto cli = ("COMMANDS\n" % (deployOpt | nodesOpt | stateOpt | jobsOpt | queueOpt | imageOpt | bootStateOpt | rebootOpt), "OPTIONS\n" % generalOpts);
 
     if (!clipp::parse(argc, argv, cli) || help) {
@@ -277,8 +278,9 @@ int main(int argc, char **argv) {
             attributes.SetObject();
             auto &allocator = attributes.GetAllocator();
 
-            attributes.AddMember(rapidjson::StringRef("provmethod"),
-                                 rapidjson::StringRef(image.c_str()),
+            if (provmethod.length())
+                attributes.AddMember(rapidjson::StringRef("provmethod"),
+                                 rapidjson::StringRef(provmethod.c_str()),
                                  allocator);
 
             if (prescripts.length())
@@ -300,12 +302,18 @@ int main(int argc, char **argv) {
 
             for (auto &group : targetGroups) {
                 xcatSession.set_group_attributes(group, attributesStr);
+                std::cout << "Set attributes for group '" << group << "'" << std::endl;
             }
 
-            if (targetNodes.size())
+            if (targetNodes.size()) {
                 xcatSession.set_node_attributes(targetNodes, attributesStr);
+                std::cout << "Set attributes for nodes: " << utils::join_vector_to_string(targetNodes, ",") << std::endl;
+            }
 
-            std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
+            if (image.size()) {
+                xcatSession.set_os_image(nodeList, image);
+                std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
+            }
 
             if (xcatSession.reboot_nodes(nodeList) != 0)
                 return 1;
