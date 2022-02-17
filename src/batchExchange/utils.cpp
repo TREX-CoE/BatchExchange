@@ -195,7 +195,10 @@ void utils::decode_brace(const std::string &input, std::vector<std::string> &ret
  */
 void utils::read_login_data(const std::string &path, utils::loginData &megware, utils::loginData &xcat, utils::loginData &slurm, bool ignoreHeader) {
     std::string fileContent;
-    utils::read_file_to_string(path, fileContent);
+    if (utils::read_file_to_string(path, fileContent)) {
+        std::cerr << "Could't read file with login data!" << std::endl;
+        exit(EXIT_FAILURE);
+    }
 
     std::string line;
     std::vector<std::string> tmpLoginData;
