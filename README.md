@@ -1,23 +1,37 @@
 # TREX
 
-<Project description>
+Command line tool for provisioning via xCat in compliance with the batch scheduler
 
-#### Dependencies
+## Dependencies
 - libcurl
 - rapidjson
 
-#### Compilation
+## Compilation
 ```
 ./cmakeHelper.sh
 cd cbuild
 make -j $(nproc)
 ```
-#### Usage
+
+## Doxygen 
+```
+cd doc && doxygen Doxyfile
+```
+### for HTML documentation:
+doc/build/html/index.html
+
+### for PDF documentation:
+```
+make -C build/latex
+```
+generates doc/build/latex/refman.pdf
+
+## Usage
 ```
 USAGE:
         ./TREX deploy <nodes> [--group] [--image <image>] [--prescripts <prescripts>]
-               [--postbootscripts <postbootscripts>] [--postscripts <postscripts>] [-h] [--json] [-b
-               (slurm|pbs)] [-l <path>]
+               [--postbootscripts <postbootscripts>] [--postscripts <postscripts>] [--provmethod
+               <provmethod>] [-h] [--json] [-b (slurm|pbs)] [-l <path>]
 
         ./TREX nodes [<nodes>] [-h] [--json] [-b (slurm|pbs)] [-l <path>]
         ./TREX state [<nodes>] [--state <state>] [--reason <reason>] [-h] [--json] [-b (slurm|pbs)]
@@ -35,7 +49,7 @@ PARAMETERS:
         COMMANDS
 
             deploy <nodes> --group [--image <image>] [--prescripts <prescripts>] [--postbootscripts
-            <postbootscripts>] [--postscripts <postscripts>]
+            <postbootscripts>] [--postscripts <postscripts>] [--provmethod <provmethod>]
                     Deploy <image> on <nodes/groups>
 
             nodes <nodes>
