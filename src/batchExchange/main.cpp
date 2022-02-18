@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    // TODO implement EITHER loginFile OR manualy specification of all login parameters (can be solved using groups)
+    // TODO implement EITHER loginFile OR manualy specification of all login parameters (can be solved using clipp groups)
     if (!loginPath.length()) {
         std::cout << "Please specify login file" << std::endl;
         return 1;
@@ -112,7 +112,8 @@ int main(int argc, char **argv) {
 
     std::cout << "Reading login data from " << loginPath << std::endl;
     utils::loginData megwareLogin, xCatLogin, slurmLogin;
-    utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin);
+    if (utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin) != 0)
+        exit(EXIT_FAILURE);
 
     CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
     CXCat xcatSession(xCatLogin.host, xCatLogin.port, xCatLogin.username, xCatLogin.password, false);
@@ -220,8 +221,6 @@ int main(int argc, char **argv) {
                 image = "";
             }
 
-            // TODO handle cin cancel
-
             if (!image.length()) {
                 std::cout << "Please select one of the following images (by number):\n\n";
                 for (size_t i = 1; i <= availableImages.size(); i++) {
@@ -280,8 +279,8 @@ int main(int argc, char **argv) {
 
             if (provmethod.length())
                 attributes.AddMember(rapidjson::StringRef("provmethod"),
-                                 rapidjson::StringRef(provmethod.c_str()),
-                                 allocator);
+                                     rapidjson::StringRef(provmethod.c_str()),
+                                     allocator);
 
             if (prescripts.length())
                 attributes.AddMember(rapidjson::StringRef("prescripts"),
@@ -310,10 +309,8 @@ int main(int argc, char **argv) {
                 std::cout << "Set attributes for nodes: " << utils::join_vector_to_string(targetNodes, ",") << std::endl;
             }
 
-            if (image.size()) {
-                xcatSession.set_os_image(nodeList, image);
-                std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
-            }
+            xcatSession.set_os_image(deployTargetIsGroup ? targetGroups : targetNodes, image);
+            std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
 
             if (xcatSession.reboot_nodes(nodeList) != 0)
                 return 1;

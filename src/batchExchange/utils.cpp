@@ -193,12 +193,10 @@ void utils::decode_brace(const std::string &input, std::vector<std::string> &ret
  * TODO rework
  *
  */
-void utils::read_login_data(const std::string &path, utils::loginData &megware, utils::loginData &xcat, utils::loginData &slurm, bool ignoreHeader) {
+int utils::read_login_data(const std::string &path, utils::loginData &megware, utils::loginData &xcat, utils::loginData &slurm, bool ignoreHeader) {
     std::string fileContent;
-    if (utils::read_file_to_string(path, fileContent)) {
-        std::cerr << "Could't read file with login data!" << std::endl;
-        exit(EXIT_FAILURE);
-    }
+    if (utils::read_file_to_string(path, fileContent) != 0)
+        return 1;
 
     std::string line;
     std::vector<std::string> tmpLoginData;
@@ -236,6 +234,8 @@ void utils::read_login_data(const std::string &path, utils::loginData &megware, 
         slurm.host = tmpLoginData[3];
         slurm.port = tmpLoginData[4];
     }
+
+    return 0;
 }
 
 /**
