@@ -1,10 +1,8 @@
 # Third Party Dependencies
 
-## webfrontend
+## clipp - command line interfaces for modern C++
 
-### [vue-ctk-date-time-picker](https://github.com/muellan/clipp)
-
-Copyright (c) 2017 André Müller; foss@andremueller-online.de
+https://github.com/muellan/clipp; Copyright (c) 2017 André Müller; foss@andremueller-online.de
 
 License: [MIT](#l_mit) <!--https://github.com/muellan/clipp/blob/master/LICENSE-->
 
