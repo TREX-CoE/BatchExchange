@@ -6,6 +6,7 @@
 
 #include "base64.h"
 #include "curlHelper.h"
+#include "utils.h"
 
 /**
  * \brief Constructor
@@ -323,12 +324,12 @@ void RestClient::rest_helper_pre(
     std::string &response,
     std::string &header,
     const std::string &postData) {
-        
     if (restPath.at(0) != '/')
         restPath = "/" + restPath;
 
     const std::string url = "https://" + this->serverAddress + ":" + this->serverPort + restPath;
-    std::cout << url << std::endl;
+    // std::cout << url << "\n"
+    //           << postData << std::endl;
     /* curl verbosity */
     // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
@@ -394,7 +395,7 @@ void RestClient::rest_helper_post() {
 }
 
 /**
- * \brief Simple getter for http return code of last request
+ * \brief Getter for http return code of last request
  *
  * \return code of last request
  */
@@ -403,19 +404,49 @@ long RestClient::get_last_http_code() {
 }
 
 /**
- * \brief Simple getter for execution time of last request
+ * \brief Getter for execution time of last request
  *
  * \return execution time of last request
  */
-double RestClient::get_last_execution_time() {
+double RestClient::get_last_request_time() {
     return this->lastRequestTime;
 }
 
 /**
- * \brief Simple getter for url of last request
+ * \brief Getter for url of last request
  *
  * \return url of last request
  */
 std::string RestClient::get_last_url() {
     return this->lastUrlEffective;
+}
+
+int RestClient::call(std::string method, const std::string &path, std::string &output, const std::string &payload) {
+    utils::to_upper(method);
+    if (!utils::vector_contains(httpMethods, method)) {
+        std::cerr << "Unknown HTTP Method '" << method << "'" << std::endl;
+        return 1;
+    }
+
+    std::string _;
+    int res;
+
+    if (method == "GET") {
+        res = get(path, output, _);
+    } else if (method == "POST") {
+        res = post(path, payload, output, _);
+    } else if (method == "PUT") {
+        res = put(path, payload, output, _);
+    } else if (method == "PATCH") {
+        res = patch(path, payload, output, _);
+    } else if (method == "DELETE") {
+        res = del(path, output, _);
+    }
+
+    if (res != 0 && res != 200) {
+        std::cerr << "Error calling " << method << " " << path << " (" << res << ")" << std::endl;
+        return 1;
+    }
+
+    return 0;
 }

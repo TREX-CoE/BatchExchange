@@ -2,23 +2,23 @@ set(TREX_LIB_SRC
     base64.cpp
 	CBatch.cpp
 	CBatchSlurm.cpp
+    CXCat.cpp
     httpSession.cpp
     restClient.cpp
     utils.cpp
-    xcat.cpp
 )
 
 set(TREX_LIB_HDR
     base64.h
 	CBatch.h
 	CBatchSlurm.h
+    CXCat.h
 	clipp.h
     curlHelper.h
     httpSession.h
     restClient.h
     sessionTokenTypes.h
     utils.h
-    xcat.h
 )
 
 # add the executable

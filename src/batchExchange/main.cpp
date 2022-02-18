@@ -5,42 +5,95 @@
  ***********************************************/
 
 #include <curl/curl.h>
+#include <signal.h>
+#include <unistd.h>
 
+#include <chrono>
 #include <ctime>
 #include <exception>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "CBatchSlurm.h"
+#include "CXCat.h"
 #include "clipp.h"
 #include "restClient.h"
 #include "sessionTokenTypes.h"
 #include "utils.h"
-#include "xcat.h"
+
+#define DRAIN_SLEEP 3000
+
+bool canceled(false);
+
+/**
+ * @brief Handle caught signal
+ *
+ * This function is called when SIGINT is caught.
+ *
+ * @param signal Number of signal
+ */
+void sigHandler(int signal) {
+    std::cout << "Caught signal " << signal << std::endl;
+
+    // only exit on second SIGINT
+    if (canceled) {
+        exit(EXIT_FAILURE);
+    }
+    canceled = true;
+}
 
 int main(int argc, char **argv) {
+    struct sigaction sigIntHandler;
+
+    sigIntHandler.sa_handler = sigHandler;
+    sigemptyset(&sigIntHandler.sa_mask);
+    sigIntHandler.sa_flags = 0;
+
+    sigaction(SIGINT, &sigIntHandler, NULL); /* for CTRL+C */
+
     enum class mode { nodes,
                       jobs,
                       state,
-                      queues
+                      queues,
+                      images,
+                      bootstate,
+                      reboot,
+                      deploy
     };
 
     mode selected;
-    bool help = false, json = true;
-    std::string batchSystem = "slurm", loginPath = "", nodes = "", state = "", jobs = "", queues = "", reason = "";
+    bool help = false, json = true, deployTargetIsGroup = false;
+    std::string batchSystem = "slurm",
+                loginPath = "",
+                nodes = "",
+                state = "",
+                jobs = "",
+                queues = "",
+                reason = "",
+                images = "",
+                image = "",
+                prescripts = "",
+                postbootscripts = "",
+                postscripts = "",
+                provmethod = "";
 
     auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
                         clipp::option("--json").set(json) % "Output as json",
-                        (clipp::option("-b", "--batch") & (clipp::required("slurm") | clipp::required("pbs"))) % "Batch System",
+                        (clipp::option("-b", "--batch").set(batchSystem) & (clipp::required("slurm") | clipp::required("pbs"))) % "Batch System",
                         (clipp::option("-l", "--loginFile") & clipp::value("path", loginPath)) % "Path for login data");
 
     auto nodesOpt = (clipp::command("nodes").set(selected, mode::nodes), clipp::opt_value("nodes", nodes)) % "Get node information [of <nodes>]";
     auto jobsOpt = (clipp::command("jobs").set(selected, mode::jobs), clipp::opt_value("jobIDs", jobs)) % "Get job info [of <jobIDs>]";
     auto stateOpt = (clipp::command("state").set(selected, mode::state), (clipp::opt_value("nodes", nodes), (clipp::option("--state") & clipp::value("state", state), (clipp::option("--reason") & clipp::value("reason", reason))))) % "Get/Set state [of <nodes>]";
     auto queueOpt = (clipp::command("queues").set(selected, mode::queues), clipp::opt_value("queues", queues)) % "Get queue information [of <queues>]";
-    auto cli = ("COMMANDS\n" % (nodesOpt | stateOpt | jobsOpt | queueOpt), "OPTIONS\n" % generalOpts);
+    auto imageOpt = (clipp::command("images").set(selected, mode::images), clipp::opt_value("images", images)) % "Get information for available images [<images>]";
+    auto bootStateOpt = (clipp::command("bootstate").set(selected, mode::bootstate), clipp::opt_value("nodes", nodes)) % "Get bootstate [of <nodes>]";
+    auto rebootOpt = (clipp::command("reboot").set(selected, mode::reboot), clipp::value("nodes", nodes)) % "Reboot <nodes>";
+    auto deployOpt = (clipp::command("deploy").set(selected, mode::deploy), clipp::value("nodes", nodes), clipp::option("--group").set(deployTargetIsGroup), (clipp::option("--image") & clipp::value("image", image)), (clipp::option("--prescripts") & clipp::value("prescripts", prescripts)), (clipp::option("--postbootscripts") & clipp::value("postbootscripts", postbootscripts)), (clipp::option("--postscripts") & clipp::value("postscripts", postscripts), (clipp::option("--provmethod") & clipp::value("provmethod", provmethod)))) % "Deploy <image> on <nodes/groups>";
+    auto cli = ("COMMANDS\n" % (deployOpt | nodesOpt | stateOpt | jobsOpt | queueOpt | imageOpt | bootStateOpt | rebootOpt), "OPTIONS\n" % generalOpts);
 
     if (!clipp::parse(argc, argv, cli) || help) {
         // std::cout << make_man_page(cli, argv[0]) << std::endl;
@@ -51,7 +104,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    // TODO implement EITHER loginFile OR manualy specification of all login parameters (can be solved using groups)
+    // TODO implement EITHER loginFile OR manualy specification of all login parameters (can be solved using clipp groups)
     if (!loginPath.length()) {
         std::cout << "Please specify login file" << std::endl;
         return 1;
@@ -59,20 +112,29 @@ int main(int argc, char **argv) {
 
     std::cout << "Reading login data from " << loginPath << std::endl;
     utils::loginData megwareLogin, xCatLogin, slurmLogin;
-    utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin);
+    if (utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin) != 0)
+        exit(EXIT_FAILURE);
 
     CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
+    CXCat xcatSession(xCatLogin.host, xCatLogin.port, xCatLogin.username, xCatLogin.password, false);
 
+    // TODO log in only when really needed
     if (slurmSession.login() != 0) {
         std::cerr << "Slurm Login failed on " << slurmLogin.host << ":" << slurmLogin.port << " failed" << std::endl;
         return 1;
     }
 
-    std::vector<std::string> nodeList, jobList, queueList;
+    if (xcatSession.login() != 0) {
+        std::cerr << "xCAT Login failed on " << xCatLogin.host << ":" << xCatLogin.port << " failed" << std::endl;
+        return 1;
+    }
+
+    std::vector<std::string> nodeList, jobList, queueList, imageList;
 
     utils::decode_brace(nodes, nodeList);
     utils::decode_brace(queues, queueList);
     utils::decode_brace(jobs, jobList);
+    utils::decode_brace(images, imageList);
 
     std::string output;
     switch (selected) {
@@ -104,9 +166,161 @@ int main(int argc, char **argv) {
                     return 0;
                 }
             } else {
-                if (slurmSession.get_node_state(nodeList, output) != 0)
+                if (slurmSession.get_node_states(nodeList, output) != 0)
                     return 1;
             }
+            break;
+        }
+        case mode::images: {
+            if (xcatSession.get_os_images(imageList, output) != 0)
+                return 1;
+
+            break;
+        }
+        case mode::bootstate: {
+            if (xcatSession.get_bootstate(nodeList, output) != 0)
+                return 1;
+            break;
+        }
+        case mode::reboot: {
+            if (xcatSession.reboot_nodes(nodeList) != 0)
+                return 1;
+            break;
+        }
+        case mode::deploy: {
+            std::vector<std::string> targetNodes, targetGroups;
+            if (!deployTargetIsGroup)
+                targetNodes = nodeList;
+            else {
+                targetGroups = nodeList;
+                nodeList.clear();
+
+                // nodeList shall hold a list of all nodes even if they were specified as a group
+                for (auto &group : targetGroups) {
+                    std::vector<std::string> members;
+                    if (xcatSession.get_group_members(group, members) != 0)
+                        return 1;
+                    for (auto &member : members)
+                        nodeList.push_back(member);
+                }
+            }
+
+            // check validity of chosen image or generate image options
+            std::vector<std::string> availableImages;
+
+            if (xcatSession.get_os_image_names(availableImages) != 0)
+                return 1;
+
+            if (!availableImages.size()) {
+                std::cerr << "No deployable images found!" << std::endl;
+                return 1;
+            }
+
+            if (image.length() && !utils::vector_contains(availableImages, image)) {
+                std::cerr << "Unknown Image" << std::endl;
+                image = "";
+            }
+
+            if (!image.length()) {
+                std::cout << "Please select one of the following images (by number):\n\n";
+                for (size_t i = 1; i <= availableImages.size(); i++) {
+                    std::cout << "(" << i << ")\t" << availableImages[i - 1] << std::endl;
+                }
+                std::cout << "\n";
+                std::cin >> image;
+                bool valid = utils::is_number(image);
+                int imageNr;
+                if (valid) {
+                    imageNr = std::stoi(image);
+                    if (imageNr < 1 || imageNr > static_cast<int>(availableImages.size()))
+                        valid = false;
+                }
+
+                if (!valid) {
+                    std::cerr << "Invalid selection" << std::endl;
+                    return 1;
+                }
+
+                image = availableImages[imageNr - 1];
+            }
+
+            // TODO handle cancellation or errors during deployment! (rollback?)
+
+            std::cout << "\nDraining nodes"
+                      << std::endl;
+            if (slurmSession.drain_nodes(nodeList, "redeployment") != 0)
+                return 1;
+
+            unsigned int drained = 0;
+            unsigned int nodeCount = nodeList.size();
+
+            if (slurmSession.drained(nodeList, drained) != 0)
+                return 1;
+
+            while (drained != nodeCount && !canceled) {
+                if (slurmSession.drained(nodeList, drained) != 0)
+                    return 1;
+                std::cout << "\x1b[A"
+                          << "Draining nodes [" << drained << "/" << nodeCount << "]"
+                          << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(DRAIN_SLEEP));
+            }
+
+            if (canceled)
+                return 1;
+
+            std::cout << "\x1b[A"
+                      << "Draining complete."
+                      << std::endl;
+
+            rapidjson::Document attributes;
+            attributes.SetObject();
+            auto &allocator = attributes.GetAllocator();
+
+            if (provmethod.length())
+                attributes.AddMember(rapidjson::StringRef("provmethod"),
+                                     rapidjson::StringRef(provmethod.c_str()),
+                                     allocator);
+
+            if (prescripts.length())
+                attributes.AddMember(rapidjson::StringRef("prescripts"),
+                                     rapidjson::StringRef(prescripts.c_str()),
+                                     allocator);
+            if (postbootscripts.length())
+                attributes.AddMember(rapidjson::StringRef("postbootscripts"),
+                                     rapidjson::StringRef(postbootscripts.c_str()),
+                                     allocator);
+            if (postscripts.length())
+                attributes.AddMember(rapidjson::StringRef("postscripts"),
+                                     rapidjson::StringRef(postscripts.c_str()),
+                                     allocator);
+
+            std::string attributesStr;
+            utils::rapidjson_doc_to_str(attributes, attributesStr);
+            std::cout << attributesStr << std::endl;
+
+            for (auto &group : targetGroups) {
+                xcatSession.set_group_attributes(group, attributesStr);
+                std::cout << "Set attributes for group '" << group << "'" << std::endl;
+            }
+
+            if (targetNodes.size()) {
+                xcatSession.set_node_attributes(targetNodes, attributesStr);
+                std::cout << "Set attributes for nodes: " << utils::join_vector_to_string(targetNodes, ",") << std::endl;
+            }
+
+            xcatSession.set_os_image(deployTargetIsGroup ? targetGroups : targetNodes, image);
+            std::cout << "Set OS image to '" << image << "' for next boot" << std::endl;
+
+            if (xcatSession.reboot_nodes(nodeList) != 0)
+                return 1;
+
+            std::cout << "Node reset ordered\n";
+
+            // TODO wait until reboot is complete
+            // either xcat provides an api for that
+            // or check boot status
+
             break;
         }
         default:
@@ -116,160 +330,6 @@ int main(int argc, char **argv) {
     std::cout << output << std::endl;
 
     slurmSession.logout();
-
-    ////// xCat
-
-    /*Xcat xCat;
-    xCat.set_user_credentials(xCatLogin.username, xCatLogin.password);
-    xCat.set_host_config(xCatLogin.host, xCatLogin.port);
-    xCat.ssl_verify(false);
-
-    int errorCode = xCat.login();
-
-    std::string currentImage = xCat.get_os_image("cn1");*/
-    // if (currentImage.find("centos8-x86_64-netboot-compute") == std::string::npos) {
-    // xCat.set_os_image("cn1", "compute-alma8-diskless");
-    //} else {
-    // xCat.set_os_image("cn1", "centos8-x86_64-netboot-compute");
-    //}
-    // xCat.reboot_node("cn1");
-
-    // xCat.logout();
-
-    /****************** REST Tests ********************/
-
-    // MEGWARE
-    /*
-        RestClient rest(SESSION_TOKEN_MEGWARE);
-        rest.set_user_credentials(megware.username, megware.password);
-        rest.set_host_config(megware.host, megware.port);
-        rest.ssl_verify(false);
-
-        int errorCode = rest.login();
-        std::cout << "login" << std::endl;
-        std::cout << "errorCode: " << errorCode << std::endl;
-
-        std::string header, response;
-        //rest.post("api/v1/racks", "[{\"position\": 10, \"rack_name\": \"curlRack\", \"height\": 10, \"position\": 99}]", response, header);
-        errorCode = rest.get("api/v1/racks/", response, header);
-        //rest.patch("api/v1/racks/curlRack", "{\"height\": 42}", response, header);
-        //rest.get("api/v1/racks/curlRack", response, header);
-        //rest.del("api/v1/racks/curlRack", response, header);
-        std::cout << "errorCode: " << errorCode << std::endl;
-        std::cout << "get" << std::endl;
-
-        rest.logout();
-        std::cout << "logout" << std::endl;
-
-        std::cout << header << std::endl;
-        std::cout << "------------" << std::endl;
-        std::cout << response << std::endl;
-    */
-
-    // XCAT TOKEN
-    /*
-        RestClient rest(SESSION_TOKEN_XCAT);
-        rest.set_user_credentials(xCatLogin.username, xCatLogin.password);
-        rest.set_host_config(xCatLogin.host, xCatLogin.port);
-        rest.ssl_verify(false);
-
-        int errorCode = rest.login();
-        std::cout << "login" << std::endl;
-        std::cout << "errorCode: " << errorCode << std::endl;
-
-        std::string header, response;
-        //errorCode = rest.get("xcatws/nodes", response, header);
-        errorCode = rest.get("xcatws/nodes/cn1/bootstate", response, header);
-        errorCode = rest.put("xcatws/nodes/cn1/bootstate", "{\"osimage\":\"centos8-x86_64-netboot-compute\"}", response, header);
-
-        std::cout << "errorCode: " << errorCode << std::endl;
-        std::cout << "get" << std::endl;
-
-        rest.logout();
-        std::cout << "logout" << std::endl;
-
-        std::cout << header << std::endl;
-        std::cout << "------------" << std::endl;
-        std::cout << response << std::endl;
-    */
-    /****************** Session Tests ********************/
-
-    // MEGWARE TOKEN
-    /*
-        HttpSession session(
-            megware.username,
-            megware.password,
-            megware.host,
-            megware.port
-        );
-
-        session.set_token_type(SESSION_TOKEN_MEGWARE);
-        session.set_login_path("/oauth/token");
-        session.set_logout_path("/oauth/revoke");
-        session.ssl_verify(false);
-
-        int errorCode = session.login();
-        if (errorCode != 0) {
-            std::cout << "login failed with error code: " << errorCode << std::endl;
-            return -1;
-        }
-        errorCode = session.logout();
-        if (errorCode != 0) {
-            std::cout << "logout failed with error code: " << errorCode << std::endl;
-            return -2;
-        }
-    */
-    // XCAT TOKEN
-    /*
-        HttpSession session(
-            xCatLogin.username,
-            xCatLogin.password,
-            xCatLogin.host,
-            xCatLogin.port
-        );
-
-        session.set_token_type(SESSION_TOKEN_XCAT);
-        session.set_login_path("/xcatws/tokens");
-        session.set_date_parse_descr("%Y-%m-%d %H:%M:%S");
-        session.ssl_verify(false);
-
-        int errorCode = session.login();
-        if (errorCode != 0) {
-            std::cout << "login failed with error code: " << errorCode << std::endl;
-            return -1;
-        }
-    */
-    // not possible to logout
-    /*errorCode = session.logout();
-    if (errorCode != 0) {
-        std::cout << "logout failed with error code: " << errorCode << std::endl;
-        return -2;
-    }*/
-
-    /****************** Token Tests ********************/
-
-    // MEGWARE TOKEN
-    /*
-        SessionToken token;
-        token.set_keys_by_token_type(SESSION_TOKEN_KEYS_MEGWARE);
-        token.read_token("{\"access_token\": \"pHfFnU2Muhg0kIPeoSYGrt71fQxC3h\", \"expires_in\": 3600, \"token_type\": \"Bearer\", \"scope\": \"alerts_delete alerts_read batch_read batch_write commands_read commands_write configclasses_control configclasses_delete configclasses_read configclasses_write logs_read graphs_delete graphs_read graphs_write emails_read emails_write emails_delete inventories_read inventories_write maintenence_admin metrics_delete metrics_read metrics_write oauth_admin pdus_control pdus_delete pdus_read pdus_write preferences_read preferences_write racks_control racks_delete racks_read racks_write thresholds_admin thresholds_read traps_write traps_read units_control units_delete units_read units_write users_delete users_read users_self_read users_self_write users_write values_read views_delete views_read views_write\", \"refresh_token\": \"9S4JfjWHt5BH7161HvSviBgEfRRMIl\", \"version\": \"0.1.0\"}");
-
-        std::cout << token.get_access_token() << std::endl;
-        std::cout << token.get_refresh_token() << std::endl;
-    */
-    // XCAT TOKEN
-    /*
-        SessionToken token;
-        token.set_keys_by_token_type(SESSION_TOKEN_KEYS_XCAT);
-        token.set_date_parse_descr("%Y-%m-%d %H:%M:%S");
-        int error = token.read_token("{\"token\":{\"expire\":\"2021-8-27 14:00:18\",\"id\":\"2bbee803-7d0d-497e-a472-e62254cd1e30\"}}");
-
-        std::cout << "error: " << error << std::endl;
-
-        std::cout << token.get_expire_date()-time(nullptr) << std::endl;
-
-        std::cout << "get_access_token: " << token.get_access_token() << std::endl;
-    */
 
     return 0;
 }

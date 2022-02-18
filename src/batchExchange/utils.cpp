@@ -127,6 +127,8 @@ void utils::str_extract_regex_occurances(std::string input, const std::regex &re
  */
 bool utils::is_number(const std::string &s) {
     // TODO floating point support
+    if (!s.length())
+        return false;
     return s.find_first_not_of("0123456789") == std::string::npos;
 }
 
@@ -191,43 +193,49 @@ void utils::decode_brace(const std::string &input, std::vector<std::string> &ret
  * TODO rework
  *
  */
-void utils::read_login_data(const std::string &path, utils::loginData &megware, utils::loginData &xcat, utils::loginData &slurm, bool ignoreHeader) {
+int utils::read_login_data(const std::string &path, utils::loginData &megware, utils::loginData &xcat, utils::loginData &slurm, bool ignoreHeader) {
     std::string fileContent;
-    utils::read_file_to_string(path, fileContent);
+    if (utils::read_file_to_string(path, fileContent) != 0)
+        return 1;
 
     std::string line;
     std::vector<std::string> tmpLoginData;
 
-    if (ignoreHeader) {
+    if (ignoreHeader)
         utils::erase_lines_from_start(fileContent, 1);
-    }
 
     std::istringstream iss(fileContent);
 
     std::getline(iss, line);
     utils::str_split(line, ",", tmpLoginData);
-    megware.username = tmpLoginData[1];
-    megware.password = tmpLoginData[2];
-    megware.host = tmpLoginData[3];
-    megware.port = tmpLoginData[4];
+    if (tmpLoginData[0] == "clustware") {
+        megware.username = tmpLoginData[1];
+        megware.password = tmpLoginData[2];
+        megware.host = tmpLoginData[3];
+        megware.port = tmpLoginData[4];
+    }
 
     tmpLoginData.clear();
-
     std::getline(iss, line);
     utils::str_split(line, ",", tmpLoginData);
-    xcat.username = tmpLoginData[1];
-    xcat.password = tmpLoginData[2];
-    xcat.host = tmpLoginData[3];
-    xcat.port = tmpLoginData[4];
+    if (tmpLoginData[0] == "xcat") {
+        xcat.username = tmpLoginData[1];
+        xcat.password = tmpLoginData[2];
+        xcat.host = tmpLoginData[3];
+        xcat.port = tmpLoginData[4];
+    }
 
     tmpLoginData.clear();
-
     std::getline(iss, line);
     utils::str_split(line, ",", tmpLoginData);
-    slurm.username = tmpLoginData[1];
-    slurm.password = tmpLoginData[2];
-    slurm.host = tmpLoginData[3];
-    slurm.port = tmpLoginData[4];
+    if (tmpLoginData[0] == "slurmOverNginx") {
+        slurm.username = tmpLoginData[1];
+        slurm.password = tmpLoginData[2];
+        slurm.host = tmpLoginData[3];
+        slurm.port = tmpLoginData[4];
+    }
+
+    return 0;
 }
 
 /**
@@ -284,11 +292,21 @@ void utils::erase_lines_from_start(std::string &data, int lineCount) {
 /**
  * @brief Converts string to lowercase
  *
- * @param s String reference to be transformed
+ * @param s String to be transformed
  */
 void utils::to_lower(std::string &s) {
     std::transform(s.begin(), s.end(), s.begin(),
                    [](unsigned char c) { return std::tolower(c); });
+}
+
+/**
+ * @brief Converts string to uppercase
+ *
+ * @param s String to be transformed
+ */
+void utils::to_upper(std::string &s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return std::toupper(c); });
 }
 
 /**
@@ -306,4 +324,68 @@ std::string utils::join_vector_to_string(const std::vector<std::string> &vec, co
         ret += s;
     }
     return ret;
+}
+
+/**
+ * @brief Check json output for errors
+ *
+ * @param o output
+ * @return 0 No errors
+ * @return 1 Errors found
+ */
+int utils::check_errors(const std::string &o) {
+    if (!o.length())
+        return 0;
+
+    rapidjson::Document d;
+    if (d.Parse(o.c_str()).HasParseError()) {
+        std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
+        return 1;
+    }
+
+    if (!d.IsObject())
+        return 0;
+
+    std::string key = "";
+    if (d.HasMember("errors"))
+        key = "errors";
+    else if (d.HasMember("error"))
+        key = "error";
+
+    const char *errorKey = key.c_str();
+    const char *errorCodeKey = "errorcode";
+    int errorCode = 0;
+    if (d.HasMember(errorCodeKey)) {
+        if (d[errorCodeKey].IsString())
+            errorCode = std::stoi(d[errorCodeKey].GetString());
+        else if (d[errorCodeKey].IsInt())
+            errorCode = d[errorCodeKey].GetInt();
+    }
+
+    if (errorCode != 0)
+        std::cerr << "Error Code " << errorCode << " - ";
+
+    if (key.length()) {
+        if (d[errorKey].IsString()) {
+            std::string err = d[errorKey].GetString();
+            if (err.length()) {
+                std::cerr << err << std::endl;
+                return 1;
+            }
+        } else if (d[errorKey].IsArray()) {
+            auto err = d[errorKey].GetArray();
+            for (rapidjson::SizeType i = 0; i < err.Size(); i++)
+                if (err[i].IsString())
+                    std::cerr << err[i].GetString() << std::endl;
+        }
+    }
+    return 0;
+}
+
+void utils::rapidjson_doc_to_str(rapidjson::Document &d, std::string &output) {
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    d.Accept(writer);
+
+    output = buffer.GetString();
 }

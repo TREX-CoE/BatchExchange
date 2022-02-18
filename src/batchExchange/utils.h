@@ -12,6 +12,12 @@
 #include <string>
 #include <vector>
 
+#include "rapidjson/document.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
+
+#define INVALID_JSON_ERROR_MSG "Error - Response is not valid JSON"
+
 namespace utils {
 struct loginData {
     std::string username;
@@ -64,19 +70,22 @@ const std::vector<std::string> slurmNodeStates = {
 };
 
 void str_split(const std::string &input, const std::string delimiter, std::vector<std::string> &ret);
-void read_login_data(const std::string &path, utils::loginData &megware, utils::loginData &xcat, utils::loginData &slurm, bool ignoreHeader = true);
+int read_login_data(const std::string &path, utils::loginData &megware, utils::loginData &xcat, utils::loginData &slurm, bool ignoreHeader = true);
 int read_file_to_string(std::string, std::string &);
 int write_to_file(std::string, const std::string &);
 void erase_lines_from_start(std::string &, int);
 void to_lower(std::string &);
+void to_upper(std::string &);
+std::string join_vector_to_string(const std::vector<std::string> &, const std::string);
+int check_errors(const std::string &);
 void str_extract_regex_occurances(std::string, const std::regex &, std::vector<std::string> &);
 bool is_number(const std::string &);
 void decode_brace(const std::string &, std::vector<std::string> &);
-std::string join_vector_to_string(const std::vector<std::string> &, const std::string);
 bool str_match_wildcard(const std::string &, const std::string &);
 bool ends_with(const std::string &, const std::string &);
 bool starts_with(const std::string &, const std::string &);
-bool str_match_any_wildcard(const std::vector<std::string>&, const std::string &);
+bool str_match_any_wildcard(const std::vector<std::string> &, const std::string &);
+void rapidjson_doc_to_str(rapidjson::Document &, std::string &);
 
 /**
  * @brief Template function to check whether a vector contains the specified element
