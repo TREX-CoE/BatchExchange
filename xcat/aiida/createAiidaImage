@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# create image from install iso
+copycds -n centos85 AlmaLinux-8.5-x86_64-dvd.iso 
+mkdef -t osimage -o alma85-x86_64-netboot-compute-aiida --template centos85-x86_64-netboot-compute
+lsdef -t osimage
+
+# add repo paths [edit here]
+chdef -t osimage alma85-x86_64-netboot-compute-aiida pkgdir=/install/centos85/x86_64,[path or url to PowerTools],[path or url to EPEL]
+
+# set packages to install and files to deploy from master to clients
+mkdir -p /install/pkglists
+cp ./compute.almalinux85.aiida.pkglist /install/pkglists/
+chdef -t osimage alma85-x86_64-netboot-compute-aiida pkglist=/install/pkglists/compute.almalinux85.aiida.pkglist
+
+podman pull docker pull aiidateam/aiida-core
+podman save aiidateam/aiida-core > aiida-core.tar
+
+mkdir -p /install/synclists
+cp ./alma8-hpc.synclist /install/synclists/
+chdef -t osimage alma85-x86_64-netboot-compute-aiida synclists=/install/synclists/alma8-aiida.synclist
+
+
+chdef -t osimage alma85-x86_64-netboot-compute-aiida rootimgdir=/install/netboot/centos85/x86_64/aiida
+
+# generate image for provisioning
+genimage alma85-x86_64-netboot-compute-aiida
+packimage alma85-x86_64-netboot-compute-aiida
+
+# define scripts which are executed on clients after boot [edit here]
+cp ./custom-slurm-scripts /install/postscripts/
+chdef -t group [group name] postbootscripts=custom-slurm-scripts
+
+# advice image to nodes or group of nodes [edit here]
+nodeset [node or group] osimage=alma85-x86_64-netboot-compute-aiida
+# reboot nodes thus changes will be applied
+# with BMC
+rpower [node or group] restart
+# without BMC
+# ssh cn1 reboot

@@ -1,0 +1,4 @@
+echo "Load AiiDA container"
+cat /install/container/aiida-core.tar | podman load
+podman run --privileged -d --name aiida-container docker.io/aiidateam/aiida-core
+podman exec -t aiida-container wait-for-services

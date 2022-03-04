@@ -1,0 +1,23 @@
+echo "Create SLURM/Munge Users"
+userdel slurm
+groupdel slurm
+userdel munge
+groupdel munge
+groupadd --non-unique -r munge -g 901
+groupadd --non-unique -r slurm -g 900
+useradd -r -g munge -d /var/run/munge -s /sbin/nologin -c "Runs Uid 'N' Gid Emporium" munge -u 901
+useradd -r -g slurm -d /etc -s /sbin/nologin -c "SLURM resource manager" slurm -u 900
+
+echo "Enabling SLURM/Munge Services"
+systemctl is-enabled --quiet munge.service || systemctl enable munge.service
+chown -vR munge:munge /etc/munge/ /var/run/munge/ /var/lib/munge/ /var/log/munge/
+systemctl restart munge
+
+systemctl is-enabled --quiet slurmd.service || systemctl enable slurmd.service
+if [ ! -d /var/spool/slurm ]; then mkdir -vp /var/spool/slurm; fi
+if [ ! -d /var/log/slurm ]; then mkdir -vp /var/log/slurm; fi
+systemctl restart slurmd
+
+# doesn't work
+#echo "Set idle state for node $(hostname)"
+#scontrol update "nodename=$(hostname)" state=resume
