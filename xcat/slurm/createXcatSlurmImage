@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# create image from install iso
+copycds -n centos85 AlmaLinux-8.5-x86_64-dvd.iso 
+mkdef -t osimage -o alma85-x86_64-netboot-compute --template centos85-x86_64-netboot-compute
+lsdef -t osimage
+
+# add repo paths [edit here]
+chdef -t osimage alma85-x86_64-netboot-compute pkgdir=/install/centos85/x86_64,[path or url to PowerTools],[path or url to SLURM],[path or url to EPEL]
+
+# set packages to install and files to deploy from master to clients
+mkdir -p /install/pkglists
+cp ./compute.almalinux85.slurm.pkglist /install/pkglists/
+chdef -t osimage alma85-x86_64-netboot-compute pkglist=/install/pkglists/compute.almalinux85.slurm.pkglist
+mkdir -p /install/synclists
+cp ./alma8-hpc.synclist /install/synclists/
+chdef -t osimage alma85-x86_64-netboot-compute synclists=/install/synclists/alma8-hpc.synclist
+
+# autostart working after provisioning
+#sed -i 's/ReturnToService=./ReturnToService=2/g' /etc/slurm/slurm.conf
+
+# generate image for provisioning
+genimage alma85-x86_64-netboot-compute
+packimage alma85-x86_64-netboot-compute
+
+# define scripts which are executed on clients after boot [edit here]
+cp ./custom-slurm-scripts /install/postscripts/
+chdef -t group [group name] postbootscripts=custom-slurm-scripts
+
+# advice image to nodes or group of nodes [edit here]
+nodeset [node or group] osimage=alma85-x86_64-netboot-compute
+# reboot nodes thus changes will be applied
+# with BMC
+rpower [node or group] restart
+# without BMC
+# ssh cn1 -c "reboot"
