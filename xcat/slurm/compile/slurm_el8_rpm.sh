@@ -2,6 +2,7 @@
 
 function print_help {
     echo "Usage: slurm_el8_rpm.sh <OPTIONS> SLURMVERSION SLURMRELEASE"
+    echo "Example: ./slurm_el8_rpm.sh 21.08.6 \"\""
     echo ""
     echo "OPTIONS:"
     echo -e "-h|--help\tprints this"
@@ -56,7 +57,7 @@ done
 SLURMVERSION=$1
 SLURMRELEASE=$2
 
-$EXECUTOR build --build-arg SLURMVERSION=$SLURMVERSION --build-arg SLURMRELEASE=$SLURMRELEASE -f ./container/build_slurm_el8.dockerfile -t alma_slurm .
+$EXECUTOR build --build-arg SLURMVERSION=$SLURMVERSION --build-arg SLURMRELEASE=$SLURMRELEASE -f ./build_slurm_el8.dockerfile -t alma_slurm .
 $EXECUTOR run -v $RPM_DIR:/tmp/slurm --name build_slurm alma_slurm
 $EXECUTOR rm build_slurm
 if [ $RM_IMAGE -eq 1 ]; then

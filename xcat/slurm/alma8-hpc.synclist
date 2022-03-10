@@ -1,0 +1,2 @@
+/etc/munge/munge.key -> /etc/munge/
+/etc/slurm/slurm.conf -> /etc/slurm/slurm.conf
