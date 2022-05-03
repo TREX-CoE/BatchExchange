@@ -21,11 +21,18 @@ set(TREX_LIB_HDR
     utils.h
 )
 
+add_library( TREX_LIB STATIC
+    ${TREX_LIB_SRC}
+    ${TREX_LIB_HDR}
+)
+
 # add the executable
 add_executable( TREX
                 main.cpp
-                ${TREX_LIB_SRC}
-                ${TREX_LIB_HDR}
+)
+
+target_link_libraries( TREX
+TREX_LIB
 )
 
 include_directories(${CURL_INCLUDE_DIR})

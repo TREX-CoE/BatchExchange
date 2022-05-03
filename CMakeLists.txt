@@ -9,3 +9,4 @@ include(cmake/compilerSettings.cmake)
 
 # project itself
 add_subdirectory(src/)
+add_subdirectory(test/)
