@@ -1,0 +1,4 @@
+[submodule "src/batchsystem"]
+	path = src/batchsystem
+	branch=main
+	url = ../../Megware/batchsystem.git
