@@ -24,6 +24,13 @@
 #include "sessionTokenTypes.h"
 #include "utils.h"
 
+#include "batchsystem/batchsystem.h"
+#include "batchsystem/factory.h"
+
+#include <reproc++/run.hpp>
+
+namespace batch = cw::batch;
+
 #define DRAIN_SLEEP 3000
 
 bool canceled(false);
@@ -43,6 +50,25 @@ void sigHandler(int signal) {
         exit(EXIT_FAILURE);
     }
     canceled = true;
+}
+
+
+int runCommand(std::string& out, const cw::batch::CmdOptions& opts) {
+        std::vector<std::string> args{opts.cmd};
+        for (const auto& a: opts.args) args.push_back(a);
+
+        reproc::process process;
+        std::error_code ec_start = process.start(args);
+        if (ec_start) return -1;
+
+        reproc::sink::string sink(out);
+        std::error_code ec_drain = reproc::drain(process, sink, reproc::sink::null);
+        if (ec_drain) return -1;
+
+        auto ret = process.wait(reproc::infinite);
+        if (ret.second) return -1;
+
+        return ret.first;
 }
 
 int main(int argc, char **argv) {
@@ -66,8 +92,10 @@ int main(int argc, char **argv) {
 
     mode selected;
     bool help = false, json = true, deployTargetIsGroup = false;
-    std::string batchSystem = "slurm",
-                loginPath = "",
+
+    batch::System batchSystem; 
+
+    std::string loginPath = "",
                 nodes = "",
                 state = "",
                 jobs = "",
@@ -82,7 +110,7 @@ int main(int argc, char **argv) {
 
     auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
                         clipp::option("--json").set(json) % "Output as json",
-                        (clipp::option("-b", "--batch").set(batchSystem) & (clipp::required("slurm") | clipp::required("pbs"))) % "Batch System",
+                        (clipp::option("-b", "--batch") & (clipp::required("slurm").set(batchSystem, batch::System::Slurm) | clipp::required("pbs").set(batchSystem, batch::System::Pbs) | clipp::required("lsf").set(batchSystem, batch::System::Lsf))) % "Batch System",
                         (clipp::option("-l", "--loginFile") & clipp::value("path", loginPath)) % "Path for login data");
 
     auto nodesOpt = (clipp::command("nodes").set(selected, mode::nodes), clipp::opt_value("nodes", nodes)) % "Get node information [of <nodes>]";
@@ -114,6 +142,10 @@ int main(int argc, char **argv) {
     utils::loginData megwareLogin, xCatLogin, slurmLogin;
     if (utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin) != 0)
         exit(EXIT_FAILURE);
+
+
+    batch::BatchSystem batch;
+    create_batch(batch, batchSystem, runCommand);
 
     CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
     CXCat xcatSession(xCatLogin.host, xCatLogin.port, xCatLogin.username, xCatLogin.password, false);
