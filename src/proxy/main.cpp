@@ -214,6 +214,23 @@ handle_request(
         req.method() != http::verb::head)
         return send(bad_request("Unknown HTTP-method"));
 
+    std::cout << "! " << req.target() << std::endl;
+
+    if (req.method() == http::verb::get && req.target() == "/openapi.json") {
+        http::string_body::value_type body{"{}"};
+        const auto size = body.size();
+        // Respond to GET request
+        http::response<http::string_body> res{
+            std::piecewise_construct,
+            std::make_tuple(std::move(body)),
+            std::make_tuple(http::status::ok, req.version())};
+        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        res.set(http::field::content_type, "application/json");
+        res.content_length(size);
+        res.keep_alive(req.keep_alive());
+        return send(std::move(res));
+    } 
+
     // Request path must be absolute and not contain "..".
     if( req.target().empty() ||
         req.target()[0] != '/' ||
