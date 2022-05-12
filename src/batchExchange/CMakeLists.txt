@@ -1,3 +1,7 @@
+find_package( Boost 1.58.0 COMPONENTS system filesystem regex iostreams unit_test_framework REQUIRED ) 
+find_package( OpenSSL REQUIRED )
+
+
 set(TREX_LIB_SRC
     base64.cpp
 	CBatch.cpp
@@ -13,7 +17,6 @@ set(TREX_LIB_HDR
 	CBatch.h
 	CBatchSlurm.h
     CXCat.h
-	clipp.h
     curlHelper.h
     httpSession.h
     restClient.h
@@ -37,6 +40,7 @@ TREX_LIB
 
 include_directories(${CURL_INCLUDE_DIR})
 include_directories(${Boost_INCLUDE_DIR})
+include_directories(${CLIPP_INCLUDE_DIR})
 
 target_link_libraries(TREX Threads::Threads)
 target_link_libraries(TREX ${CURL_LIBRARIES})
