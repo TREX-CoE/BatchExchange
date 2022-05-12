@@ -1,7 +1,5 @@
 set(SHARED_SRC
     base64.cpp
-	CBatch.cpp
-	CBatchSlurm.cpp
     CXCat.cpp
     httpSession.cpp
     restClient.cpp
@@ -10,8 +8,6 @@ set(SHARED_SRC
 
 set(SHARED_HDR
     base64.h
-	CBatch.h
-	CBatchSlurm.h
     CXCat.h
     curlHelper.h
     httpSession.h
