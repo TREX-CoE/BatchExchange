@@ -545,7 +545,7 @@ public:
         } else if (req.method() == http::verb::get && req.target() == "/users") {
             if (!check_auth({"a"})) return;
 
-            derived().timer.async_wait([&,self=derived().shared_from_this()](beast::error_code ec){
+            derived().timer.async_wait([&](beast::error_code ec){
                 std::cout << "! " << ec << std::endl;
 
                 rapidjson::Document document;
