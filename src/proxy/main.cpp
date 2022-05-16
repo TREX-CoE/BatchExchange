@@ -124,116 +124,6 @@ rapidjson::Document generate_json_error(const std::string& type, const std::stri
     return document;
 }
 
-// This function produces an HTTP response for the given
-// request. The type of the response object depends on the
-// contents of the request, so the interface requires the
-// caller to pass a generic lambda for receiving the response.
-template<
-    class Body, class Allocator,
-    class Send>
-void
-handle_request(
-    http::request<Body, http::basic_fields<Allocator>>&& req,
-    Send&& send
-    )
-{
-    auto const json_response =
-    [&](const rapidjson::Document& document, http::status status = http::status::ok)
-    {
-        http::response<http::string_body> res{status, 11}; // req.version()
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "application/json");
-        rapidjson::StringBuffer buffer;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-        document.Accept(writer);
-        res.body() = buffer.GetString();
-        res.prepare_payload();
-        return res;
-    };
-
-    auto const json_error_response =
-    [&](const std::string& type, const std::string& message, http::status status)
-    {
-        return json_response(generate_json_error(type, message, status), status);
-    };
-
-    auto const bad_request =
-    [&]()
-    {
-        return json_error_response("Bad request", "Unsupported API call", http::status::bad_request);
-    };
-
-    auto const check_auth =
-    [&](const std::set<std::string>& scopes = {})
-    {
-        const auto it = cw::credentials::check_header(get_creds(), req["Authorization"]);
-        if (it == get_creds().end()) {
-            send(json_error_response("Invalid credentials", "Could not authenticate user", http::status::unauthorized));
-            return false;
-        }
-        if (!scopes.empty()) {
-            for (const auto& s : scopes) {
-                if (it->second.scopes.find(s) == it->second.scopes.end()) {
-                    send(json_error_response("Invalid scope", std::string("User does not have requested scope: ")+s, http::status::unauthorized));
-                    return false;
-                }
-            }
-        }
-        return true;
-    };
-        
-    if (req.method() == http::verb::get && req.target() == "/openapi.json") {
-        http::string_body::value_type body{cw::openapi::openapi_json};
-        const auto size = body.size();
-        // Respond to GET request
-        http::response<http::string_body> res{
-            std::piecewise_construct,
-            std::make_tuple(std::move(body)),
-            std::make_tuple(http::status::ok, req.version())};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "application/json");
-        res.content_length(size);
-        res.keep_alive(req.keep_alive());
-        return send(std::move(res));
-    } else if (req.method() == http::verb::get && req.target() == "/users") {
-        if (!check_auth({"a"})) return;
-
-        rapidjson::Document document;
-        rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-        document.SetObject();
-        document.AddMember("id", "a", allocator);
-
-        send(json_response(document));
-        return;
-    } else if (req.method() == http::verb::get && req.target() == "/nodes") {
-        if (!check_auth({"nodes_info"})) return;
-
-        const auto func = [](std::string& out, const cw::batch::CmdOptions& cmd) {
-            (void)cmd;
-            (void)out;
-            return 1;
-        };
-
-        auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(func);
-
-        pbs->getNodesAsync({}, [](const auto n){ (void)n; std::cout << "N" << std::endl; return true; });
-
-        (void)pbs;
-
-        //cw::batchsystem::BatchSystem batch;
-        //create_batch(batch, cw::batchsystem::System::Slurm);
-
-
-        rapidjson::Document document;
-        rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-        document.SetObject();
-        document.AddMember("id", "a", allocator);
-        return send(json_response(document));
-    } else {
-        return send(bad_request());
-    }
-}
-
 //------------------------------------------------------------------------------
 
 // Report a failure
@@ -581,6 +471,119 @@ public:
     {
     }
 
+    // This function produces an HTTP response for the given
+    // request. The type of the response object depends on the
+    // contents of the request, so the interface requires the
+    // caller to pass a generic lambda for receiving the response.
+    template<
+        class Body, class Allocator,
+        class Send>
+    void
+    handle_request(
+        http::request<Body, http::basic_fields<Allocator>>&& req,
+        Send&& send
+        )
+    {
+        auto const json_response =
+        [&](const rapidjson::Document& document, http::status status = http::status::ok)
+        {
+            http::response<http::string_body> res{status, 11}; // req.version()
+            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+            res.set(http::field::content_type, "application/json");
+            rapidjson::StringBuffer buffer;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+            document.Accept(writer);
+            res.body() = buffer.GetString();
+            res.prepare_payload();
+            return res;
+        };
+
+        auto const json_error_response =
+        [&](const std::string& type, const std::string& message, http::status status)
+        {
+            return json_response(generate_json_error(type, message, status), status);
+        };
+
+        auto const bad_request =
+        [&]()
+        {
+            return json_error_response("Bad request", "Unsupported API call", http::status::bad_request);
+        };
+
+        auto const check_auth =
+        [&](const std::set<std::string>& scopes = {})
+        {
+            const auto it = cw::credentials::check_header(get_creds(), req["Authorization"]);
+            if (it == get_creds().end()) {
+                send(json_error_response("Invalid credentials", "Could not authenticate user", http::status::unauthorized));
+                return false;
+            }
+            if (!scopes.empty()) {
+                for (const auto& s : scopes) {
+                    if (it->second.scopes.find(s) == it->second.scopes.end()) {
+                        send(json_error_response("Invalid scope", std::string("User does not have requested scope: ")+s, http::status::unauthorized));
+                        return false;
+                    }
+                }
+            }
+            return true;
+        };
+            
+        if (req.method() == http::verb::get && req.target() == "/openapi.json") {
+            http::string_body::value_type body{cw::openapi::openapi_json};
+            const auto size = body.size();
+            // Respond to GET request
+            http::response<http::string_body> res{
+                std::piecewise_construct,
+                std::make_tuple(std::move(body)),
+                std::make_tuple(http::status::ok, req.version())};
+            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+            res.set(http::field::content_type, "application/json");
+            res.content_length(size);
+            res.keep_alive(req.keep_alive());
+            return send(std::move(res));
+        } else if (req.method() == http::verb::get && req.target() == "/users") {
+            if (!check_auth({"a"})) return;
+
+            derived().timer.async_wait([&,self=derived().shared_from_this()](beast::error_code ec){
+                std::cout << "! " << ec << std::endl;
+
+                rapidjson::Document document;
+                rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+                document.SetObject();
+                document.AddMember("id", "a", allocator);
+                send(json_response(document));
+            });
+            return;
+        } else if (req.method() == http::verb::get && req.target() == "/nodes") {
+            if (!check_auth({"nodes_info"})) return;
+
+            const auto func = [](std::string& out, const cw::batch::CmdOptions& cmd) {
+                (void)cmd;
+                (void)out;
+                return 1;
+            };
+
+            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(func);
+
+            pbs->getNodesAsync({}, [](const auto n){ (void)n; std::cout << "N" << std::endl; return true; });
+
+            (void)pbs;
+
+            //cw::batchsystem::BatchSystem batch;
+            //create_batch(batch, cw::batchsystem::System::Slurm);
+
+
+            rapidjson::Document document;
+            rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+            document.SetObject();
+            document.AddMember("id", "a", allocator);
+            return send(json_response(document));
+        } else {
+            return send(bad_request());
+        }
+    }
+
     void
     do_read()
     {
@@ -673,13 +676,15 @@ class plain_http_session
     beast::tcp_stream stream_;
 
 public:
+    boost::asio::deadline_timer timer;
     // Create the session
     plain_http_session(
         beast::tcp_stream&& stream,
         beast::flat_buffer&& buffer)
         : http_session<plain_http_session>(
             std::move(buffer))
-        , stream_(std::move(stream))
+        , stream_(std::move(stream)),
+        timer(stream_.get_executor(), boost::posix_time::seconds(5))
     {
     }
 
@@ -726,6 +731,7 @@ class ssl_http_session
     beast::ssl_stream<beast::tcp_stream> stream_;
 
 public:
+    boost::asio::deadline_timer timer;
     // Create the http_session
     ssl_http_session(
         beast::tcp_stream&& stream,
@@ -734,6 +740,7 @@ public:
         : http_session<ssl_http_session>(
             std::move(buffer))
         , stream_(std::move(stream), ctx)
+        , timer(stream_.get_executor(), boost::posix_time::seconds(5))
     {
     }
 
