@@ -17,12 +17,9 @@
 #include <string>
 #include <thread>
 
-#include "CBatchSlurm.h"
-#include "CXCat.h"
+#include "shared/CXCat.h"
 #include "clipp.h"
-#include "restClient.h"
-#include "sessionTokenTypes.h"
-#include "utils.h"
+#include "shared/utils.h"
 
 #include "batchsystem/batchsystem.h"
 #include "batchsystem/factory.h"
@@ -147,14 +144,7 @@ int main(int argc, char **argv) {
     batch::BatchSystem batch;
     create_batch(batch, batchSystem, runCommand);
 
-    CBatchSlurm slurmSession(slurmLogin.host, slurmLogin.port, slurmLogin.username, slurmLogin.password, false);
     CXCat xcatSession(xCatLogin.host, xCatLogin.port, xCatLogin.username, xCatLogin.password, false);
-
-    // TODO log in only when really needed
-    if (slurmSession.login() != 0) {
-        std::cerr << "Slurm Login failed on " << slurmLogin.host << ":" << slurmLogin.port << " failed" << std::endl;
-        return 1;
-    }
 
     if (xcatSession.login() != 0) {
         std::cerr << "xCAT Login failed on " << xCatLogin.host << ":" << xCatLogin.port << " failed" << std::endl;
@@ -171,21 +161,16 @@ int main(int argc, char **argv) {
     std::string output;
     switch (selected) {
         case mode::nodes: {
-            if (slurmSession.get_nodes(nodeList, output) != 0)
-                return 1;
             break;
         }
         case mode::jobs: {
-            if (slurmSession.get_jobs(jobList, output) != 0)
-                return 1;
             break;
         }
         case mode::queues: {
-            if (slurmSession.get_queues(queueList, output) != 0)
-                return 1;
             break;
         }
         case mode::state: {
+            /*
             // TODO check for reason for certain states
             if (nodes.length() && state.length()) {
                 if (slurmSession.set_node_state(nodeList, state, reason) != 0)
@@ -201,6 +186,7 @@ int main(int argc, char **argv) {
                 if (slurmSession.get_node_states(nodeList, output) != 0)
                     return 1;
             }
+            */
             break;
         }
         case mode::images: {
@@ -276,6 +262,9 @@ int main(int argc, char **argv) {
                 image = availableImages[imageNr - 1];
             }
 
+
+            /*
+
             // TODO handle cancellation or errors during deployment! (rollback?)
 
             std::cout << "\nDraining nodes"
@@ -297,6 +286,8 @@ int main(int argc, char **argv) {
                           << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(DRAIN_SLEEP));
             }
+
+            */
 
             if (canceled)
                 return 1;
@@ -361,7 +352,7 @@ int main(int argc, char **argv) {
 
     std::cout << output << std::endl;
 
-    slurmSession.logout();
+    //slurmSession.logout();
 
     return 0;
 }

@@ -1,3 +1,5 @@
+src/proxy/openapi_json.cpp
+
 # exclude editor and build stuff
 .vscode/
 venv/

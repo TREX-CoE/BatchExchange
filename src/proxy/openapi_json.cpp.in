@@ -1,0 +1,7 @@
+#include "proxy/openapi_json.h"
+
+namespace cw {
+namespace openapi {
+    const char* openapi_json = R"EOF(@OPENAPI@)EOF";
+}
+}

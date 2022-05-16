@@ -359,7 +359,7 @@ void RestClient::rest_helper_pre(
 
     switch (this->authType) {
         case SESSION_TOKEN_BASIC_AUTH:
-            this->chunk = curl_slist_append(this->chunk, ("Authorization: Basic " + base64_encode(this->username + ":" + this->password)).c_str());
+            this->chunk = curl_slist_append(this->chunk, ("Authorization: Basic " + cw::base64::encode(this->username + ":" + this->password)).c_str());
             break;
         case SESSION_TOKEN_MEGWARE:
             this->chunk = curl_slist_append(this->chunk, ("Authorization: Bearer " + httpSession->get_access_token()).c_str());

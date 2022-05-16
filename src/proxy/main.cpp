@@ -11,27 +11,49 @@
 #include <ctime>
 #include <exception>
 #include <iomanip>
-#include <iostream>
 #include <sstream>
+#include <fstream>
 #include <string>
 #include <thread>
-
-#include "clipp.h"
-#include "utils.h"
-
-#include "batchsystem/batchsystem.h"
-#include "batchsystem/factory.h"
-
-#include <reproc++/run.hpp>
-
-
+#include <algorithm>
+#include <memory>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/ssl.hpp>
+#include <boost/beast/version.hpp>
+#include <boost/asio/strand.hpp>
+#include <boost/config.hpp>
+#include <cassert>
+#include <stdlib.h>
+#include <random>
+#include <ctime>
 
+#include "proxy/openapi_json.h"
+#include "proxy/credentials.h"
+#include "shared/obfuscator.h"
+#include "shared/stream_cast.h"
+#include "shared/sha512.h"
+#include "proxy/salt_hash.h"
+#include "shared/string_view.h"
+
+
+#include "clipp.h"
+
+#include "batchsystem/batchsystem.h"
+#include "batchsystem/factory.h"
+
+
+namespace beast = boost::beast;         // from <boost/beast.hpp>
+namespace http = beast::http;           // from <boost/beast/http.hpp>
+namespace net = boost::asio;            // from <boost/asio.hpp>
+namespace ssl = boost::asio::ssl;       // from <boost/asio/ssl.hpp>
+using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 using boost::asio::ip::tcp;
 
 namespace batch = cw::batch;
@@ -55,44 +77,42 @@ void sigHandler(int signal) {
     canceled = true;
 }
 
-int runCommand(std::string& out, const cw::batch::CmdOptions& opts) {
-        std::vector<std::string> args{opts.cmd};
-        for (const auto& a: opts.args) args.push_back(a);
+namespace {
 
-        reproc::process process;
-        std::error_code ec_start = process.start(args);
-        if (ec_start) return -1;
-
-        reproc::sink::string sink(out);
-        std::error_code ec_drain = reproc::drain(process, sink, reproc::sink::null);
-        if (ec_drain) return -1;
-
-        auto ret = process.wait(reproc::infinite);
-        if (ret.second) return -1;
-
-        return ret.first;
+std::string random_hex(unsigned int length) {
+    const char* hex_chars = "0123456789abcdef";
+    std::random_device dev;
+    std::mt19937 rng(dev());
+    std::uniform_int_distribution<std::mt19937::result_type> rnd_hex(0,15);
+    std::string s;
+    for (unsigned int i=0;i<length;i++) s.push_back(hex_chars[rnd_hex(rng)]);
+    return s;
 }
 
+std::string generate_salt() {
+    return random_hex(16);
+}
 
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
-#include <boost/beast/ssl.hpp>
-#include <boost/beast/version.hpp>
-#include <boost/asio/strand.hpp>
-#include <boost/config.hpp>
-#include <algorithm>
-#include <cstdlib>
-#include <functional>
-#include <iostream>
-#include <memory>
-#include <string>
-#include <thread>
+void set_user(credentials::dict& creds, string_view user, string_view password) {
+    std::string salt = generate_salt();
+    std::string hash = cw::proxy::salt_hash(salt, password);
+    creds[std::string(user)] = std::make_pair(salt, hash);
+}
 
-namespace beast = boost::beast;         // from <boost/beast.hpp>
-namespace http = beast::http;           // from <boost/beast/http.hpp>
-namespace net = boost::asio;            // from <boost/asio.hpp>
-namespace ssl = boost::asio::ssl;       // from <boost/asio/ssl.hpp>
-using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+}
+
+ssl::context create_ssl_context(const std::string& cert, const std::string& priv, const std::string& dh) {
+    // The SSL context is required, and holds certificates
+    ssl::context ctx{boost::asio::ssl::context::sslv23};
+    ctx.set_options(
+        boost::asio::ssl::context::default_workarounds
+        | boost::asio::ssl::context::no_sslv2
+        | boost::asio::ssl::context::single_dh_use);
+    ctx.use_certificate_chain_file(cert);
+    ctx.use_private_key_file(priv, boost::asio::ssl::context::pem);
+    ctx.use_tmp_dh_file(dh);
+    return ctx;
+}
 
 // Return a reasonable mime type based on the extension of a file.
 beast::string_view
@@ -166,6 +186,7 @@ template<
     class Send>
 void
 handle_request(
+    const credentials::dict& creds,
     beast::string_view doc_root,
     http::request<Body, http::basic_fields<Allocator>>&& req,
     Send&& send)
@@ -217,7 +238,7 @@ handle_request(
     std::cout << "! " << req.target() << std::endl;
 
     if (req.method() == http::verb::get && req.target() == "/openapi.json") {
-        http::string_body::value_type body{"{}"};
+        http::string_body::value_type body{cw::openapi::openapi_json};
         const auto size = body.size();
         // Respond to GET request
         http::response<http::string_body> res{
@@ -229,7 +250,37 @@ handle_request(
         res.content_length(size);
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
-    } 
+    } else if (req.method() == http::verb::get && req.target() == "/users") {
+        std::string user = credentials::check_header(creds, req["Authorization"]);
+        if (user.empty()) {
+            // no auth
+            http::string_body::value_type body{"{\"a\": 1}"};
+            const auto size = body.size();
+            // Respond to GET request
+            http::response<http::string_body> res{
+                std::piecewise_construct,
+                std::make_tuple(std::move(body)),
+                std::make_tuple(http::status::ok, req.version())};
+            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+            res.set(http::field::content_type, "application/json");
+            res.content_length(size);
+            res.keep_alive(req.keep_alive());
+            return send(std::move(res));
+        } else {
+            http::string_body::value_type body{"{}"};
+            const auto size = body.size();
+            // Respond to GET request
+            http::response<http::string_body> res{
+                std::piecewise_construct,
+                std::make_tuple(std::move(body)),
+                std::make_tuple(http::status::ok, req.version())};
+            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+            res.set(http::field::content_type, "application/json");
+            res.content_length(size);
+            res.keep_alive(req.keep_alive());
+            return send(std::move(res));
+        }
+    }
 
     // Request path must be absolute and not contain "..".
     if( req.target().empty() ||
@@ -361,6 +412,7 @@ class session
         }
     };
 
+    std::shared_ptr<credentials::dict const> creds_;
     std::shared_ptr<std::string const> doc_root_;
     http::request<http::string_body> req_;
     std::shared_ptr<void> res_;
@@ -373,8 +425,10 @@ public:
     // Take ownership of the buffer
     session(
         beast::flat_buffer buffer,
+        std::shared_ptr<credentials::dict const> const& creds,
         std::shared_ptr<std::string const> const& doc_root)
-        : doc_root_(doc_root)
+        : creds_(creds)
+        , doc_root_(doc_root)
         , lambda_(*this)
         , buffer_(std::move(buffer))
     {
@@ -412,7 +466,7 @@ public:
             return fail(ec, "read");
 
         // Send the response
-        handle_request(*doc_root_, std::move(req_), lambda_);
+        handle_request(*creds_, *doc_root_, std::move(req_), lambda_);
     }
 
     void
@@ -453,9 +507,11 @@ public:
     plain_session(
         tcp::socket&& socket,
         beast::flat_buffer buffer,
+        std::shared_ptr<credentials::dict const> const& creds,
         std::shared_ptr<std::string const> const& doc_root)
         : session<plain_session>(
             std::move(buffer),
+            creds,
             doc_root)
         , stream_(std::move(socket))
     {
@@ -499,9 +555,11 @@ public:
         tcp::socket&& socket,
         ssl::context& ctx,
         beast::flat_buffer buffer,
+        std::shared_ptr<credentials::dict const> const& creds,
         std::shared_ptr<std::string const> const& doc_root)
         : session<ssl_session>(
             std::move(buffer),
+            creds,
             doc_root)
         , stream_(std::move(socket), ctx)
     {
@@ -576,16 +634,19 @@ class detect_session : public std::enable_shared_from_this<detect_session>
     beast::tcp_stream stream_;
     ssl::context& ctx_;
     std::shared_ptr<std::string const> doc_root_;
+    std::shared_ptr<credentials::dict const> creds_;
     beast::flat_buffer buffer_;
 
 public:
     detect_session(
         tcp::socket&& socket,
         ssl::context& ctx,
+        std::shared_ptr<credentials::dict const> const& creds,
         std::shared_ptr<std::string const> const& doc_root)
         : stream_(std::move(socket))
         , ctx_(ctx)
         , doc_root_(doc_root)
+        , creds_(creds)
     {
     }
 
@@ -618,6 +679,7 @@ public:
                 stream_.release_socket(),
                 ctx_,
                 std::move(buffer_),
+                creds_,
                 doc_root_)->run();
             return;
         }
@@ -626,6 +688,7 @@ public:
         std::make_shared<plain_session>(
             stream_.release_socket(),
             std::move(buffer_),
+            creds_,
             doc_root_)->run();
     }
 };
@@ -637,17 +700,20 @@ class listener : public std::enable_shared_from_this<listener>
     ssl::context& ctx_;
     tcp::acceptor acceptor_;
     std::shared_ptr<std::string const> doc_root_;
+    std::shared_ptr<credentials::dict const> creds_;
 
 public:
     listener(
         net::io_context& ioc,
         ssl::context& ctx,
         tcp::endpoint endpoint,
+        std::shared_ptr<credentials::dict const> const& creds,
         std::shared_ptr<std::string const> const& doc_root)
         : ioc_(ioc)
         , ctx_(ctx)
         , acceptor_(net::make_strand(ioc))
         , doc_root_(doc_root)
+        , creds_(creds)
     {
         beast::error_code ec;
 
@@ -717,6 +783,7 @@ private:
             std::make_shared<detect_session>(
                 std::move(socket),
                 ctx_,
+                creds_,
                 doc_root_)->run();
         }
 
@@ -724,6 +791,8 @@ private:
         do_accept();
     }
 };
+
+
 
 
 int main(int argc, char **argv) {
@@ -735,99 +804,129 @@ int main(int argc, char **argv) {
 
     sigaction(SIGINT, &sigIntHandler, NULL); /* for CTRL+C */
 
-
-    bool help = false;
-
-    enum class mode { run,
+    enum class mode { run, user_set, help
     };
-
     mode selected;
-    batch::System batchSystem; 
 
     std::string cert;
+    std::string cred;
     std::string dh;
-    std::string private_key;
+    std::string priv;
     std::string host = "0.0.0.0";
     int portInput = -1;
+    std::string username;
+    unsigned int threads = 10;
 
-    auto generalOpts = (clipp::option("-h", "--help").set(help) % "Shows this help message",
-                        (clipp::option("-b", "--batch") & (clipp::required("slurm").set(batchSystem, batch::System::Slurm) | clipp::required("pbs").set(batchSystem, batch::System::Pbs) | clipp::required("lsf").set(batchSystem, batch::System::Lsf))) % "Batch System",
-                        (clipp::option("--cert") & clipp::value("CERT", cert)) % "SSL certificate file",
-                        (clipp::option("--priv") & clipp::value("KEY", private_key)) % "SSL private key file",
-                        (clipp::option("--dh") & clipp::value("DH", dh)) % "SSL dh file",
-                        (clipp::option("--port") & clipp::value("PORT", portInput)) % "Port to run server on (1-65535), default 80",
-                        (clipp::option("--host") & clipp::value("HOST", host)) % "Host to run server on, default 0.0.0.0"
+    auto cli = (
+        (clipp::command("help").set(selected,mode::help) % "Show help message")
+        | (((clipp::required("--cred") & clipp::value("CRED", cred)) % "Credentials file"),
+            (clipp::command("run").set(selected, mode::run) % "Run server",
+                (clipp::required("--cert") & clipp::value("CERT", cert)) % "SSL certificate file",
+                (clipp::required("--priv") & clipp::value("KEY", priv)) % "SSL private key file",
+                (clipp::required("--dh") & clipp::value("DH", dh)) % "SSL dh file",
+                (clipp::option("--port") & clipp::value("PORT", portInput)) % "Port to run server on (1-65535), default 80",
+                (clipp::option("--host") & clipp::value("HOST", host)) % "Host to run server on, default 0.0.0.0",
+                (clipp::option("--threads") & clipp::value("NTHREADS", threads)) % "Number of threads to use"
+            )
+            | (clipp::command("user"), (clipp::command("set").set(selected, mode::user_set) % "Set / add user credentials",
+                (clipp::value("name").set(username)) % "Username"
+            )))
     );
 
-    auto nodesOpt = (clipp::command("run").set(selected, mode::run)) % "Run server";
-    auto cli = ("COMMANDS\n" % (nodesOpt), "OPTIONS\n" % generalOpts);
+    if (!clipp::parse(argc, argv, cli)) selected = mode::help;
 
-    if (!clipp::parse(argc, argv, cli) || help) {
-        // std::cout << make_man_page(cli, argv[0]) << std::endl;
-        std::cout << "USAGE:\n"
-                  << clipp::usage_lines(cli, argv[0]) << "\n\n\n"
-                  << "PARAMETERS:\n\n"
-                  << clipp::documentation(cli) << std::endl;
-        return 1;
-    }
+    switch (selected) {
+        default: {
+            assert(false && "invalid cmd");
+            return 1;
+        }
+        case mode::help: {
+            // std::cout << make_man_page(cli, argv[0]) << std::endl;
+            std::cout << "USAGE:\n"
+                    << clipp::usage_lines(cli, argv[0]) << "\n\n\n"
+                    << "PARAMETERS:\n\n"
+                    << clipp::documentation(cli) << std::endl;
+            return 1;
+        }
 
+        case mode::user_set: {
+            credentials::dict creds;
+            {
+                std::ifstream creds_fs(cred);
+                credentials::read(creds, creds_fs);
+            }
+            
+            std::cout << "password> ";
+            std::cout.flush();
+            std::string password;
+            std::getline(std::cin, password);
+            set_user(creds, username, password);
 
-    unsigned short port = 80;
+            {
+                std::ofstream creds_fso(cred);
+                credentials::write(creds, creds_fso);
+            }
+            break;
+        }
+        case mode::run: {
+            if (threads < 1) {
+                std::cout << "Minimum 1 thread" << std::endl;
+                return 1;
+            }
 
-    if (portInput==-1) {
-        port = 80;
-    } else if (portInput < 1 || portInput > 65535) {
-        std::cout << "Invalid PORT (1-65535) " << portInput << std::endl;
-        return 1;
-    } else {
-        port = static_cast<unsigned short>(portInput);
-    }
+            unsigned short port = 80;
 
-    batch::BatchSystem batch;
-    create_batch(batch, batchSystem, runCommand);
-
-
-
-    int threads = 10;
-
-    // The io_context is required for all I/O
-    net::io_context ioc{threads};
-
-    // The SSL context is required, and holds certificates
-    ssl::context ctx{boost::asio::ssl::context::sslv23};
-    ctx.set_options(
-        boost::asio::ssl::context::default_workarounds
-        | boost::asio::ssl::context::no_sslv2
-        | boost::asio::ssl::context::single_dh_use);
-    ctx.use_certificate_chain_file(cert);
-    ctx.use_private_key_file(private_key, boost::asio::ssl::context::pem);
-    ctx.use_tmp_dh_file(dh);
-
-    auto const doc_root = std::make_shared<std::string>(".");
-
-    auto const address = net::ip::make_address(host);
-
-
-    // Create and launch a listening port
-    std::make_shared<listener>(
-        ioc,
-        ctx,
-        tcp::endpoint{address, port},
-        doc_root)->run();
-
-    std::cout << "Server running" << std::endl;
+            if (portInput==-1) {
+                port = 80;
+            } else if (portInput < 1 || portInput > 65535) {
+                std::cout << "Invalid PORT (1-65535) " << portInput << std::endl;
+                return 1;
+            } else {
+                port = static_cast<unsigned short>(portInput);
+            }
 
 
-    // Run the I/O service on the requested number of threads
-    std::vector<std::thread> v;
-    v.reserve(threads - 1);
-    for(auto i = threads - 1; i > 0; --i)
-        v.emplace_back(
-        [&ioc]
-        {
+            // The io_context is required for all I/O
+            net::io_context ioc{static_cast<int>(threads)};
+
+            auto const doc_root = std::make_shared<std::string>(".");
+
+            auto const address = net::ip::make_address(host);
+
+            auto ctx = create_ssl_context(cert, priv, dh);
+
+            auto creds = std::make_shared<credentials::dict>();
+
+            {
+                std::ifstream creds_fs(cred);
+                credentials::read(*creds, creds_fs);
+            }
+
+            // Create and launch a listening port
+            std::make_shared<listener>(
+                ioc,
+                ctx,
+                tcp::endpoint{address, port},
+                creds,
+                doc_root)->run();
+
+            std::cout << "Server running" << std::endl;
+
+            // Run the I/O service on the requested number of threads
+            std::vector<std::thread> v;
+            v.reserve(threads - 1);
+            for(auto i = threads - 1; i > 0; --i)
+                v.emplace_back(
+                [&ioc]
+                {
+                    ioc.run();
+                });
             ioc.run();
-        });
-    ioc.run();
+
+            break;
+        }
+    }
+
 
     return 0;
 }
