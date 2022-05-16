@@ -20,7 +20,10 @@ set(SHARED_HDR
     salt_hash.h
     stream_cast.h
     string_view.h
+    splitString.h
+    joinString.h
     http.h
+    randomHex.h
 )
 
 include_directories(${MAIN_INCLUDE_DIR})

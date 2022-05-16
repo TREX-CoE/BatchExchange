@@ -33,8 +33,11 @@
 #include <boost/config.hpp>
 #include <cassert>
 #include <stdlib.h>
-#include <random>
-#include <ctime>
+
+#define RAPIDJSON_HAS_STDSTRING 1
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include "proxy/openapi_json.h"
 #include "proxy/credentials.h"
@@ -79,30 +82,6 @@ void sigHandler(int signal) {
     canceled = true;
 }
 
-namespace {
-
-std::string random_hex(unsigned int length) {
-    const char* hex_chars = "0123456789abcdef";
-    std::random_device dev;
-    std::mt19937 rng(dev());
-    std::uniform_int_distribution<std::mt19937::result_type> rnd_hex(0,15);
-    std::string s;
-    for (unsigned int i=0;i<length;i++) s.push_back(hex_chars[rnd_hex(rng)]);
-    return s;
-}
-
-std::string generate_salt() {
-    return random_hex(16);
-}
-
-void set_user(credentials::dict& creds, string_view user, string_view password) {
-    std::string salt = generate_salt();
-    std::string hash = cw::proxy::salt_hash(salt, password);
-    creds[std::string(user)] = std::make_pair(salt, hash);
-}
-
-}
-
 ssl::context create_ssl_context(const std::string& cert, const std::string& priv, const std::string& dh) {
     // The SSL context is required, and holds certificates
     ssl::context ctx{boost::asio::ssl::context::sslv23};
@@ -116,28 +95,6 @@ ssl::context create_ssl_context(const std::string& cert, const std::string& priv
     return ctx;
 }
 
-#define RAPIDJSON_HAS_STDSTRING 1
-#include <rapidjson/document.h>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/writer.h>
-
-using rapidjson::Value;
-using rapidjson::Document;
-
-namespace {
-
-/*
-std::string jsonToString(const rapidjson::Document& document) {
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    document.Accept(writer);
-    return buffer.GetString();
-}
-*/
-
-}
-
-
 // This function produces an HTTP response for the given
 // request. The type of the response object depends on the
 // contents of the request, so the interface requires the
@@ -147,7 +104,7 @@ template<
     class Send>
 void
 handle_request(
-    const credentials::dict& creds,
+    const cw::credentials::dict& creds,
     http::request<Body, http::basic_fields<Allocator>>&& req,
     Send&& send)
 {
@@ -173,6 +130,21 @@ handle_request(
         res.set(http::field::content_type, "text/html");
         res.keep_alive(req.keep_alive());
         res.body() = std::string(why);
+        res.prepare_payload();
+        return res;
+    };
+
+    auto const json_response =
+    [&req](const rapidjson::Document& document)
+    {
+        http::response<http::string_body> res{http::status::bad_request, req.version()};
+        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        res.set(http::field::content_type, "application/json");
+        res.keep_alive(req.keep_alive());
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        document.Accept(writer);
+        res.body() = buffer.GetString();
         res.prepare_payload();
         return res;
     };
@@ -223,20 +195,14 @@ handle_request(
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
     } else if (req.method() == http::verb::get && req.target() == "/users") {
-        std::string user = credentials::check_header(creds, req["Authorization"]);
-        if (user.empty()) return send(unauthorized("invalid user"));
-        http::string_body::value_type body{"{\"a\": 1}"};
-        const auto size = body.size();
-        // Respond to GET request
-        http::response<http::string_body> res{
-            std::piecewise_construct,
-            std::make_tuple(std::move(body)),
-            std::make_tuple(http::status::ok, req.version())};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "application/json");
-        res.content_length(size);
-        res.keep_alive(req.keep_alive());
-        return send(std::move(res));
+        const auto it = cw::credentials::check_header(creds, req["Authorization"]);
+        if (it == creds.end()) return send(unauthorized("invalid user"));
+
+        rapidjson::Document document;
+        rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+        document.SetObject();
+        document.AddMember("id", "a", allocator);
+        return send(json_response(document));
     }
 
     return send(bad_request("Unknown endpoint"));
@@ -322,7 +288,7 @@ class session
         }
     };
 
-    std::shared_ptr<credentials::dict const> creds_;
+    std::shared_ptr<cw::credentials::dict const> creds_;
     http::request<http::string_body> req_;
     std::shared_ptr<void> res_;
     send_lambda lambda_;
@@ -334,7 +300,7 @@ public:
     // Take ownership of the buffer
     session(
         beast::flat_buffer buffer,
-        std::shared_ptr<credentials::dict const> const& creds)
+        std::shared_ptr<cw::credentials::dict const> const& creds)
         : creds_(creds)
         , lambda_(*this)
         , buffer_(std::move(buffer))
@@ -414,7 +380,7 @@ public:
     plain_session(
         tcp::socket&& socket,
         beast::flat_buffer buffer,
-        std::shared_ptr<credentials::dict const> const& creds)
+        std::shared_ptr<cw::credentials::dict const> const& creds)
         : session<plain_session>(
             std::move(buffer),
             creds)
@@ -460,7 +426,7 @@ public:
         tcp::socket&& socket,
         ssl::context& ctx,
         beast::flat_buffer buffer,
-        std::shared_ptr<credentials::dict const> const& creds)
+        std::shared_ptr<cw::credentials::dict const> const& creds)
         : session<ssl_session>(
             std::move(buffer),
             creds)
@@ -536,14 +502,14 @@ class detect_session : public std::enable_shared_from_this<detect_session>
 {
     beast::tcp_stream stream_;
     ssl::context& ctx_;
-    std::shared_ptr<credentials::dict const> creds_;
+    std::shared_ptr<cw::credentials::dict const> creds_;
     beast::flat_buffer buffer_;
 
 public:
     detect_session(
         tcp::socket&& socket,
         ssl::context& ctx,
-        std::shared_ptr<credentials::dict const> const& creds)
+        std::shared_ptr<cw::credentials::dict const> const& creds)
         : stream_(std::move(socket))
         , ctx_(ctx)
         , creds_(creds)
@@ -597,14 +563,14 @@ class listener : public std::enable_shared_from_this<listener>
     net::io_context& ioc_;
     ssl::context& ctx_;
     tcp::acceptor acceptor_;
-    std::shared_ptr<credentials::dict const> creds_;
+    std::shared_ptr<cw::credentials::dict const> creds_;
 
 public:
     listener(
         net::io_context& ioc,
         ssl::context& ctx,
         tcp::endpoint endpoint,
-        std::shared_ptr<credentials::dict const> const& creds)
+        std::shared_ptr<cw::credentials::dict const> const& creds)
         : ioc_(ioc)
         , ctx_(ctx)
         , acceptor_(net::make_strand(ioc))
@@ -710,6 +676,7 @@ int main(int argc, char **argv) {
     int portInput = -1;
     std::string username;
     unsigned int threads = 10;
+    std::vector<std::string> scopes;
 
     auto cli = (
         (clipp::command("help").set(selected,mode::help) % "Show help message")
@@ -723,7 +690,8 @@ int main(int argc, char **argv) {
                 (clipp::option("--threads") & clipp::value("NTHREADS", threads)) % "Number of threads to use"
             )
             | (clipp::command("user"), (clipp::command("set").set(selected, mode::user_set) % "Set / add user credentials",
-                (clipp::value("name").set(username)) % "Username"
+                (clipp::value("name").set(username)) % "Username",
+                (clipp::option("--scopes") & clipp::values("SCOPE", scopes)) % "Permission scopes to set for user"
             )))
     );
 
@@ -744,21 +712,22 @@ int main(int argc, char **argv) {
         }
 
         case mode::user_set: {
-            credentials::dict creds;
+            cw::credentials::dict creds;
             {
                 std::ifstream creds_fs(cred);
-                credentials::read(creds, creds_fs);
+                cw::credentials::read(creds, creds_fs);
             }
             
             std::cout << "password> ";
             std::cout.flush();
             std::string password;
             std::getline(std::cin, password);
-            set_user(creds, username, password);
+            std::set<std::string> scopes_set(scopes.begin(), scopes.end());
+            cw::credentials::set_user(creds, username, scopes_set, password);
 
             {
                 std::ofstream creds_fso(cred);
-                credentials::write(creds, creds_fso);
+                cw::credentials::write(creds, creds_fso);
             }
             break;
         }
@@ -787,11 +756,11 @@ int main(int argc, char **argv) {
 
             auto ctx = create_ssl_context(cert, priv, dh);
 
-            auto creds = std::make_shared<credentials::dict>();
+            auto creds = std::make_shared<cw::credentials::dict>();
 
             {
                 std::ifstream creds_fs(cred);
-                credentials::read(*creds, creds_fs);
+                cw::credentials::read(*creds, creds_fs);
             }
 
             // Create and launch a listening port
