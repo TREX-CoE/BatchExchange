@@ -95,6 +95,21 @@ ssl::context create_ssl_context(const std::string& cert, const std::string& priv
     return ctx;
 }
 
+rapidjson::Document generate_json_error(const std::string& type, const std::string& message, http::status status) {
+    rapidjson::Document document;
+    rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+    document.SetObject();
+    {
+        rapidjson::Value error;
+        error.SetObject();
+        error.AddMember("type", type, allocator);
+        error.AddMember("message", message, allocator);
+        error.AddMember("code", static_cast<int>(status), allocator);
+        document.AddMember("error", error, allocator);
+    }
+    return document;
+}
+
 // This function produces an HTTP response for the given
 // request. The type of the response object depends on the
 // contents of the request, so the interface requires the
@@ -108,36 +123,10 @@ handle_request(
     http::request<Body, http::basic_fields<Allocator>>&& req,
     Send&& send)
 {
-
-    auto const unauthorized =
-    [&req](beast::string_view why)
-    {
-        http::response<http::string_body> res{http::status::unauthorized, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = std::string(why);
-        res.prepare_payload();
-        return res;
-    };
-
-    // Returns a bad request response
-    auto const bad_request =
-    [&req](beast::string_view why)
-    {
-        http::response<http::string_body> res{http::status::bad_request, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = std::string(why);
-        res.prepare_payload();
-        return res;
-    };
-
     auto const json_response =
-    [&req](const rapidjson::Document& document)
+    [&](const rapidjson::Document& document, http::status status = http::status::ok)
     {
-        http::response<http::string_body> res{http::status::bad_request, req.version()};
+        http::response<http::string_body> res{status, req.version()};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
         res.set(http::field::content_type, "application/json");
         res.keep_alive(req.keep_alive());
@@ -149,37 +138,36 @@ handle_request(
         return res;
     };
 
-    /*
-
-
-    // Returns a not found response
-    auto const not_found =
-    [&req](beast::string_view target)
+    auto const json_error_response =
+    [&](const std::string& type, const std::string& message, http::status status)
     {
-        http::response<http::string_body> res{http::status::not_found, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = "The resource '" + std::string(target) + "' was not found.";
-        res.prepare_payload();
-        return res;
+        return json_response(generate_json_error(type, message, status), status);
     };
 
-
-
-    // Returns a server error response
-    auto const server_error =
-    [&req](beast::string_view what)
+    auto const bad_request =
+    [&]()
     {
-        http::response<http::string_body> res{http::status::internal_server_error, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = "An error occurred: '" + std::string(what) + "'";
-        res.prepare_payload();
-        return res;
+        return json_error_response("Bad request", "Unsupported API call", http::status::bad_request);
     };
-    */
+
+    auto const check_auth =
+    [&](const std::set<std::string>& scopes = {})
+    {
+        const auto it = cw::credentials::check_header(creds, req["Authorization"]);
+        if (it == creds.end()) {
+            send(json_error_response("Invalid credentials", "Could not authenticate user", http::status::unauthorized));
+            return false;
+        }
+        if (!scopes.empty()) {
+            for (const auto& s : scopes) {
+                if (it->second.scopes.find(s) == it->second.scopes.end()) {
+                    send(json_error_response("Invalid scope", std::string("User does not have requested scope: ")+s, http::status::unauthorized));
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
         
     if (req.method() == http::verb::get && req.target() == "/openapi.json") {
         http::string_body::value_type body{cw::openapi::openapi_json};
@@ -195,8 +183,7 @@ handle_request(
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
     } else if (req.method() == http::verb::get && req.target() == "/users") {
-        const auto it = cw::credentials::check_header(creds, req["Authorization"]);
-        if (it == creds.end()) return send(unauthorized("invalid user"));
+        if (!check_auth({"a"})) return;
 
         rapidjson::Document document;
         rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
@@ -204,8 +191,7 @@ handle_request(
         document.AddMember("id", "a", allocator);
         return send(json_response(document));
     }
-
-    return send(bad_request("Unknown endpoint"));
+    return send(bad_request());
 }
 
 //------------------------------------------------------------------------------
