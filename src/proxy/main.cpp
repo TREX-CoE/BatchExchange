@@ -2,6 +2,8 @@
  * @file main.cpp
  * @brief CLI
  *
+ * ./src/server/proxy --cred ../data/creds run --cert ../data/server.crt --priv ../data/server.key --dh ../data/dh2048.pem --port 2000 --host 0.0.0.0
+ * 
  ***********************************************/
 
 #include <signal.h>
