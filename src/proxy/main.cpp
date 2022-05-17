@@ -96,6 +96,14 @@ const cw::credentials::dict& get_creds() {
     return creds;
 }
 
+
+struct CmdProcess {
+    bp::async_pipe ap;
+    bp::child cp;
+    std::string buf;
+    CmdProcess(net::io_context& ioc, const cw::batch::CmdOptions& opts): ap(ioc), cp(bp::search_path(opts.cmd), bp::args(opts.args), bp::std_out > ap, ioc) {}
+};
+
 }
 
 ssl::context create_ssl_context(const std::string& cert, const std::string& priv, const std::string& dh) {
@@ -547,10 +555,16 @@ public:
         } else if (req.method() == http::verb::get && req.target() == "/users") {
             if (!check_auth({"a"})) return;
 
-            derived().cp_.emplace(bp::search_path("bash"), "-c", "sleep 2; echo Hallo", bp::std_out > derived().ap, derived().ioc_);
+            //derived().cp_.emplace(bp::search_path("bash"), "-c", "sleep 2; echo Hallo", bp::std_out > derived().ap, derived().ioc_);
             
-            boost::asio::async_read(derived().ap, boost::asio::dynamic_buffer(derived().buf),
+            cw::batch::CmdOptions opts{"bash", {"-c", "sleep 2; echo Hallo"}};
+            // auto it = derived().process_cache_.emplace(opts, CmdProcess(derived().ioc_, opts)).first;
+
+            derived().proc_.emplace(derived().ioc_, opts);
+
+            boost::asio::async_read(derived().proc_->ap, boost::asio::dynamic_buffer(derived().proc_->buf),
                 [&](boost::system::error_code ec, std::size_t size){
+                    (void)size;
                     if (ec!=boost::asio::error::misc_errors::eof) {
                         fail(ec, "Async process fail");
                         send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
@@ -559,9 +573,9 @@ public:
                     rapidjson::Document document;
                     rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
                     document.SetObject();
-                    document.AddMember("data", derived().buf, allocator);
+                    document.AddMember("data", derived().proc_->buf, allocator);
                     send(json_response(document));
-            });
+            });            
             return;
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
@@ -688,6 +702,9 @@ public:
     net::io_context& ioc_;
     bp::async_pipe ap;
     boost::optional<bp::child> cp_;
+    boost::optional<CmdProcess> proc_;
+    std::map<cw::batch::CmdOptions, CmdProcess> process_cache_;
+
     // Create the session
     plain_http_session(
         beast::tcp_stream&& stream,
@@ -748,6 +765,9 @@ public:
     net::io_context& ioc_;
     bp::async_pipe ap;
     boost::optional<bp::child> cp_;
+    boost::optional<CmdProcess> proc_;
+    std::map<cw::batch::CmdOptions, CmdProcess> process_cache_;
+
     // Create the http_session
     ssl_http_session(
         beast::tcp_stream&& stream,
