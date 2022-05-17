@@ -547,13 +547,12 @@ public:
         } else if (req.method() == http::verb::get && req.target() == "/users") {
             if (!check_auth({"a"})) return;
 
-            bp::async_pipe ap(derived().ioc_);
-            bp::child cp(bp::search_path("ls"), ".", bp::std_out > ap, derived().ioc_);
-            std::vector<char> buf(4096);
-            boost::asio::async_read(ap, boost::asio::buffer(buf),
-                [](boost::system::error_code ec, std::size_t size){
-                    std::cout << "! " << ec << std::endl;
-                    (void)size;
+            derived().cp_.emplace(bp::search_path("ls"), ".", bp::std_out > derived().ap, derived().ioc_);
+            
+            boost::asio::async_read(derived().ap, boost::asio::dynamic_buffer(derived().buf),
+                [&](boost::system::error_code ec, std::size_t size){
+                    std::cout << "! " << ec << "?" << size << std::endl;
+                    std::cout << "* " << derived().buf << std::endl;
             });
 
             rapidjson::Document document;
@@ -681,8 +680,12 @@ class plain_http_session
     , public std::enable_shared_from_this<plain_http_session>
 {
     beast::tcp_stream stream_;
+
 public:
+    std::string buf;
     net::io_context& ioc_;
+    bp::async_pipe ap;
+    boost::optional<bp::child> cp_;
     // Create the session
     plain_http_session(
         beast::tcp_stream&& stream,
@@ -692,6 +695,7 @@ public:
             std::move(buffer))
         , stream_(std::move(stream))
         , ioc_(ioc)
+        , ap(ioc)
     {
     }
 
@@ -736,10 +740,12 @@ class ssl_http_session
     , public std::enable_shared_from_this<ssl_http_session>
 {
     beast::ssl_stream<beast::tcp_stream> stream_;
-    bp::child cp_;
 
 public:
+    std::string buf;
     net::io_context& ioc_;
+    bp::async_pipe ap;
+    boost::optional<bp::child> cp_;
     // Create the http_session
     ssl_http_session(
         beast::tcp_stream&& stream,
@@ -750,6 +756,7 @@ public:
             std::move(buffer))
         , stream_(std::move(stream), ctx)
         , ioc_(ioc)
+        , ap(ioc)
     {
     }
 
