@@ -33,6 +33,7 @@
 #include <boost/asio/strand.hpp>
 #include <boost/make_unique.hpp>
 #include <boost/optional.hpp>
+#include <boost/process.hpp>
 
 #include <cassert>
 #include <stdlib.h>
@@ -64,6 +65,7 @@ namespace websocket = beast::websocket;         // from <boost/beast/websocket.h
 namespace net = boost::asio;                    // from <boost/asio.hpp>
 namespace ssl = boost::asio::ssl;               // from <boost/asio/ssl.hpp>
 using tcp = boost::asio::ip::tcp;               // from <boost/asio/ip/tcp.hpp>
+namespace bp = boost::process;
 
 namespace batch = cw::batch;
 
@@ -545,15 +547,20 @@ public:
         } else if (req.method() == http::verb::get && req.target() == "/users") {
             if (!check_auth({"a"})) return;
 
-            derived().timer.async_wait([&](beast::error_code ec){
-                std::cout << "! " << ec << std::endl;
-
-                rapidjson::Document document;
-                rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-                document.SetObject();
-                document.AddMember("id", "a", allocator);
-                send(json_response(document));
+            bp::async_pipe ap(derived().ioc_);
+            bp::child cp(bp::search_path("ls"), ".", bp::std_out > ap, derived().ioc_);
+            std::vector<char> buf(4096);
+            boost::asio::async_read(ap, boost::asio::buffer(buf),
+                [](boost::system::error_code ec, std::size_t size){
+                    std::cout << "! " << ec << std::endl;
+                    (void)size;
             });
+
+            rapidjson::Document document;
+            rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+            document.SetObject();
+            document.AddMember("id", "a", allocator);
+            send(json_response(document));
             return;
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
@@ -674,17 +681,17 @@ class plain_http_session
     , public std::enable_shared_from_this<plain_http_session>
 {
     beast::tcp_stream stream_;
-
 public:
-    boost::asio::deadline_timer timer;
+    net::io_context& ioc_;
     // Create the session
     plain_http_session(
         beast::tcp_stream&& stream,
-        beast::flat_buffer&& buffer)
+        beast::flat_buffer&& buffer,
+        net::io_context& ioc)
         : http_session<plain_http_session>(
             std::move(buffer))
-        , stream_(std::move(stream)),
-        timer(stream_.get_executor(), boost::posix_time::seconds(5))
+        , stream_(std::move(stream))
+        , ioc_(ioc)
     {
     }
 
@@ -729,18 +736,20 @@ class ssl_http_session
     , public std::enable_shared_from_this<ssl_http_session>
 {
     beast::ssl_stream<beast::tcp_stream> stream_;
+    bp::child cp_;
 
 public:
-    boost::asio::deadline_timer timer;
+    net::io_context& ioc_;
     // Create the http_session
     ssl_http_session(
         beast::tcp_stream&& stream,
         ssl::context& ctx,
-        beast::flat_buffer&& buffer)
+        beast::flat_buffer&& buffer,
+        net::io_context& ioc)
         : http_session<ssl_http_session>(
             std::move(buffer))
         , stream_(std::move(stream), ctx)
-        , timer(stream_.get_executor(), boost::posix_time::seconds(5))
+        , ioc_(ioc)
     {
     }
 
@@ -822,14 +831,17 @@ class detect_session : public std::enable_shared_from_this<detect_session>
     beast::tcp_stream stream_;
     ssl::context& ctx_;
     beast::flat_buffer buffer_;
+    net::io_context& ioc_;
 
 public:
     explicit
     detect_session(
         tcp::socket&& socket,
-        ssl::context& ctx)
+        ssl::context& ctx,
+        net::io_context& ioc)
         : stream_(std::move(socket))
         , ctx_(ctx)
+        , ioc_(ioc)
     {
     }
 
@@ -860,14 +872,16 @@ public:
             std::make_shared<ssl_http_session>(
                 std::move(stream_),
                 ctx_,
-                std::move(buffer_))->run();
+                std::move(buffer_),
+                ioc_)->run();
             return;
         }
 
         // Launch plain session
         std::make_shared<plain_http_session>(
             std::move(stream_),
-            std::move(buffer_))->run();
+            std::move(buffer_),
+            ioc_)->run();
     }
 };
 
@@ -954,7 +968,8 @@ private:
             // Create the detector http_session and run it
             std::make_shared<detect_session>(
                 std::move(socket),
-                ctx_)->run();
+                ctx_,
+                ioc_)->run();
         }
 
         // Accept another connection
