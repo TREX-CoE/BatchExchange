@@ -547,19 +547,21 @@ public:
         } else if (req.method() == http::verb::get && req.target() == "/users") {
             if (!check_auth({"a"})) return;
 
-            derived().cp_.emplace(bp::search_path("ls"), ".", bp::std_out > derived().ap, derived().ioc_);
+            derived().cp_.emplace(bp::search_path("bash"), "-c", "sleep 2; echo Hallo", bp::std_out > derived().ap, derived().ioc_);
             
             boost::asio::async_read(derived().ap, boost::asio::dynamic_buffer(derived().buf),
                 [&](boost::system::error_code ec, std::size_t size){
-                    std::cout << "! " << ec << "?" << size << std::endl;
-                    std::cout << "* " << derived().buf << std::endl;
-            });
+                    if (ec!=boost::asio::error::misc_errors::eof) {
+                        fail(ec, "Async process fail");
+                        send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
+                    }
 
-            rapidjson::Document document;
-            rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-            document.SetObject();
-            document.AddMember("id", "a", allocator);
-            send(json_response(document));
+                    rapidjson::Document document;
+                    rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+                    document.SetObject();
+                    document.AddMember("data", derived().buf, allocator);
+                    send(json_response(document));
+            });
             return;
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
