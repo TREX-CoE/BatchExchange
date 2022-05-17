@@ -101,7 +101,9 @@ struct CmdProcess {
     bp::async_pipe ap;
     bp::child cp;
     std::string buf;
-    CmdProcess(net::io_context& ioc, const cw::batch::CmdOptions& opts): ap(ioc), cp(bp::search_path(opts.cmd), bp::args(opts.args), bp::std_out > ap, ioc) {}
+    int ret;
+    std::future<std::string> out;
+    CmdProcess(net::io_context& ioc, const cw::batch::CmdOptions& opts): ap(ioc), cp(bp::search_path(opts.cmd), bp::args(opts.args), bp::std_out > ap, ioc), ret(-1) {}
 };
 
 }
@@ -578,15 +580,29 @@ public:
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
 
-            const auto func = [](std::string& out, const cw::batch::CmdOptions& cmd) {
-                (void)cmd;
+            const auto func = [&](std::string& out, const cw::batch::CmdOptions& opts) {
                 (void)out;
-                return 1;
+                if (derived().process_cache_[opts].has_value()) {
+                    if (derived().process_cache_[opts]->ret) {
+                        return 0;
+                    }
+                } else {
+                    // start command
+                    derived().process_cache_[opts].emplace(derived().ioc_, opts);
+                    auto it = derived().process_cache_.find(opts);
+                    boost::asio::async_read(it->second->ap, boost::asio::dynamic_buffer(it->second->buf),
+                    [it, &send, &json_response, &json_error_response](boost::system::error_code ec, std::size_t size){ (void)size; (void)ec; });
+
+                    return -1;
+                }
+
+                return -1;
             };
 
             auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(func);
 
-            pbs->getNodesAsync({}, [](const auto n){ (void)n; std::cout << "N" << std::endl; return true; });
+            std::vector<cw::batch::Node> nodes;
+            pbs->getNodesAsync({}, [&nodes](cw::batch::Node n){ nodes.push_back(std::move(n)); return true; });
 
             (void)pbs;
 
