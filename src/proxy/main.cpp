@@ -98,12 +98,12 @@ const cw::credentials::dict& get_creds() {
 
 
 struct CmdProcess {
-    bp::async_pipe ap;
+    std::future<std::string> out; // before cp else "std::future_error: No associated state" because initialized afterwards
     bp::child cp;
-    std::string buf;
-    int ret;
-    std::future<std::string> out;
-    CmdProcess(net::io_context& ioc, const cw::batch::CmdOptions& opts): ap(ioc), cp(bp::search_path(opts.cmd), bp::args(opts.args), bp::std_out > ap, ioc), ret(-1) {}
+    template <typename F>
+    CmdProcess(net::io_context& ioc, const cw::batch::CmdOptions& opts, F func): cp(bp::search_path(opts.cmd), bp::args(opts.args), bp::std_out > out, ioc, bp::on_exit=[&](int ret, const std::error_code& ec){
+        func(*this, ret, ec);
+    }) {}
 };
 
 }
@@ -560,7 +560,21 @@ public:
             //derived().cp_.emplace(bp::search_path("bash"), "-c", "sleep 2; echo Hallo", bp::std_out > derived().ap, derived().ioc_);
             
             cw::batch::CmdOptions opts{"bash", {"-c", "sleep 2; echo Hallo"}};
-            derived().process_cache_[opts].emplace(derived().ioc_, opts);
+            derived().process_cache_[opts].emplace(derived().ioc_, opts, [&send, &json_response, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
+                if (ec) {
+                    return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
+                }
+                if (ret != 0) {
+                    return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
+                }
+
+                rapidjson::Document document;
+                rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+                document.SetObject();
+                document.AddMember("data", proc.out.get(), allocator);
+                return send(json_response(document));
+            });
+            /*
             auto it = derived().process_cache_.find(opts);
             boost::asio::async_read(it->second->ap, boost::asio::dynamic_buffer(it->second->buf),
                 [it, &send, &json_response, &json_error_response](boost::system::error_code ec, std::size_t size){
@@ -575,11 +589,14 @@ public:
                     document.SetObject();
                     document.AddMember("data", it->second->buf, allocator);
                     send(json_response(document));
-            });            
+            });   
+
+            */         
             return;
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
 
+            /*
             const auto func = [&](std::string& out, const cw::batch::CmdOptions& opts) {
                 (void)out;
                 if (derived().process_cache_[opts].has_value()) {
@@ -599,6 +616,7 @@ public:
                 return -1;
             };
 
+
             auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(func);
 
             std::vector<cw::batch::Node> nodes;
@@ -608,6 +626,7 @@ public:
 
             //cw::batchsystem::BatchSystem batch;
             //create_batch(batch, cw::batchsystem::System::Slurm);
+            */
 
 
             rapidjson::Document document;
