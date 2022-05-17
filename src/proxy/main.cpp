@@ -558,12 +558,10 @@ public:
             //derived().cp_.emplace(bp::search_path("bash"), "-c", "sleep 2; echo Hallo", bp::std_out > derived().ap, derived().ioc_);
             
             cw::batch::CmdOptions opts{"bash", {"-c", "sleep 2; echo Hallo"}};
-            // auto it = derived().process_cache_.emplace(opts, CmdProcess(derived().ioc_, opts)).first;
-
-            derived().proc_.emplace(derived().ioc_, opts);
-
-            boost::asio::async_read(derived().proc_->ap, boost::asio::dynamic_buffer(derived().proc_->buf),
-                [&](boost::system::error_code ec, std::size_t size){
+            derived().process_cache_[opts].emplace(derived().ioc_, opts);
+            auto it = derived().process_cache_.find(opts);
+            boost::asio::async_read(it->second->ap, boost::asio::dynamic_buffer(it->second->buf),
+                [it, &send, &json_response, &json_error_response](boost::system::error_code ec, std::size_t size){
                     (void)size;
                     if (ec!=boost::asio::error::misc_errors::eof) {
                         fail(ec, "Async process fail");
@@ -573,7 +571,7 @@ public:
                     rapidjson::Document document;
                     rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
                     document.SetObject();
-                    document.AddMember("data", derived().proc_->buf, allocator);
+                    document.AddMember("data", it->second->buf, allocator);
                     send(json_response(document));
             });            
             return;
@@ -703,7 +701,7 @@ public:
     bp::async_pipe ap;
     boost::optional<bp::child> cp_;
     boost::optional<CmdProcess> proc_;
-    std::map<cw::batch::CmdOptions, CmdProcess> process_cache_;
+    std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
 
     // Create the session
     plain_http_session(
@@ -766,7 +764,7 @@ public:
     bp::async_pipe ap;
     boost::optional<bp::child> cp_;
     boost::optional<CmdProcess> proc_;
-    std::map<cw::batch::CmdOptions, CmdProcess> process_cache_;
+    std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
 
     // Create the http_session
     ssl_http_session(
