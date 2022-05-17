@@ -557,8 +557,6 @@ public:
         } else if (req.method() == http::verb::get && req.target() == "/users") {
             if (!check_auth({"a"})) return;
 
-            //derived().cp_.emplace(bp::search_path("bash"), "-c", "sleep 2; echo Hallo", bp::std_out > derived().ap, derived().ioc_);
-            
             cw::batch::CmdOptions opts{"bash", {"-c", "sleep 2; echo Hallo"}};
             derived().process_cache_[opts].emplace(derived().ioc_, opts, [&send, &json_response, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
                 if (ec) {
@@ -574,24 +572,6 @@ public:
                 document.AddMember("data", proc.out.get(), allocator);
                 return send(json_response(document));
             });
-            /*
-            auto it = derived().process_cache_.find(opts);
-            boost::asio::async_read(it->second->ap, boost::asio::dynamic_buffer(it->second->buf),
-                [it, &send, &json_response, &json_error_response](boost::system::error_code ec, std::size_t size){
-                    (void)size;
-                    if (ec!=boost::asio::error::misc_errors::eof) {
-                        fail(ec, "Async process fail");
-                        send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
-                    }
-
-                    rapidjson::Document document;
-                    rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-                    document.SetObject();
-                    document.AddMember("data", it->second->buf, allocator);
-                    send(json_response(document));
-            });   
-
-            */         
             return;
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
@@ -733,9 +713,6 @@ class plain_http_session
 public:
     std::string buf;
     net::io_context& ioc_;
-    bp::async_pipe ap;
-    boost::optional<bp::child> cp_;
-    boost::optional<CmdProcess> proc_;
     std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
 
     // Create the session
@@ -747,7 +724,6 @@ public:
             std::move(buffer))
         , stream_(std::move(stream))
         , ioc_(ioc)
-        , ap(ioc)
     {
     }
 
@@ -796,9 +772,6 @@ class ssl_http_session
 public:
     std::string buf;
     net::io_context& ioc_;
-    bp::async_pipe ap;
-    boost::optional<bp::child> cp_;
-    boost::optional<CmdProcess> proc_;
     std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
 
     // Create the http_session
@@ -811,7 +784,6 @@ public:
             std::move(buffer))
         , stream_(std::move(stream), ctx)
         , ioc_(ioc)
-        , ap(ioc)
     {
     }
 
