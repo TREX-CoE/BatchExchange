@@ -98,10 +98,12 @@ const cw::credentials::dict& get_creds() {
 
 
 struct CmdProcess {
+    int exit;
     std::future<std::string> out; // before cp else "std::future_error: No associated state" because initialized afterwards
     bp::child cp;
     template <typename F>
-    CmdProcess(net::io_context& ioc, const cw::batch::CmdOptions& opts, F func): cp(bp::search_path(opts.cmd), bp::args(opts.args), bp::std_out > out, ioc, bp::on_exit=[&](int ret, const std::error_code& ec){
+    CmdProcess(net::io_context& ioc, const cw::batch::CmdOptions& opts, F func): exit(-1), cp(bp::search_path(opts.cmd), bp::args(opts.args), bp::std_out > out, ioc, bp::on_exit=[&](int ret, const std::error_code& ec){
+        exit = ec ? -2 : ret;
         func(*this, ret, ec);
     }) {}
 };
@@ -580,22 +582,27 @@ public:
             const auto func = [&](std::string& out, const cw::batch::CmdOptions& opts) {
                 (void)out;
                 if (derived().process_cache_[opts].has_value()) {
-                    if (derived().process_cache_[opts]->ret) {
-                        return 0;
-                    }
+                    //if (derived().process_cache_[opts]->fail) return -2;
+                    //if (derived().process_cache_[opts]->exit < 0) {
+                    //    out = derived().process_cache_[opts]->out.get();
+                    //    return derived().process_cache_[opts]->exit;
+                    //}
                 } else {
                     // start command
-                    derived().process_cache_[opts].emplace(derived().ioc_, opts);
-                    auto it = derived().process_cache_.find(opts);
-                    boost::asio::async_read(it->second->ap, boost::asio::dynamic_buffer(it->second->buf),
-                    [it, &send, &json_response, &json_error_response](boost::system::error_code ec, std::size_t size){ (void)size; (void)ec; });
-
-                    return -1;
+                    derived().process_cache_[opts].emplace(derived().ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
+                        (void)proc;
+                        if (ec) {
+                            //proc.fail = true;
+                            return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
+                        }
+                        if (ret != 0) {
+                            //proc.fail = true;
+                            return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
+                        }
+                    });
                 }
-
                 return -1;
             };
-
 
             auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(func);
 
@@ -607,7 +614,6 @@ public:
             //cw::batchsystem::BatchSystem batch;
             //create_batch(batch, cw::batchsystem::System::Slurm);
             */
-
 
             rapidjson::Document document;
             rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
