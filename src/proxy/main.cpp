@@ -1015,47 +1015,63 @@ private:
     }
 };
 
+bool read_cred(const std::string& cred_file, cw::helper::credentials::dict& creds) {
+    std::ifstream creds_fs(cred_file);
+    if (!creds_fs.good()) {
+        std::cout << "Could not open '" << cred_file << "' for reading" << std::endl;
+        return false;
+    }
+    cw::helper::credentials::read(creds, creds_fs);
+    return true;
+}
+
+bool write_cred(const std::string& cred_file, const cw::helper::credentials::dict& creds) {
+    std::ofstream creds_fso(cred_file);
+    if (!creds_fso.good()) {
+        std::cout << "Could not open '" << cred_file << "' for writing" << std::endl;
+        return false;
+    }
+    cw::helper::credentials::write(creds, creds_fso);
+    return true;
+}
+
 int user_set(const std::string& cred_file, const std::string& username, const std::vector<std::string>& scopes) {
     cw::helper::credentials::dict creds;
-    {
-        std::ifstream creds_fs(cred_file);
-        if (!creds_fs.good()) {
-            std::cout << "Could not open '" << cred_file << "' for reading" << std::endl;
-            return 1;
-        }
-        cw::helper::credentials::read(creds, creds_fs);
-    }
+    if (!read_cred(cred_file, creds)) return 1;
     
     std::set<std::string> scopes_set(scopes.begin(), scopes.end());
     cw::helper::credentials::set_user(creds, username, scopes_set, prompt(defaults::password_prompt));
 
-    {
-        std::ofstream creds_fso(cred_file);
-        if (!creds_fso.good()) {
-            std::cout << "Could not open '" << cred_file << "' for writing" << std::endl;
-            return 1;
-        }
-        cw::helper::credentials::write(creds, creds_fso);
-    }
+    if (!write_cred(cred_file, creds)) return 1;
     return 0;
 }
 
-int main_loop(const std::string& cred, int threads, const std::string& host, int portInput, const std::string& cert, const std::string& priv, const std::string& dh) {
+int user_remove(const std::string& cred_file, const std::string& username) {
+    cw::helper::credentials::dict creds;
+    if (!read_cred(cred_file, creds)) return 1;
+
+    auto it = creds.find(username);
+    if (it == creds.end()) {
+        std::cout << "Username '" << username << "' not found" << std::endl;
+        return 1;
+    }
+    creds.erase(it);
+    
+    if (!write_cred(cred_file, creds)) return 1;
+    return 0;
+}
+
+
+int main_loop(const std::string& cred, int threads, const std::string& host, int port, const std::string& cert, const std::string& priv, const std::string& dh, bool force_ssl, bool no_ssl) {
     if (threads < 1) {
         std::cout << "Minimum 1 thread" << std::endl;
         return 1;
     }
 
-    unsigned short port;
-    if (portInput==-1) {
-        port = defaults::port;
-    } else if (portInput < 1 || portInput > 65535) {
-        std::cout << "Invalid PORT (1-65535) " << portInput << std::endl;
+    if (port < 1 || port > 65535) {
+        std::cout << "Invalid PORT (1-65535) " << port << std::endl;
         return 1;
-    } else {
-        port = static_cast<unsigned short>(portInput);
     }
-
 
     // The io_context is required for all I/O
     net::io_context ioc{static_cast<int>(threads)};
@@ -1073,7 +1089,12 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
 
     auto const address = net::ip::make_address(host);
 
-    auto ctx = create_ssl_context(cert, priv, dh);
+    (void)force_ssl;
+    (void)no_ssl;
+    (void)cert;
+    (void)priv;
+    (void)dh;
+    ssl::context ctx{boost::asio::ssl::context::sslv23}; // create_ssl_context(cert, priv, dh);
 
     {
         std::ifstream creds_fs(cred);
@@ -1090,7 +1111,7 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
     std::make_shared<listener>(
         ioc,
         ctx,
-        tcp::endpoint{address, port})->run();
+        tcp::endpoint{address, static_cast<unsigned short>(port)})->run();
 
     std::cout << "Server running" << std::endl;
 
@@ -1115,7 +1136,7 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
 }
 
 int main(int argc, char **argv) {
-    enum class mode { run, user_set, help };
+    enum class mode { run, user_set, user_remove, help };
     mode selected;
 
     std::string cert = defaults::cert;
@@ -1123,26 +1144,32 @@ int main(int argc, char **argv) {
     std::string dh = defaults::dh;
     std::string priv = defaults::priv;
     std::string host = defaults::host;
-    int portInput = -1;
+    int port = defaults::port;
     std::string username;
     unsigned int threads = defaults::threads;
     std::vector<std::string> scopes;
+    bool no_ssl = false;
+    bool force_ssl = false;
 
     auto cli = (
         (clipp::command("help").set(selected,mode::help) % "Show help message")
         | (((clipp::required("--cred") & clipp::value("CRED", cred)) % "Credentials file"),
             (clipp::command("run").set(selected, mode::run) % "Run server",
-                (clipp::required("--cert") & clipp::value("CERT", cert)) % "SSL certificate file",
-                (clipp::required("--priv") & clipp::value("KEY", priv)) % "SSL private key file",
-                (clipp::required("--dh") & clipp::value("DH", dh)) % "SSL dh file",
-                (clipp::option("--port") & clipp::value("PORT", portInput)) % "Port to run server on (1-65535), default 80",
+                (((clipp::option("--force-ssl").set(force_ssl)) % "Disable automatic HTTP/HTTPS detection and only support SSL")
+                    |((clipp::option("--no-ssl").set(no_ssl)) % "Disable SSL encryption")),
+                (clipp::option("--cert") & clipp::value("CERT", cert)) % "SSL certificate file",
+                (clipp::option("--priv") & clipp::value("KEY", priv)) % "SSL private key file",
+                (clipp::option("--dh") & clipp::value("DH", dh)) % "SSL dh file",
+                (clipp::option("--port") & clipp::value("PORT", port)) % "Port to run server on (1-65535), default 80",
                 (clipp::option("--host") & clipp::value("HOST", host)) % "Host to run server on, default 0.0.0.0",
                 (clipp::option("--threads") & clipp::value("NTHREADS", threads)) % "Number of threads to use"
             )
-            | (clipp::command("user"), (clipp::command("set").set(selected, mode::user_set) % "Set / add user credentials",
+            | (clipp::command("user"), ((clipp::command("set").set(selected, mode::user_set) % "Set / add user credentials",
                 (clipp::value("name").set(username)) % "Username",
                 (clipp::option("--scopes") & clipp::values("SCOPE", scopes)) % "Permission scopes to set for user"
-            )))
+            ) | (clipp::command("remove").set(selected, mode::user_remove) % "Remove user credentials",
+                (clipp::value("name").set(username)) % "Username"
+            ))))
     );
 
     if (!clipp::parse(argc, argv, cli)) selected = mode::help;
@@ -1161,7 +1188,8 @@ int main(int argc, char **argv) {
             return 1;
         }
         case mode::user_set: return user_set(cred, username, scopes);
-        case mode::run: return main_loop(cred, threads, host, portInput, cert, priv, dh);
+        case mode::user_remove: return user_remove(cred, username);
+        case mode::run: return main_loop(cred, threads, host, port, cert, priv, dh, force_ssl, no_ssl);
     }
 
 
