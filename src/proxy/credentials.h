@@ -9,6 +9,7 @@
 #include "shared/http.h"
 
 namespace cw {
+namespace helper {
 namespace credentials {
 
 struct user_data {
@@ -27,6 +28,7 @@ void set_user(credentials::dict& creds, string_view user, std::set<std::string> 
 
 dict::const_iterator check_header(const dict& creds, string_view header);
 
+}
 }
 }
 

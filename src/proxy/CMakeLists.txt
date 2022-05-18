@@ -9,11 +9,15 @@ set( proxy_SRC
     main.cpp
     openapi_json.cpp
     credentials.cpp
+    creds.cpp
 )
 set( proxy_HDR
     openapi_json.h
     credentials.h
+    creds.h
     salt_hash.h
+    json.h
+    poll_timer.h
 )
 
 set( CMAKE_CXX_FLAGS "-Werror -Wall -Wextra -pedantic -Wshadow -Wswitch-enum -Wpointer-arith -Wwrite-strings -Wunreachable-code -Wformat=2 -Wundef -Wredundant-decls -Wcast-align -Wcast-qual -Wctor-dtor-privacy -Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-include-dirs -Wnoexcept -Woverloaded-virtual -Wredundant-decls -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=1 -Wundef -Wno-deprecated-copy -Wfloat-equal -Wswitch-default -Wconversion  -Wold-style-cast -Wstrict-overflow=2")

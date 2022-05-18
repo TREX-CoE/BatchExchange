@@ -20,6 +20,7 @@ std::string generate_salt() {
 }
 
 namespace cw {
+namespace helper {
 namespace credentials {
 
 void read(dict& creds, std::istream& in) {
@@ -78,5 +79,6 @@ dict::const_iterator check_header(const dict& creds, string_view header) {
     return creds.end();
 }
 
+}
 }
 }

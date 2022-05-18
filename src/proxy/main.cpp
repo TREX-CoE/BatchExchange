@@ -45,11 +45,15 @@
 
 #include "proxy/openapi_json.h"
 #include "proxy/credentials.h"
+#include "proxy/creds.h"
+#include "proxy/json.h"
+#include "proxy/poll_timer.h"
 #include "shared/obfuscator.h"
 #include "shared/stream_cast.h"
 #include "shared/sha512.h"
 #include "proxy/salt_hash.h"
 #include "shared/string_view.h"
+#include "shared/batch_json.h"
 
 
 #include "clipp.h"
@@ -57,7 +61,6 @@
 #include "batchsystem/batchsystem.h"
 #include "batchsystem/factory.h"
 #include "batchsystem/pbsBatch.h"
-#include "batchsystem/json.h"
 
 
 namespace beast = boost::beast;                 // from <boost/beast.hpp>
@@ -91,13 +94,6 @@ void sigHandler(int signal) {
 
 namespace {
 
-cw::credentials::dict creds;
-
-const cw::credentials::dict& get_creds() {
-    return creds;
-}
-
-
 struct CmdProcess {
     int exit;
     std::future<std::string> out; // before cp else "std::future_error: No associated state" because initialized afterwards
@@ -122,21 +118,6 @@ ssl::context create_ssl_context(const std::string& cert, const std::string& priv
     ctx.use_private_key_file(priv, boost::asio::ssl::context::pem);
     ctx.use_tmp_dh_file(dh);
     return ctx;
-}
-
-rapidjson::Document generate_json_error(const std::string& type, const std::string& message, http::status status) {
-    rapidjson::Document document;
-    rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-    document.SetObject();
-    {
-        rapidjson::Value error;
-        error.SetObject();
-        error.AddMember("type", type, allocator);
-        error.AddMember("message", message, allocator);
-        error.AddMember("code", static_cast<int>(status), allocator);
-        document.AddMember("error", error, allocator);
-    }
-    return document;
 }
 
 //------------------------------------------------------------------------------
@@ -364,45 +345,6 @@ make_websocket_session(
 
 //------------------------------------------------------------------------------
 
-class PollTimer {
-public:
-    using callback = std::function<void(PollTimer& timer, const boost::system::error_code& ec)>;
-    explicit PollTimer(net::io_context& io_context): _timer( io_context ) {}
-
-    void set_interval(boost::posix_time::time_duration interval) {
-        _interval = interval;
-    }
-
-    void stop() {
-        _timer.cancel();
-        _running = false;
-        _func = nullptr;
-    }
-    
-    void start(callback func) {
-        if (_running) stop();
-        _running = true;
-        _func = func;
-        this->wait();
-    }
-
-private:
-    bool _running{false};
-    boost::asio::deadline_timer _timer;
-    boost::posix_time::time_duration _interval{boost::posix_time::millisec(100)};
-    callback _func;
-    void wait()
-    {
-        _timer.expires_from_now(_interval);
-        _timer.async_wait([&](const boost::system::error_code& ec) {
-            (void)ec;
-            this->_func(*this, ec);
-            if (_running) this->wait();
-        });
-    }
-};
-
-
 // Handles an HTTP server connection.
 // This uses the Curiously Recurring Template Pattern so that
 // the same code works with both SSL streams and regular sockets.
@@ -555,7 +497,7 @@ public:
         auto const json_error_response =
         [&](const std::string& type, const std::string& message, http::status status)
         {
-            return json_response(generate_json_error(type, message, status), status);
+            return json_response(cw::proxy::json::generate_json_error(type, message, status), status);
         };
 
         auto const bad_request =
@@ -567,8 +509,8 @@ public:
         auto const check_auth =
         [&](const std::set<std::string>& scopes = {})
         {
-            const auto it = cw::credentials::check_header(get_creds(), req["Authorization"]);
-            if (it == get_creds().end()) {
+            const auto it = cw::helper::credentials::check_header(cw::creds::get(), req["Authorization"]);
+            if (it == cw::creds::get().end()) {
                 send(json_error_response("Invalid credentials", "Could not authenticate user", http::status::unauthorized));
                 return false;
             }
@@ -642,7 +584,7 @@ public:
             });
 
             auto nodes = std::make_shared<std::vector<cw::batch::Node>>();
-            derived().poll.start([nodes, pbs, &send, &json_error_response, &json_response](PollTimer& timer, const boost::system::error_code& ec){
+            derived().poll.start([nodes, pbs, &send, &json_error_response, &json_response](cw::helper::asio::PollTimer& timer, const boost::system::error_code& ec){
                 (void)ec;
                 if (ec) {
                     send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
@@ -652,24 +594,9 @@ public:
                 try {
                     std::cout << "7" << std::endl;
 
-                    bool done = pbs->getNodesAsync({}, [nodes](cw::batch::Node n){
-                        nodes->push_back(n);
-                        return true;
-                    });
+                    bool done = pbs->getNodesAsync({}, [nodes](cw::batch::Node n){ nodes->push_back(std::move(n)); return true; });
                     if (done) {
-                        rapidjson::Document document;
-                        rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-                        document.SetObject();
-
-                        rapidjson::Value nodesArr;
-                        nodesArr.SetArray();
-                        for (const auto& node : *nodes) {
-                                rapidjson::Document subdocument(&document.GetAllocator());
-                                cw::batch::json::serialize(node, subdocument);
-                                nodesArr.PushBack(subdocument, allocator);
-                        }
-                        document.AddMember("nodes", nodesArr, allocator);
-                        send(json_response(document));
+                        send(json_response(cw::helper::json::serialize_wrap(*nodes)));
                         timer.stop();
                         return;
                     }
@@ -780,7 +707,7 @@ public:
     net::io_context& ioc_;
     std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
     boost::asio::deadline_timer timer;
-    PollTimer poll;
+    cw::helper::asio::PollTimer poll;
 
     // Create the session
     plain_http_session(
@@ -843,7 +770,7 @@ public:
     net::io_context& ioc_;
     std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
     boost::asio::deadline_timer timer;
-    PollTimer poll;
+    cw::helper::asio::PollTimer poll;
 
     // Create the http_session
     ssl_http_session(
@@ -1143,10 +1070,10 @@ int main(int argc, char **argv) {
         }
 
         case mode::user_set: {
-            cw::credentials::dict creds;
+            cw::helper::credentials::dict creds;
             {
                 std::ifstream creds_fs(cred);
-                cw::credentials::read(creds, creds_fs);
+                cw::helper::credentials::read(creds, creds_fs);
             }
             
             std::cout << "password> ";
@@ -1154,11 +1081,11 @@ int main(int argc, char **argv) {
             std::string password;
             std::getline(std::cin, password);
             std::set<std::string> scopes_set(scopes.begin(), scopes.end());
-            cw::credentials::set_user(creds, username, scopes_set, password);
+            cw::helper::credentials::set_user(creds, username, scopes_set, password);
 
             {
                 std::ofstream creds_fso(cred);
-                cw::credentials::write(creds, creds_fso);
+                cw::helper::credentials::write(creds, creds_fso);
             }
             break;
         }
@@ -1201,7 +1128,9 @@ int main(int argc, char **argv) {
 
             {
                 std::ifstream creds_fs(cred);
-                cw::credentials::read(creds, creds_fs);
+                cw::helper::credentials::dict creds;
+                cw::helper::credentials::read(creds, creds_fs);
+                cw::creds::init(creds);
             }
 
             // Create and launch a listening port
