@@ -65,8 +65,14 @@
 
 namespace defaults {
 
-constexpr int port = 80;
+constexpr int port = 2000;
 constexpr const char* host = "0.0.0.0";
+constexpr unsigned int threads = 10;
+constexpr const char* cred = "/etc/trex/creds";
+constexpr const char* cert = "/etc/trex/server.crt";
+constexpr const char* priv = "/etc/trex/server.key";
+constexpr const char* dh = "/etc/trex/dh2048.pem";
+constexpr const char* password_prompt = "password> ";
 
 }
 
@@ -80,26 +86,17 @@ namespace bp = boost::process;
 
 namespace batch = cw::batch;
 
-bool canceled(false);
-
-/**
- * @brief Handle caught signal
- *
- * This function is called when SIGINT is caught.
- *
- * @param signal Number of signal
- */
-void sigHandler(int signal) {
-    std::cout << "Caught signal " << signal << std::endl;
-
-    // only exit on second SIGINT
-    if (canceled) {
-        exit(EXIT_FAILURE);
-    }
-    canceled = true;
-}
-
 namespace {
+
+std::string prompt(const std::string& prefix) {
+    if (!prefix.empty()) {
+        std::cout << prefix;
+        std::cout.flush();
+    }
+    std::string input;
+    std::getline(std::cin, input);
+    return input;
+}
 
 struct CmdProcess {
     int exit;
@@ -1022,18 +1019,22 @@ int user_set(const std::string& cred_file, const std::string& username, const st
     cw::helper::credentials::dict creds;
     {
         std::ifstream creds_fs(cred_file);
+        if (!creds_fs.good()) {
+            std::cout << "Could not open '" << cred_file << "' for reading" << std::endl;
+            return 1;
+        }
         cw::helper::credentials::read(creds, creds_fs);
     }
     
-    std::cout << "password> ";
-    std::cout.flush();
-    std::string password;
-    std::getline(std::cin, password);
     std::set<std::string> scopes_set(scopes.begin(), scopes.end());
-    cw::helper::credentials::set_user(creds, username, scopes_set, password);
+    cw::helper::credentials::set_user(creds, username, scopes_set, prompt(defaults::password_prompt));
 
     {
         std::ofstream creds_fso(cred_file);
+        if (!creds_fso.good()) {
+            std::cout << "Could not open '" << cred_file << "' for writing" << std::endl;
+            return 1;
+        }
         cw::helper::credentials::write(creds, creds_fso);
     }
     return 0;
@@ -1070,13 +1071,16 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
         ioc.stop();
     });
 
-
     auto const address = net::ip::make_address(host);
 
     auto ctx = create_ssl_context(cert, priv, dh);
 
     {
         std::ifstream creds_fs(cred);
+        if (!creds_fs.good()) {
+            std::cout << "Could not open '" << cred << "' for reading" << std::endl;
+            return 1;
+        }
         cw::helper::credentials::dict creds;
         cw::helper::credentials::read(creds, creds_fs);
         cw::creds::init(creds);
@@ -1111,26 +1115,17 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
 }
 
 int main(int argc, char **argv) {
-    struct sigaction sigIntHandler;
-
-    sigIntHandler.sa_handler = sigHandler;
-    sigemptyset(&sigIntHandler.sa_mask);
-    sigIntHandler.sa_flags = 0;
-
-    sigaction(SIGINT, &sigIntHandler, NULL); /* for CTRL+C */
-
-    enum class mode { run, user_set, help
-    };
+    enum class mode { run, user_set, help };
     mode selected;
 
-    std::string cert;
-    std::string cred;
-    std::string dh;
-    std::string priv;
+    std::string cert = defaults::cert;
+    std::string cred = defaults::cred;
+    std::string dh = defaults::dh;
+    std::string priv = defaults::priv;
     std::string host = defaults::host;
     int portInput = -1;
     std::string username;
-    unsigned int threads = 10;
+    unsigned int threads = defaults::threads;
     std::vector<std::string> scopes;
 
     auto cli = (
