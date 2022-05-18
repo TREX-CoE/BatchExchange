@@ -8,8 +8,8 @@
 #include <ostream>
 #include <istream>
 
-static string_view delimiter = ":";
-static string_view scope_delimiter = ",";
+static const std::string delimiter = ":";
+static const std::string scope_delimiter = ",";
 
 namespace {
 
@@ -26,16 +26,16 @@ void read(dict& creds, std::istream& in) {
     std::string line;
     while(std::getline(in, line)) {
         if (line.empty()) continue;
-        auto l = string_view(line);
         std::string user;
         user_data data;
         unsigned int i = 0;
-        cw::helper::splitString(l, delimiter, [&](const auto idx1, const auto idx2){
+        cw::helper::splitString(line, delimiter, [&](const auto idx1, const auto idx2){
             switch (i) {
                 case 0: user=line.substr(idx1, idx2); break;
                 case 1: {
-                    cw::helper::splitString(l.substr(idx1, idx2), scope_delimiter, [&](const auto i1, const auto i2){
-                        data.scopes.insert(line.substr(i1, i2));
+                    std::string l2 = line.substr(idx1, idx2);
+                    cw::helper::splitString(l2, scope_delimiter, [&](const auto i1, const auto i2){
+                        data.scopes.insert(l2.substr(i1, i2));
                         return true;
                     });
                     break;
