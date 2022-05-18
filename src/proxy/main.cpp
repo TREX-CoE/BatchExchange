@@ -366,23 +366,38 @@ make_websocket_session(
 
 class PollTimer {
 public:
+    using callback = std::function<void(PollTimer& timer, const boost::system::error_code& ec)>;
     explicit PollTimer(net::io_context& io_context): _timer( io_context ) {}
+
+    void set_interval(boost::posix_time::time_duration interval) {
+        _interval = interval;
+    }
+
+    void stop() {
+        _timer.cancel();
+        _running = false;
+        _func = nullptr;
+    }
     
-    void start(std::function<bool(const boost::system::error_code& ec)> func)
-    {
+    void start(callback func) {
+        if (_running) stop();
+        _running = true;
         _func = func;
         this->wait();
     }
 
 private:
+    bool _running{false};
     boost::asio::deadline_timer _timer;
-    std::function<bool(const boost::system::error_code& ec)> _func;
+    boost::posix_time::time_duration _interval{boost::posix_time::millisec(100)};
+    callback _func;
     void wait()
     {
-        _timer.expires_from_now(boost::posix_time::millisec(400));
+        _timer.expires_from_now(_interval);
         _timer.async_wait([&](const boost::system::error_code& ec) {
-            if (!this->_func(ec)) return;
-            this->wait();
+            (void)ec;
+            this->_func(*this, ec);
+            if (_running) this->wait();
         });
     }
 };
@@ -627,8 +642,13 @@ public:
             });
 
             auto nodes = std::make_shared<std::vector<cw::batch::Node>>();
-            derived().poll.start([nodes, pbs, &send, &json_error_response, &json_response](const boost::system::error_code& ec){
+            derived().poll.start([nodes, pbs, &send, &json_error_response, &json_response](PollTimer& timer, const boost::system::error_code& ec){
                 (void)ec;
+                if (ec) {
+                    send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
+                    timer.stop();
+                    return;
+                }
                 try {
                     std::cout << "7" << std::endl;
 
@@ -650,15 +670,14 @@ public:
                         }
                         document.AddMember("nodes", nodesArr, allocator);
                         send(json_response(document));
-                        return false;
+                        timer.stop();
+                        return;
                     }
                 } catch (const boost::process::process_error& e) {
                     send(json_error_response("Running command failed", e.what(), http::status::internal_server_error));
-                    return false;
+                    timer.stop();
+                    return;
                 }
-
-                return true;
-
             });
             return;
         }
