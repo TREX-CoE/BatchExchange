@@ -52,6 +52,7 @@
 #include "shared/stream_cast.h"
 #include "shared/sha512.h"
 #include "proxy/salt_hash.h"
+#include "proxy/set_echo.h"
 #include "shared/string_view.h"
 #include "shared/batch_json.h"
 
@@ -93,8 +94,10 @@ std::string prompt(const std::string& prefix) {
         std::cout << prefix;
         std::cout.flush();
     }
+    cw::helper::set_echo(false);
     std::string input;
     std::getline(std::cin, input);
+    cw::helper::set_echo(true);
     return input;
 }
 
