@@ -113,6 +113,8 @@ struct CmdProcess {
     }) {}
 };
 
+using process_cache_dict = std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>>;
+
 }
 
 void set_ssl_context(ssl::context& ctx, const std::string& cert, const std::string& priv, const std::string& dh) {
@@ -544,35 +546,19 @@ public:
             res.content_length(size);
             res.keep_alive(req.keep_alive());
             return send(std::move(res));
-        } else if (req.method() == http::verb::get && req.target() == "/users") {
-            if (!check_auth({"a"})) return;
-
-            cw::batch::CmdOptions opts{"bash", {"-c", "sleep 2; echo Hallo"}};
-            derived().process_cache_[opts].emplace(derived().ioc_, opts, [&send, &json_response, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
-                if (ec) {
-                    return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
-                }
-                if (ret != 0) {
-                    return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
-                }
-
-                rapidjson::Document document;
-                rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-                document.SetObject();
-                document.AddMember("data", proc.out.get(), allocator);
-                return send(json_response(document));
-            });
-            return;
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
 
-            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>([&](std::string& out, const cw::batch::CmdOptions& opts) {
-                if (derived().process_cache_[opts].has_value()) {
-                    if (derived().process_cache_[opts]->exit >= 0) out = derived().process_cache_[opts]->out.get();
-                    return derived().process_cache_[opts]->exit;
+            auto process_cache = std::make_shared<process_cache_dict>();
+
+            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>([&, process_cache](std::string& out, const cw::batch::CmdOptions& opts) {
+                process_cache_dict& cache = *process_cache;
+                if (cache[opts].has_value()) {
+                    if (cache[opts]->exit >= 0) out = cache[opts]->out.get();
+                    return cache[opts]->exit;
                 } else {
                     // start command
-                    derived().process_cache_[opts].emplace(derived().ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
+                    cache[opts].emplace(derived().ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
                         (void)proc;
                         if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
                         if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
@@ -697,7 +683,6 @@ class plain_http_session
 public:
     std::string buf;
     net::io_context& ioc_;
-    std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
 
     // Create the session
     plain_http_session(
@@ -756,7 +741,6 @@ class ssl_http_session
 public:
     std::string buf;
     net::io_context& ioc_;
-    std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
 
     // Create the http_session
     ssl_http_session(
