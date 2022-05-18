@@ -57,6 +57,7 @@
 #include "batchsystem/batchsystem.h"
 #include "batchsystem/factory.h"
 #include "batchsystem/pbsBatch.h"
+#include "batchsystem/json.h"
 
 
 namespace beast = boost::beast;                 // from <boost/beast.hpp>
@@ -363,6 +364,30 @@ make_websocket_session(
 
 //------------------------------------------------------------------------------
 
+class PollTimer {
+public:
+    explicit PollTimer(net::io_context& io_context): _timer( io_context ) {}
+    
+    void start(std::function<bool(const boost::system::error_code& ec)> func)
+    {
+        _func = func;
+        this->wait();
+    }
+
+private:
+    boost::asio::deadline_timer _timer;
+    std::function<bool(const boost::system::error_code& ec)> _func;
+    void wait()
+    {
+        _timer.expires_from_now(boost::posix_time::millisec(400));
+        _timer.async_wait([&](const boost::system::error_code& ec) {
+            if (!this->_func(ec)) return;
+            this->wait();
+        });
+    }
+};
+
+
 // Handles an HTTP server connection.
 // This uses the Curiously Recurring Template Pattern so that
 // the same code works with both SSL streams and regular sockets.
@@ -501,7 +526,7 @@ public:
         auto const json_response =
         [&](const rapidjson::Document& document, http::status status = http::status::ok)
         {
-            http::response<http::string_body> res{status, 11}; // req.version()
+            http::response<http::string_body> res{status, 11}; // req.version(); fails
             res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
             res.set(http::field::content_type, "application/json");
             rapidjson::StringBuffer buffer;
@@ -578,51 +603,66 @@ public:
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
 
-            /*
-            const auto func = [&](std::string& out, const cw::batch::CmdOptions& opts) {
-                (void)out;
+            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>([&](std::string& out, const cw::batch::CmdOptions& opts) {
+                std::cout << "1" << std::endl;
                 if (derived().process_cache_[opts].has_value()) {
-                    //if (derived().process_cache_[opts]->fail) return -2;
-                    //if (derived().process_cache_[opts]->exit < 0) {
-                    //    out = derived().process_cache_[opts]->out.get();
-                    //    return derived().process_cache_[opts]->exit;
-                    //}
+                    std::cout << "2" << std::endl;
+
+                    if (derived().process_cache_[opts]->exit >= 0) out = derived().process_cache_[opts]->out.get();
+                    std::cout << "4" << std::endl;
+                    return derived().process_cache_[opts]->exit;
                 } else {
+                    std::cout << "3" << std::endl;
                     // start command
                     derived().process_cache_[opts].emplace(derived().ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
                         (void)proc;
-                        if (ec) {
-                            //proc.fail = true;
-                            return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
-                        }
-                        if (ret != 0) {
-                            //proc.fail = true;
-                            return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
-                        }
+                        std::cout << "5" << std::endl;
+                        if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
+                        if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
+                        std::cout << "6" << std::endl;
+                        //return send(json_error_response("a", "b", http::status::internal_server_error));
                     });
                 }
                 return -1;
-            };
+            });
 
-            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(func);
+            auto nodes = std::make_shared<std::vector<cw::batch::Node>>();
+            derived().poll.start([nodes, pbs, &send, &json_error_response, &json_response](const boost::system::error_code& ec){
+                (void)ec;
+                try {
+                    std::cout << "7" << std::endl;
 
-            std::vector<cw::batch::Node> nodes;
-            pbs->getNodesAsync({}, [&nodes](cw::batch::Node n){ nodes.push_back(std::move(n)); return true; });
+                    bool done = pbs->getNodesAsync({}, [nodes](cw::batch::Node n){
+                        nodes->push_back(n);
+                        return true;
+                    });
+                    if (done) {
+                        rapidjson::Document document;
+                        rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+                        document.SetObject();
 
-            (void)pbs;
+                        rapidjson::Value nodesArr;
+                        nodesArr.SetArray();
+                        for (const auto& node : *nodes) {
+                                rapidjson::Document subdocument(&document.GetAllocator());
+                                cw::batch::json::serialize(node, subdocument);
+                                nodesArr.PushBack(subdocument, allocator);
+                        }
+                        document.AddMember("nodes", nodesArr, allocator);
+                        send(json_response(document));
+                        return false;
+                    }
+                } catch (const boost::process::process_error& e) {
+                    send(json_error_response("Running command failed", e.what(), http::status::internal_server_error));
+                    return false;
+                }
 
-            //cw::batchsystem::BatchSystem batch;
-            //create_batch(batch, cw::batchsystem::System::Slurm);
-            */
+                return true;
 
-            rapidjson::Document document;
-            rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-            document.SetObject();
-            document.AddMember("id", "a", allocator);
-            return send(json_response(document));
-        } else {
-            return send(bad_request());
+            });
+            return;
         }
+        return send(bad_request());
     }
 
     void
@@ -720,6 +760,8 @@ public:
     std::string buf;
     net::io_context& ioc_;
     std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
+    boost::asio::deadline_timer timer;
+    PollTimer poll;
 
     // Create the session
     plain_http_session(
@@ -730,6 +772,8 @@ public:
             std::move(buffer))
         , stream_(std::move(stream))
         , ioc_(ioc)
+        , timer(ioc, boost::posix_time::seconds(1))
+        , poll(ioc)
     {
     }
 
@@ -779,6 +823,8 @@ public:
     std::string buf;
     net::io_context& ioc_;
     std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
+    boost::asio::deadline_timer timer;
+    PollTimer poll;
 
     // Create the http_session
     ssl_http_session(
@@ -790,6 +836,8 @@ public:
             std::move(buffer))
         , stream_(std::move(stream), ctx)
         , ioc_(ioc)
+        , timer(ioc, boost::posix_time::seconds(1))
+        , poll(ioc)
     {
     }
 
