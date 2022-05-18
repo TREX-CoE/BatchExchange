@@ -114,9 +114,8 @@ struct CmdProcess {
 
 }
 
-ssl::context create_ssl_context(const std::string& cert, const std::string& priv, const std::string& dh) {
+void set_ssl_context(ssl::context& ctx, const std::string& cert, const std::string& priv, const std::string& dh) {
     // The SSL context is required, and holds certificates
-    ssl::context ctx{boost::asio::ssl::context::sslv23};
     ctx.set_options(
         boost::asio::ssl::context::default_workarounds
         | boost::asio::ssl::context::no_sslv2
@@ -124,7 +123,6 @@ ssl::context create_ssl_context(const std::string& cert, const std::string& priv
     ctx.use_certificate_chain_file(cert);
     ctx.use_private_key_file(priv, boost::asio::ssl::context::pem);
     ctx.use_tmp_dh_file(dh);
-    return ctx;
 }
 
 //------------------------------------------------------------------------------
@@ -873,16 +871,19 @@ class detect_session : public std::enable_shared_from_this<detect_session>
     ssl::context& ctx_;
     beast::flat_buffer buffer_;
     net::io_context& ioc_;
+    bool force_ssl_;
 
 public:
     explicit
     detect_session(
         tcp::socket&& socket,
         ssl::context& ctx,
-        net::io_context& ioc)
+        net::io_context& ioc,
+        bool force_ssl)
         : stream_(std::move(socket))
         , ctx_(ctx)
         , ioc_(ioc)
+        , force_ssl_(force_ssl)
     {
     }
 
@@ -918,6 +919,8 @@ public:
             return;
         }
 
+        if (force_ssl_) return;
+
         // Launch plain session
         std::make_shared<plain_http_session>(
             std::move(stream_),
@@ -932,15 +935,18 @@ class listener : public std::enable_shared_from_this<listener>
     net::io_context& ioc_;
     ssl::context& ctx_;
     tcp::acceptor acceptor_;
+    bool force_ssl_;
 
 public:
     listener(
         net::io_context& ioc,
         ssl::context& ctx,
-        tcp::endpoint endpoint)
+        tcp::endpoint endpoint,
+        bool force_ssl)
         : ioc_(ioc)
         , ctx_(ctx)
         , acceptor_(net::make_strand(ioc))
+        , force_ssl_(force_ssl)
     {
         beast::error_code ec;
 
@@ -1010,7 +1016,8 @@ private:
             std::make_shared<detect_session>(
                 std::move(socket),
                 ctx_,
-                ioc_)->run();
+                ioc_,
+                force_ssl_)->run();
         }
 
         // Accept another connection
@@ -1092,12 +1099,8 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
 
     auto const address = net::ip::make_address(host);
 
-    (void)force_ssl;
-    (void)no_ssl;
-    (void)cert;
-    (void)priv;
-    (void)dh;
-    ssl::context ctx{boost::asio::ssl::context::sslv23}; // create_ssl_context(cert, priv, dh);
+    ssl::context ctx{boost::asio::ssl::context::sslv23};
+    if (!no_ssl) set_ssl_context(ctx, cert, priv, dh);
 
     {
         std::ifstream creds_fs(cred);
@@ -1114,7 +1117,8 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
     std::make_shared<listener>(
         ioc,
         ctx,
-        tcp::endpoint{address, static_cast<unsigned short>(port)})->run();
+        tcp::endpoint{address, static_cast<unsigned short>(port)},
+        force_ssl)->run();
 
     std::cout << "Server running" << std::endl;
 
