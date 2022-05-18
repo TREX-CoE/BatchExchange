@@ -63,6 +63,13 @@
 #include "batchsystem/pbsBatch.h"
 
 
+namespace defaults {
+
+constexpr int port = 80;
+constexpr const char* host = "0.0.0.0";
+
+}
+
 namespace beast = boost::beast;                 // from <boost/beast.hpp>
 namespace http = beast::http;                   // from <boost/beast/http.hpp>
 namespace websocket = beast::websocket;         // from <boost/beast/websocket.hpp>
@@ -1011,7 +1018,97 @@ private:
     }
 };
 
+int user_set(const std::string& cred_file, const std::string& username, const std::vector<std::string>& scopes) {
+    cw::helper::credentials::dict creds;
+    {
+        std::ifstream creds_fs(cred_file);
+        cw::helper::credentials::read(creds, creds_fs);
+    }
+    
+    std::cout << "password> ";
+    std::cout.flush();
+    std::string password;
+    std::getline(std::cin, password);
+    std::set<std::string> scopes_set(scopes.begin(), scopes.end());
+    cw::helper::credentials::set_user(creds, username, scopes_set, password);
 
+    {
+        std::ofstream creds_fso(cred_file);
+        cw::helper::credentials::write(creds, creds_fso);
+    }
+    return 0;
+}
+
+int main_loop(const std::string& cred, int threads, const std::string& host, int portInput, const std::string& cert, const std::string& priv, const std::string& dh) {
+    if (threads < 1) {
+        std::cout << "Minimum 1 thread" << std::endl;
+        return 1;
+    }
+
+    unsigned short port;
+    if (portInput==-1) {
+        port = defaults::port;
+    } else if (portInput < 1 || portInput > 65535) {
+        std::cout << "Invalid PORT (1-65535) " << portInput << std::endl;
+        return 1;
+    } else {
+        port = static_cast<unsigned short>(portInput);
+    }
+
+
+    // The io_context is required for all I/O
+    net::io_context ioc{static_cast<int>(threads)};
+
+    // Capture SIGINT and SIGTERM to perform a clean shutdown
+    net::signal_set signals(ioc, SIGINT, SIGTERM);
+    signals.async_wait(
+    [&](beast::error_code const&, int)
+    {
+        // Stop the `io_context`. This will cause `run()`
+        // to return immediately, eventually destroying the
+        // `io_context` and all of the sockets in it.
+        ioc.stop();
+    });
+
+
+    auto const address = net::ip::make_address(host);
+
+    auto ctx = create_ssl_context(cert, priv, dh);
+
+    {
+        std::ifstream creds_fs(cred);
+        cw::helper::credentials::dict creds;
+        cw::helper::credentials::read(creds, creds_fs);
+        cw::creds::init(creds);
+    }
+
+    // Create and launch a listening port
+    std::make_shared<listener>(
+        ioc,
+        ctx,
+        tcp::endpoint{address, port})->run();
+
+    std::cout << "Server running" << std::endl;
+
+    // Run the I/O service on the requested number of threads
+    std::vector<std::thread> v;
+    v.reserve(threads - 1);
+    for(auto i = threads - 1; i > 0; --i)
+        v.emplace_back(
+        [&ioc]
+        {
+            ioc.run();
+        });
+    ioc.run();
+
+    // (If we get here, it means we got a SIGINT or SIGTERM)
+
+    // Block until all the threads exit
+    for(auto& t : v)
+        t.join();
+
+    return 0;
+}
 
 int main(int argc, char **argv) {
     struct sigaction sigIntHandler;
@@ -1030,7 +1127,7 @@ int main(int argc, char **argv) {
     std::string cred;
     std::string dh;
     std::string priv;
-    std::string host = "0.0.0.0";
+    std::string host = defaults::host;
     int portInput = -1;
     std::string username;
     unsigned int threads = 10;
@@ -1068,99 +1165,8 @@ int main(int argc, char **argv) {
                     << clipp::documentation(cli) << std::endl;
             return 1;
         }
-
-        case mode::user_set: {
-            cw::helper::credentials::dict creds;
-            {
-                std::ifstream creds_fs(cred);
-                cw::helper::credentials::read(creds, creds_fs);
-            }
-            
-            std::cout << "password> ";
-            std::cout.flush();
-            std::string password;
-            std::getline(std::cin, password);
-            std::set<std::string> scopes_set(scopes.begin(), scopes.end());
-            cw::helper::credentials::set_user(creds, username, scopes_set, password);
-
-            {
-                std::ofstream creds_fso(cred);
-                cw::helper::credentials::write(creds, creds_fso);
-            }
-            break;
-        }
-        case mode::run: {
-            if (threads < 1) {
-                std::cout << "Minimum 1 thread" << std::endl;
-                return 1;
-            }
-
-            unsigned short port = 80;
-
-            if (portInput==-1) {
-                port = 80;
-            } else if (portInput < 1 || portInput > 65535) {
-                std::cout << "Invalid PORT (1-65535) " << portInput << std::endl;
-                return 1;
-            } else {
-                port = static_cast<unsigned short>(portInput);
-            }
-
-
-            // The io_context is required for all I/O
-            net::io_context ioc{static_cast<int>(threads)};
-
-            // Capture SIGINT and SIGTERM to perform a clean shutdown
-            net::signal_set signals(ioc, SIGINT, SIGTERM);
-            signals.async_wait(
-            [&](beast::error_code const&, int)
-            {
-                // Stop the `io_context`. This will cause `run()`
-                // to return immediately, eventually destroying the
-                // `io_context` and all of the sockets in it.
-                ioc.stop();
-            });
-
-
-            auto const address = net::ip::make_address(host);
-
-            auto ctx = create_ssl_context(cert, priv, dh);
-
-            {
-                std::ifstream creds_fs(cred);
-                cw::helper::credentials::dict creds;
-                cw::helper::credentials::read(creds, creds_fs);
-                cw::creds::init(creds);
-            }
-
-            // Create and launch a listening port
-            std::make_shared<listener>(
-                ioc,
-                ctx,
-                tcp::endpoint{address, port})->run();
-
-            std::cout << "Server running" << std::endl;
-
-            // Run the I/O service on the requested number of threads
-            std::vector<std::thread> v;
-            v.reserve(threads - 1);
-            for(auto i = threads - 1; i > 0; --i)
-                v.emplace_back(
-                [&ioc]
-                {
-                    ioc.run();
-                });
-            ioc.run();
-
-            // (If we get here, it means we got a SIGINT or SIGTERM)
-
-            // Block until all the threads exit
-            for(auto& t : v)
-                t.join();
-
-
-            break;
-        }
+        case mode::user_set: return user_set(cred, username, scopes);
+        case mode::run: return main_loop(cred, threads, host, portInput, cert, priv, dh);
     }
 
 
