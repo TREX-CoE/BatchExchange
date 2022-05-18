@@ -48,6 +48,7 @@
 #include "proxy/creds.h"
 #include "proxy/json.h"
 #include "proxy/poll_timer.h"
+#include "proxy/poll.h"
 #include "shared/obfuscator.h"
 #include "shared/stream_cast.h"
 #include "shared/sha512.h"
@@ -566,51 +567,37 @@ public:
             if (!check_auth({"nodes_info"})) return;
 
             auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>([&](std::string& out, const cw::batch::CmdOptions& opts) {
-                std::cout << "1" << std::endl;
                 if (derived().process_cache_[opts].has_value()) {
-                    std::cout << "2" << std::endl;
-
                     if (derived().process_cache_[opts]->exit >= 0) out = derived().process_cache_[opts]->out.get();
-                    std::cout << "4" << std::endl;
                     return derived().process_cache_[opts]->exit;
                 } else {
-                    std::cout << "3" << std::endl;
                     // start command
                     derived().process_cache_[opts].emplace(derived().ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
                         (void)proc;
-                        std::cout << "5" << std::endl;
                         if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
                         if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
-                        std::cout << "6" << std::endl;
-                        //return send(json_error_response("a", "b", http::status::internal_server_error));
                     });
                 }
                 return -1;
             });
 
             auto nodes = std::make_shared<std::vector<cw::batch::Node>>();
-            derived().poll.start([nodes, pbs, &send, &json_error_response, &json_response](cw::helper::asio::PollTimer& timer, const boost::system::error_code& ec){
-                (void)ec;
-                if (ec) {
-                    send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
-                    timer.stop();
-                    return;
-                }
-                try {
-                    std::cout << "7" << std::endl;
 
+            cw::helper::asio::Poll::create(derived().ioc_, [nodes, pbs, &send, &json_error_response, &json_response](cw::helper::asio::Poll& poll){
+                try {
                     bool done = pbs->getNodesAsync({}, [nodes](cw::batch::Node n){ nodes->push_back(std::move(n)); return true; });
                     if (done) {
                         send(json_response(cw::helper::json::serialize_wrap(*nodes)));
-                        timer.stop();
+                        poll.stop();
                         return;
                     }
                 } catch (const boost::process::process_error& e) {
                     send(json_error_response("Running command failed", e.what(), http::status::internal_server_error));
-                    timer.stop();
+                    poll.stop();
                     return;
                 }
             });
+
             return;
         }
         return send(bad_request());
@@ -711,8 +698,6 @@ public:
     std::string buf;
     net::io_context& ioc_;
     std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
-    boost::asio::deadline_timer timer;
-    cw::helper::asio::PollTimer poll;
 
     // Create the session
     plain_http_session(
@@ -723,8 +708,6 @@ public:
             std::move(buffer))
         , stream_(std::move(stream))
         , ioc_(ioc)
-        , timer(ioc, boost::posix_time::seconds(1))
-        , poll(ioc)
     {
     }
 
@@ -774,8 +757,6 @@ public:
     std::string buf;
     net::io_context& ioc_;
     std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>> process_cache_;
-    boost::asio::deadline_timer timer;
-    cw::helper::asio::PollTimer poll;
 
     // Create the http_session
     ssl_http_session(
@@ -787,8 +768,6 @@ public:
             std::move(buffer))
         , stream_(std::move(stream), ctx)
         , ioc_(ioc)
-        , timer(ioc, boost::posix_time::seconds(1))
-        , poll(ioc)
     {
     }
 

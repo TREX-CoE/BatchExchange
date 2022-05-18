@@ -18,6 +18,7 @@ set( proxy_HDR
     salt_hash.h
     json.h
     poll_timer.h
+    poll.h
     set_echo.h
 )
 
