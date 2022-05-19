@@ -610,7 +610,7 @@ public:
 
             ioc_.post(cw::helper::y_combinator([queues, pbs, &send, &json_error_response, &json_response, &ioc_](auto handler){
                 try {
-                    bool done = pbs->getQueuesAsync({}, [queues](cw::batch::Queue q){ queues->push_back(std::move(q)); return true; });
+                    bool done = pbs->getQueuesAsync([queues](cw::batch::Queue q){ queues->push_back(std::move(q)); return true; });
                     if (done) {
                         send(json_response(cw::helper::json::serialize_wrap(*queues)));
                         return;
