@@ -17,8 +17,6 @@ set( proxy_HDR
     creds.h
     salt_hash.h
     json.h
-    poll_timer.h
-    poll.h
     set_echo.h
 )
 
@@ -39,7 +37,6 @@ include_directories(${MAIN_INCLUDE_DIR})
 target_link_libraries( proxy shared)
 target_link_libraries(proxy Threads::Threads)
 target_link_libraries(proxy ${Boost_LIBRARIES})
-target_link_libraries(proxy reproc++)
 target_link_libraries(proxy batchsystem)
 target_link_libraries(proxy OpenSSL::SSL)
 target_link_libraries(proxy OpenSSL::Crypto)

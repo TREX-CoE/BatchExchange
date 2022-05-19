@@ -47,13 +47,12 @@
 #include "proxy/credentials.h"
 #include "proxy/creds.h"
 #include "proxy/json.h"
-#include "proxy/poll_timer.h"
-#include "proxy/poll.h"
 #include "shared/obfuscator.h"
 #include "shared/stream_cast.h"
 #include "shared/sha512.h"
 #include "proxy/salt_hash.h"
 #include "proxy/set_echo.h"
+#include "proxy/y_combinator.h"
 #include "shared/string_view.h"
 #include "shared/batch_json.h"
 
@@ -488,6 +487,8 @@ public:
         Send&& send
         )
     {
+        boost::asio::io_context& ioc_ = derived().ioc_;
+
         auto const json_response =
         [&](const rapidjson::Document& document, http::status status = http::status::ok)
         {
@@ -569,20 +570,57 @@ public:
 
             auto nodes = std::make_shared<std::vector<cw::batch::Node>>();
 
-            cw::helper::asio::Poll::create(derived().ioc_, [nodes, pbs, &send, &json_error_response, &json_response](cw::helper::asio::Poll& poll){
+            ioc_.post(cw::helper::y_combinator([nodes, pbs, &send, &json_error_response, &json_response, &ioc_](auto handler){
                 try {
                     bool done = pbs->getNodesAsync({}, [nodes](cw::batch::Node n){ nodes->push_back(std::move(n)); return true; });
                     if (done) {
                         send(json_response(cw::helper::json::serialize_wrap(*nodes)));
-                        poll.stop();
                         return;
                     }
                 } catch (const boost::process::process_error& e) {
                     send(json_error_response("Running command failed", e.what(), http::status::internal_server_error));
-                    poll.stop();
                     return;
                 }
+                ioc_.post(handler);
+            }));
+
+            return;
+        } else if (req.method() == http::verb::get && req.target() == "/queues") {
+            if (!check_auth({"queues_info"})) return;
+
+            auto process_cache = std::make_shared<process_cache_dict>();
+
+            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>([&, process_cache](std::string& out, const cw::batch::CmdOptions& opts) {
+                process_cache_dict& cache = *process_cache;
+                if (cache[opts].has_value()) {
+                    if (cache[opts]->exit >= 0) out = cache[opts]->out.get();
+                    return cache[opts]->exit;
+                } else {
+                    // start command
+                    cache[opts].emplace(derived().ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
+                        (void)proc;
+                        if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
+                        if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
+                    });
+                }
+                return -1;
             });
+
+            auto queues = std::make_shared<std::vector<cw::batch::Queue>>();
+
+            ioc_.post(cw::helper::y_combinator([queues, pbs, &send, &json_error_response, &json_response, &ioc_](auto handler){
+                try {
+                    bool done = pbs->getQueuesAsync({}, [queues](cw::batch::Queue q){ queues->push_back(std::move(q)); return true; });
+                    if (done) {
+                        send(json_response(cw::helper::json::serialize_wrap(*queues)));
+                        return;
+                    }
+                } catch (const boost::process::process_error& e) {
+                    send(json_error_response("Running command failed", e.what(), http::status::internal_server_error));
+                    return;
+                }
+                ioc_.post(handler);
+            }));
 
             return;
         }
