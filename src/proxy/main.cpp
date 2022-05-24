@@ -34,6 +34,7 @@
 #include <boost/make_unique.hpp>
 #include <boost/optional.hpp>
 #include <boost/process.hpp>
+#include <boost/asio/error.hpp>
 
 #include <cassert>
 #include <stdlib.h>
@@ -350,6 +351,40 @@ make_websocket_session(
         std::move(stream))->run(std::move(req));
 }
 
+template <typename AsyncF, typename CallbackF, typename Args>
+void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
+    ioc_.post(cw::helper::y_combinator([asyncF, callbackF, &ioc_](auto handler){
+        try {
+            if (asyncF()) {
+                callbackF(boost::system::error_code());
+                return;
+            }
+        } catch (const boost::process::process_error& e) {
+            callbackF(e.code());
+            return;
+        }
+        ioc_.post(handler);
+    }));
+}
+
+template <typename T, typename AsyncF, typename CallbackF>
+void run_async_vector(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
+    ioc_.post(cw::helper::y_combinator_shared([container=std::vector<T>{}, asyncF, callbackF, &ioc_](auto handler) mutable {
+        try {
+            bool done = asyncF([&container](auto n) { container.push_back(std::move(n)); return true; });
+            if (done) {
+                callbackF(std::move(container), boost::system::error_code());
+                return;
+            }
+        } catch (const boost::process::process_error& e) {
+            callbackF(std::move(container), e.code());
+            return;
+        }
+        ioc_.post(handler);
+    }));
+}
+
+
 //------------------------------------------------------------------------------
 
 // Handles an HTTP server connection.
@@ -533,6 +568,34 @@ public:
             }
             return true;
         };
+
+        auto const create_exec_callback =
+        [&send, &json_error_response, &ioc_](){
+            auto process_cache = std::make_shared<process_cache_dict>();
+            return [&send, &json_error_response, process_cache, &ioc_](std::string& out, const cw::batch::CmdOptions& opts) {
+                process_cache_dict& cache = *process_cache;
+                if (cache[opts].has_value()) {
+                    if (cache[opts]->exit >= 0) out = cache[opts]->out.get();
+                    return cache[opts]->exit;
+                } else {
+                    // start command
+                    cache[opts].emplace(ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
+                        (void)proc;
+                        if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
+                        if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
+                    });
+                }
+                return -1;
+            };
+        };
+
+        auto const send_info = [&send, &json_error_response, &json_response](auto container, auto ec){
+            if (ec) {
+                send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
+            } else {
+                send(json_response(cw::helper::json::serialize_wrap(container)));
+            }
+        };
             
         if (req.method() == http::verb::get && req.target() == "/openapi.json") {
             http::string_body::value_type body{cw::openapi::openapi_json};
@@ -547,65 +610,16 @@ public:
             res.content_length(size);
             res.keep_alive(req.keep_alive());
             return send(std::move(res));
-        } else if (req.method() == http::verb::get && req.target() == "/nodes") {
+        }  else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
 
-            auto process_cache = std::make_shared<process_cache_dict>();
-
-            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>([&, process_cache](std::string& out, const cw::batch::CmdOptions& opts) {
-                process_cache_dict& cache = *process_cache;
-                if (cache[opts].has_value()) {
-                    if (cache[opts]->exit >= 0) out = cache[opts]->out.get();
-                    return cache[opts]->exit;
-                } else {
-                    // start command
-                    cache[opts].emplace(derived().ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
-                        (void)proc;
-                        if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
-                        if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
-                    });
-                }
-                return -1;
-            });
-
-            auto nodes = std::make_shared<std::vector<cw::batch::Node>>();
-
-            ioc_.post(cw::helper::y_combinator([nodes, pbs, &send, &json_error_response, &json_response, &ioc_](auto handler){
-                try {
-                    bool done = pbs->getNodesAsync({}, [nodes](cw::batch::Node n){ nodes->push_back(std::move(n)); return true; });
-                    if (done) {
-                        send(json_response(cw::helper::json::serialize_wrap(*nodes)));
-                        return;
-                    }
-                } catch (const boost::process::process_error& e) {
-                    send(json_error_response("Running command failed", e.what(), http::status::internal_server_error));
-                    return;
-                }
-                ioc_.post(handler);
-            }));
-
+            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(create_exec_callback());
+            run_async_vector<cw::batch::Node>(ioc_, [pbs](auto... args){ return pbs->getNodesAsync({}, args...); }, send_info);
             return;
-        } else if (req.method() == http::verb::get && req.target() == "/queues") {
+        } /* else if (req.method() == http::verb::get && req.target() == "/queues") {
             if (!check_auth({"queues_info"})) return;
 
-            auto process_cache = std::make_shared<process_cache_dict>();
-
-            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>([&, process_cache](std::string& out, const cw::batch::CmdOptions& opts) {
-                process_cache_dict& cache = *process_cache;
-                if (cache[opts].has_value()) {
-                    if (cache[opts]->exit >= 0) out = cache[opts]->out.get();
-                    return cache[opts]->exit;
-                } else {
-                    // start command
-                    cache[opts].emplace(derived().ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
-                        (void)proc;
-                        if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
-                        if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
-                    });
-                }
-                return -1;
-            });
-
+            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(create_exec_callback());
             auto queues = std::make_shared<std::vector<cw::batch::Queue>>();
 
             ioc_.post(cw::helper::y_combinator([queues, pbs, &send, &json_error_response, &json_response, &ioc_](auto handler){
@@ -623,7 +637,54 @@ public:
             }));
 
             return;
-        }
+        } else if (req.method() == http::verb::get && req.target() == "/jobs") {
+            if (!check_auth({"jobs_info"})) return;
+
+            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(create_exec_callback());
+            auto jobs = std::make_shared<std::vector<cw::batch::Job>>();
+
+            ioc_.post(cw::helper::y_combinator([jobs, pbs, &send, &json_error_response, &json_response, &ioc_](auto handler){
+                try {
+                    bool done = pbs->getJobs([jobs](cw::batch::Job j){ jobs->push_back(std::move(j)); return true; });
+                    if (done) {
+                        send(json_response(cw::helper::json::serialize_wrap(*jobs)));
+                        return;
+                    }
+                } catch (const boost::process::process_error& e) {
+                    send(json_error_response("Running command failed", e.what(), http::status::internal_server_error));
+                    return;
+                }
+                ioc_.post(handler);
+            }));
+
+            return;
+        } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
+            if (!check_auth({"jobs_delete"})) return;
+
+
+
+
+            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(create_exec_callback());
+            run_async(ioc_, [pbs](){ return pbs->deleteJobById("id"); }, [&send, &json_error_response, &json_response](auto ec){
+                if (ec) {
+                    send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
+                } else {
+
+                    rapidjson::Document document;
+                    rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+                    document.SetObject();
+                    {
+                        rapidjson::Value error;
+                        error.SetObject();
+                        error.AddMember("cmd", 0, allocator);
+                        document.AddMember("error", error, allocator);
+                    }
+                    send(json_response(document));
+
+                }
+            });
+            return;
+        } */
         return send(bad_request());
     }
 
