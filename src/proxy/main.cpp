@@ -600,29 +600,27 @@ public:
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
 
-            auto pbs = std::make_shared<cw::batch::pbs::Pbs>(exec_callback);
-            auto f = pbs->getNodes(std::vector<std::string>{});
-            run_async_vector<cw::batch::Node>(ioc_, f, send_info);
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_vector<cw::batch::Node>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](auto... args){ (void)batch; return f(args...); }, send_info);
             return;
         } else if (req.method() == http::verb::get && req.target() == "/queues") {
             if (!check_auth({"queues_info"})) return;
 
-            auto pbs = std::make_shared<cw::batch::pbs::Pbs>(exec_callback);
-            auto f = pbs->getQueues();
-            run_async_vector<cw::batch::Queue>(ioc_, f, send_info);
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_vector<cw::batch::Queue>(ioc_, [batch, f=batch->getQueues()](auto... args){ (void)batch; return f(args...); }, send_info);
             return;
         } else if (req.method() == http::verb::get && req.target() == "/jobs") {
             if (!check_auth({"jobs_info"})) return;
 
-            auto pbs = std::make_shared<cw::batch::pbs::Pbs>(exec_callback);
-            auto f = pbs->getJobs(std::vector<std::string>{});
-            run_async_vector<cw::batch::Job>(ioc_, f, send_info);
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_vector<cw::batch::Job>(ioc_, [batch, f=batch->getJobs(std::vector<std::string>{})](auto... args){ (void)batch; return f(args...); }, send_info);
             return;
-        } /* else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
+        } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
             if (!check_auth({"jobs_delete"})) return;
 
-            auto pbs = std::make_shared<cw::batch::pbs::Pbs>(exec_callback);
-            run_async(ioc_, [pbs](){ return pbs->deleteJobById("id", false); }, [&send, &json_error_response, &json_response](auto ec){
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            auto f = batch->deleteJobById("id", false);
+            run_async(ioc_, f, [&send, &json_error_response, &json_response](auto ec){
                 if (ec) {
                     send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
                 } else {
@@ -641,7 +639,7 @@ public:
                 }
             });
             return;
-        } */
+        }
         return send(bad_request());
     }
 
