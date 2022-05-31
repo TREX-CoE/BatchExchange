@@ -46,6 +46,7 @@
 
 #include "proxy/openapi_json.h"
 #include "proxy/credentials.h"
+#include "proxy/batchsystem_json.h"
 #include "proxy/creds.h"
 #include "proxy/json.h"
 #include "shared/obfuscator.h"
@@ -62,8 +63,6 @@
 
 #include "batchsystem/batchsystem.h"
 #include "batchsystem/factory.h"
-#include "batchsystem/pbs.h"
-
 
 namespace defaults {
 
@@ -532,6 +531,13 @@ public:
             return res;
         };
 
+        auto const empty_response =
+        [&](http::status status)
+        {
+            http::response<http::string_body> res{status, 11}; // req.version(); fails
+            return res;
+        };
+
         auto const json_error_response =
         [&](const std::string& type, const std::string& message, http::status status)
         {
@@ -620,24 +626,45 @@ public:
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
             auto f = batch->deleteJobById("id", false);
-            run_async(ioc_, f, [&send, &json_error_response, &json_response](auto ec){
+            run_async(ioc_, f, [&send, &json_error_response, &json_response, &empty_response](auto ec){
                 if (ec) {
-                    send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
+                    return send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
                 } else {
-
-                    rapidjson::Document document;
-                    rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-                    document.SetObject();
-                    {
-                        rapidjson::Value error;
-                        error.SetObject();
-                        error.AddMember("cmd", 0, allocator);
-                        document.AddMember("error", error, allocator);
-                    }
-                    send(json_response(document));
-
+                    return send(empty_response(http::status::ok));
                 }
             });
+            return;
+        } else if (req.method() == http::verb::get && req.target() == "/jobs/submit") {
+            if (!check_auth({"jobs_submit"})) return;
+
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            rapidjson::Document indocument;
+            // TODO read from request body
+            auto f = cw_proxy_batch::runJob(*batch, indocument);
+            ioc_.post(cw::helper::y_combinator([f, &send, &ioc_, &json_error_response, &json_response](auto handler){
+                try {
+                    std::string jobName;
+                    if (f(jobName)) {
+
+                        rapidjson::Document document;
+                        rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+                        document.SetObject();
+                        {
+                            rapidjson::Value data;
+                            data.SetObject();
+                            data.AddMember("job", jobName, allocator);
+                            document.AddMember("data", data, allocator);
+                        }
+
+                        send(json_response(document));
+                    }
+                } catch (const boost::process::process_error& e) {
+                    auto ec = e.code();
+                    return send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
+                }
+                ioc_.post(handler);
+            }));
+
             return;
         }
         return send(bad_request());
