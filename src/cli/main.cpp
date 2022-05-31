@@ -49,8 +49,8 @@ void sigHandler(int signal) {
     canceled = true;
 }
 
-
-int runCommand(std::string& out, const cw::batch::CmdOptions& opts) {
+/*
+int runCommand(cw::batch::Result& res, const cw::batch::Cmd& opts) {
         std::vector<std::string> args{opts.cmd};
         for (const auto& a: opts.args) args.push_back(a);
 
@@ -58,7 +58,7 @@ int runCommand(std::string& out, const cw::batch::CmdOptions& opts) {
         std::error_code ec_start = process.start(args);
         if (ec_start) return -1;
 
-        reproc::sink::string sink(out);
+        reproc::sink::string sink(res.out);
         std::error_code ec_drain = reproc::drain(process, sink, reproc::sink::null);
         if (ec_drain) return -1;
 
@@ -67,6 +67,7 @@ int runCommand(std::string& out, const cw::batch::CmdOptions& opts) {
 
         return ret.first;
 }
+*/
 
 int main(int argc, char **argv) {
     struct sigaction sigIntHandler;
@@ -140,9 +141,6 @@ int main(int argc, char **argv) {
     if (utils::read_login_data(loginPath, megwareLogin, xCatLogin, slurmLogin) != 0)
         exit(EXIT_FAILURE);
 
-
-    batch::BatchSystem batch;
-    create_batch(batch, batchSystem, runCommand);
 
     CXCat xcatSession(xCatLogin.host, xCatLogin.port, xCatLogin.username, xCatLogin.password, false);
 

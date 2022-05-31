@@ -1,8 +1,8 @@
 /**
  * @file main.cpp
- * @brief CLI
+ * @brief Proxy
  *
- * ./src/server/proxy --cred ../data/creds run --cert ../data/server.crt --priv ../data/server.key --dh ../data/dh2048.pem --port 2000 --host 0.0.0.0
+ * ./src/proxy/proxy --cred ../data/creds run --cert ../data/server.crt --priv ../data/server.key --dh ../data/dh2048.pem --port 2000 --host 0.0.0.0
  * 
  ***********************************************/
 
@@ -62,7 +62,7 @@
 
 #include "batchsystem/batchsystem.h"
 #include "batchsystem/factory.h"
-#include "batchsystem/pbsBatch.h"
+#include "batchsystem/pbs.h"
 
 
 namespace defaults {
@@ -105,15 +105,9 @@ std::string prompt(const std::string& prefix) {
 struct CmdProcess {
     int exit;
     std::future<std::string> out; // before cp else "std::future_error: No associated state" because initialized afterwards
-    bp::child cp;
-    template <typename F>
-    CmdProcess(net::io_context& ioc, const cw::batch::CmdOptions& opts, F func): exit(-1), cp(bp::search_path(opts.cmd), bp::args(opts.args), bp::std_out > out, ioc, bp::on_exit=[&](int ret, const std::error_code& ec){
-        exit = ec ? -2 : ret;
-        func(*this, ret, ec);
-    }) {}
+    std::future<std::string> err; // before cp else "std::future_error: No associated state" because initialized afterwards
+    boost::optional<bp::child> cp;
 };
-
-using process_cache_dict = std::map<cw::batch::CmdOptions, boost::optional<CmdProcess>>;
 
 }
 
@@ -351,7 +345,7 @@ make_websocket_session(
         std::move(stream))->run(std::move(req));
 }
 
-template <typename AsyncF, typename CallbackF, typename Args>
+template <typename AsyncF, typename CallbackF>
 void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
     ioc_.post(cw::helper::y_combinator([asyncF, callbackF, &ioc_](auto handler){
         try {
@@ -569,24 +563,17 @@ public:
             return true;
         };
 
-        auto const create_exec_callback =
-        [&send, &json_error_response, &ioc_](){
-            auto process_cache = std::make_shared<process_cache_dict>();
-            return [&send, &json_error_response, process_cache, &ioc_](std::string& out, const cw::batch::CmdOptions& opts) {
-                process_cache_dict& cache = *process_cache;
-                if (cache[opts].has_value()) {
-                    if (cache[opts]->exit >= 0) out = cache[opts]->out.get();
-                    return cache[opts]->exit;
-                } else {
-                    // start command
-                    cache[opts].emplace(ioc_, opts, [opts, &send, &json_error_response](CmdProcess& proc, int ret, const std::error_code& ec){
-                        (void)proc;
-                        if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
-                        if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
-                    });
-                }
-                return -1;
-            };
+        auto const exec_callback = [&send, &json_error_response, &ioc_](cw::batch::Result& res, const cw::batch::Cmd& cmd) {
+            // start command
+            std::shared_ptr<CmdProcess> process{new CmdProcess{}};
+            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > process->out, bp::std_err > process->err, ioc_, bp::on_exit=[process, &res, &send, &json_error_response](int ret, const std::error_code& ec){
+                res.exit = ec ? -2 : ret;
+                if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
+                if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
+
+                res.out = process->out.get();
+                res.err = process->err.get();
+            });
         };
 
         auto const send_info = [&send, &json_error_response, &json_response](auto container, auto ec){
@@ -610,62 +597,32 @@ public:
             res.content_length(size);
             res.keep_alive(req.keep_alive());
             return send(std::move(res));
-        }  else if (req.method() == http::verb::get && req.target() == "/nodes") {
+        } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
 
-            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(create_exec_callback());
-            run_async_vector<cw::batch::Node>(ioc_, [pbs](auto... args){ return pbs->getNodesAsync({}, args...); }, send_info);
+            auto pbs = std::make_shared<cw::batch::pbs::Pbs>(exec_callback);
+            auto f = pbs->getNodes(std::vector<std::string>{});
+            run_async_vector<cw::batch::Node>(ioc_, f, send_info);
             return;
-        } /* else if (req.method() == http::verb::get && req.target() == "/queues") {
+        } else if (req.method() == http::verb::get && req.target() == "/queues") {
             if (!check_auth({"queues_info"})) return;
 
-            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(create_exec_callback());
-            auto queues = std::make_shared<std::vector<cw::batch::Queue>>();
-
-            ioc_.post(cw::helper::y_combinator([queues, pbs, &send, &json_error_response, &json_response, &ioc_](auto handler){
-                try {
-                    bool done = pbs->getQueuesAsync([queues](cw::batch::Queue q){ queues->push_back(std::move(q)); return true; });
-                    if (done) {
-                        send(json_response(cw::helper::json::serialize_wrap(*queues)));
-                        return;
-                    }
-                } catch (const boost::process::process_error& e) {
-                    send(json_error_response("Running command failed", e.what(), http::status::internal_server_error));
-                    return;
-                }
-                ioc_.post(handler);
-            }));
-
+            auto pbs = std::make_shared<cw::batch::pbs::Pbs>(exec_callback);
+            auto f = pbs->getQueues();
+            run_async_vector<cw::batch::Queue>(ioc_, f, send_info);
             return;
         } else if (req.method() == http::verb::get && req.target() == "/jobs") {
             if (!check_auth({"jobs_info"})) return;
 
-            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(create_exec_callback());
-            auto jobs = std::make_shared<std::vector<cw::batch::Job>>();
-
-            ioc_.post(cw::helper::y_combinator([jobs, pbs, &send, &json_error_response, &json_response, &ioc_](auto handler){
-                try {
-                    bool done = pbs->getJobs([jobs](cw::batch::Job j){ jobs->push_back(std::move(j)); return true; });
-                    if (done) {
-                        send(json_response(cw::helper::json::serialize_wrap(*jobs)));
-                        return;
-                    }
-                } catch (const boost::process::process_error& e) {
-                    send(json_error_response("Running command failed", e.what(), http::status::internal_server_error));
-                    return;
-                }
-                ioc_.post(handler);
-            }));
-
+            auto pbs = std::make_shared<cw::batch::pbs::Pbs>(exec_callback);
+            auto f = pbs->getJobs(std::vector<std::string>{});
+            run_async_vector<cw::batch::Job>(ioc_, f, send_info);
             return;
-        } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
+        } /* else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
             if (!check_auth({"jobs_delete"})) return;
 
-
-
-
-            auto pbs = std::make_shared<cw::batch::pbs::PbsBatch>(create_exec_callback());
-            run_async(ioc_, [pbs](){ return pbs->deleteJobById("id"); }, [&send, &json_error_response, &json_response](auto ec){
+            auto pbs = std::make_shared<cw::batch::pbs::Pbs>(exec_callback);
+            run_async(ioc_, [pbs](){ return pbs->deleteJobById("id", false); }, [&send, &json_error_response, &json_response](auto ec){
                 if (ec) {
                     send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
                 } else {
