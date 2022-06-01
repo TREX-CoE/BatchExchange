@@ -8,7 +8,6 @@ target_link_libraries(tests PRIVATE
     Catch2::Catch2WithMain
     shared
     batchsystem
-    reproc++
 )
 target_include_directories( tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

@@ -19,6 +19,5 @@ include_directories(${CLIPP_INCLUDE_DIR})
 target_link_libraries(cli Threads::Threads)
 target_link_libraries(cli ${CURL_LIBRARIES})
 target_link_libraries(cli ${Boost_LIBRARIES})
-target_link_libraries(cli reproc++)
 target_link_libraries(cli batchsystem)
 

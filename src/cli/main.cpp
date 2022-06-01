@@ -24,8 +24,6 @@
 #include "batchsystem/batchsystem.h"
 #include "batchsystem/factory.h"
 
-#include <reproc++/run.hpp>
-
 namespace batch = cw::batch;
 
 #define DRAIN_SLEEP 3000
@@ -48,26 +46,6 @@ void sigHandler(int signal) {
     }
     canceled = true;
 }
-
-/*
-int runCommand(cw::batch::Result& res, const cw::batch::Cmd& opts) {
-        std::vector<std::string> args{opts.cmd};
-        for (const auto& a: opts.args) args.push_back(a);
-
-        reproc::process process;
-        std::error_code ec_start = process.start(args);
-        if (ec_start) return -1;
-
-        reproc::sink::string sink(res.out);
-        std::error_code ec_drain = reproc::drain(process, sink, reproc::sink::null);
-        if (ec_drain) return -1;
-
-        auto ret = process.wait(reproc::infinite);
-        if (ret.second) return -1;
-
-        return ret.first;
-}
-*/
 
 int main(int argc, char **argv) {
     struct sigaction sigIntHandler;
