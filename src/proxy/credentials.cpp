@@ -54,12 +54,10 @@ void read(dict& creds, const std::string& s) {
     }
 }
 
-std::string write(const dict& creds) {
-    std::stringstream out;
+void write(const dict& creds, std::string& out) {
     for (const auto& p : creds) {
-        out << p.first << delimiter.data() << cw::helper::joinString(p.second.scopes.begin(), p.second.scopes.end(), scope_delimiter) << delimiter.data() << p.second.salt << delimiter.data() << p.second.hash << std::endl;
+        out += p.first + delimiter + cw::helper::joinString(p.second.scopes.begin(), p.second.scopes.end(), scope_delimiter) + delimiter.data() + p.second.salt + delimiter + p.second.hash + "\n";
     }
-    return out.str();
 }
 
 void set_user(credentials::dict& creds, string_view user, std::set<std::string> scopes, string_view password) {

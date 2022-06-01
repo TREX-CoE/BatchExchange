@@ -22,7 +22,7 @@ using dict = std::map<std::string, user_data>;
 
 void read(dict& creds, const std::string& s);
 
-std::string write(const dict& creds);
+void write(const dict& creds, std::string& out);
 
 void set_user(credentials::dict& creds, string_view user, std::set<std::string> scopes, string_view password);
 

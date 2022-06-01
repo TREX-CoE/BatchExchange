@@ -720,13 +720,17 @@ public:
 
                 auto creds = cw::globals::creds();
                 f(creds);
-                auto creds_str = cw::helper::credentials::write(creds);
-
-                boost::asio::async_write(*stream, boost::asio::buffer(creds_str), boost::asio::transfer_all(), [stream, creds](beast::error_code ec, size_t s){
-                    (void)ec;
-                    (void)s;
-                    // store new credentials in global after successfull write
-                    cw::globals::creds(creds);
+                auto s = std::make_shared<std::string>();
+                cw::helper::credentials::write(creds, *s);
+                boost::asio::async_write(*stream, boost::asio::buffer(*s), boost::asio::transfer_all(), [stream, s, creds, &empty_response, &json_error_response, &send](beast::error_code ec, size_t len){
+                    (void)len;
+                    if (ec) {
+                        return send(json_error_response("Writing credentials failed", ec.message(), http::status::internal_server_error));
+                    } else {
+                        // store new credentials in global after successfull write
+                        cw::globals::creds(creds);
+                        return send(empty_response(http::status::created));
+                    }
                 });
             } catch (const std::runtime_error& e) {
                 return send(json_error_response("Request body validation failed", e.what(), http::status::internal_server_error));
@@ -1156,7 +1160,10 @@ bool write_cred(const std::string& cred_file, const cw::helper::credentials::dic
         std::cout << "Could not open '" << cred_file << "' for writing" << std::endl;
         return false;
     }
-    creds_fso << cw::helper::credentials::write(creds);
+
+    std::string out;
+    cw::helper::credentials::write(creds, out);
+    creds_fso << out;
     return true;
 }
 
