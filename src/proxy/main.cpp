@@ -49,6 +49,7 @@
 #include "proxy/batchsystem_json.h"
 #include "proxy/globals.h"
 #include "proxy/json.h"
+#include "proxy/server.h"
 #include "shared/obfuscator.h"
 #include "shared/stream_cast.h"
 #include "shared/sha512.h"
@@ -66,8 +67,6 @@
 
 namespace defaults {
 
-constexpr int body_size_limit = 10000;
-constexpr unsigned int response_timeout = 30;
 constexpr int port = 2000;
 constexpr const char* host = "0.0.0.0";
 constexpr unsigned int threads = 10;
@@ -123,229 +122,6 @@ void set_ssl_context(ssl::context& ctx, const std::string& cert, const std::stri
     ctx.use_tmp_dh_file(dh);
 }
 
-//------------------------------------------------------------------------------
-
-// Report a failure
-void
-fail(beast::error_code ec, char const* what)
-{
-    // ssl::error::stream_truncated, also known as an SSL "short read",
-    // indicates the peer closed the connection without performing the
-    // required closing handshake (for example, Google does this to
-    // improve performance). Generally this can be a security issue,
-    // but if your communication protocol is self-terminated (as
-    // it is with both HTTP and WebSocket) then you may simply
-    // ignore the lack of close_notify.
-    //
-    // https://github.com/boostorg/beast/issues/38
-    //
-    // https://security.stackexchange.com/questions/91435/how-to-handle-a-malicious-ssl-tls-shutdown
-    //
-    // When a short read would cut off the end of an HTTP message,
-    // Beast returns the error beast::http::error::partial_message.
-    // Therefore, if we see a short read here, it has occurred
-    // after the message has been completed, so it is safe to ignore it.
-
-    if(ec == net::ssl::error::stream_truncated)
-        return;
-
-    std::cerr << what << ": " << ec.message() << "\n";
-}
-
-//------------------------------------------------------------------------------
-
-// Echoes back all received WebSocket messages.
-// This uses the Curiously Recurring Template Pattern so that
-// the same code works with both SSL streams and regular sockets.
-template<class Derived>
-class websocket_session
-{
-    // Access the derived class, this is part of
-    // the Curiously Recurring Template Pattern idiom.
-    Derived&
-    derived()
-    {
-        return static_cast<Derived&>(*this);
-    }
-
-    beast::flat_buffer buffer_;
-
-    // Start the asynchronous operation
-    template<class Body, class Allocator>
-    void
-    do_accept(http::request<Body, http::basic_fields<Allocator>> req)
-    {
-        // Set suggested timeout settings for the websocket
-        derived().ws().set_option(
-            websocket::stream_base::timeout::suggested(
-                beast::role_type::server));
-
-        // Set a decorator to change the Server of the handshake
-        derived().ws().set_option(
-            websocket::stream_base::decorator(
-            [](websocket::response_type& res)
-            {
-                res.set(http::field::server,
-                    std::string(BOOST_BEAST_VERSION_STRING) +
-                        " advanced-server-flex");
-            }));
-
-        // Accept the websocket handshake
-        derived().ws().async_accept(
-            req,
-            beast::bind_front_handler(
-                &websocket_session::on_accept,
-                derived().shared_from_this()));
-    }
-
-    void
-    on_accept(beast::error_code ec)
-    {
-        if(ec)
-            return fail(ec, "accept");
-
-        // Read a message
-        do_read();
-    }
-
-    void
-    do_read()
-    {
-        // Read a message into our buffer
-        derived().ws().async_read(
-            buffer_,
-            beast::bind_front_handler(
-                &websocket_session::on_read,
-                derived().shared_from_this()));
-    }
-
-    void
-    on_read(
-        beast::error_code ec,
-        std::size_t bytes_transferred)
-    {
-        boost::ignore_unused(bytes_transferred);
-
-        // This indicates that the websocket_session was closed
-        if(ec == websocket::error::closed)
-            return;
-
-        if(ec)
-            fail(ec, "read");
-
-        // Echo the message
-        derived().ws().text(derived().ws().got_text());
-        derived().ws().async_write(
-            buffer_.data(),
-            beast::bind_front_handler(
-                &websocket_session::on_write,
-                derived().shared_from_this()));
-    }
-
-    void
-    on_write(
-        beast::error_code ec,
-        std::size_t bytes_transferred)
-    {
-        boost::ignore_unused(bytes_transferred);
-
-        if(ec)
-            return fail(ec, "write");
-
-        // Clear the buffer
-        buffer_.consume(buffer_.size());
-
-        // Do another read
-        do_read();
-    }
-
-public:
-    // Start the asynchronous operation
-    template<class Body, class Allocator>
-    void
-    run(http::request<Body, http::basic_fields<Allocator>> req)
-    {
-        // Accept the WebSocket upgrade request
-        do_accept(std::move(req));
-    }
-};
-
-//------------------------------------------------------------------------------
-
-// Handles a plain WebSocket connection
-class plain_websocket_session
-    : public websocket_session<plain_websocket_session>
-    , public std::enable_shared_from_this<plain_websocket_session>
-{
-    websocket::stream<beast::tcp_stream> ws_;
-
-public:
-    // Create the session
-    explicit
-    plain_websocket_session(
-        beast::tcp_stream&& stream)
-        : ws_(std::move(stream))
-    {
-    }
-
-    // Called by the base class
-    websocket::stream<beast::tcp_stream>&
-    ws()
-    {
-        return ws_;
-    }
-};
-
-//------------------------------------------------------------------------------
-
-// Handles an SSL WebSocket connection
-class ssl_websocket_session
-    : public websocket_session<ssl_websocket_session>
-    , public std::enable_shared_from_this<ssl_websocket_session>
-{
-    websocket::stream<
-        beast::ssl_stream<beast::tcp_stream>> ws_;
-
-public:
-    // Create the ssl_websocket_session
-    explicit
-    ssl_websocket_session(
-        beast::ssl_stream<beast::tcp_stream>&& stream)
-        : ws_(std::move(stream))
-    {
-    }
-
-    // Called by the base class
-    websocket::stream<
-        beast::ssl_stream<beast::tcp_stream>>&
-    ws()
-    {
-        return ws_;
-    }
-};
-
-//------------------------------------------------------------------------------
-
-template<class Body, class Allocator>
-void
-make_websocket_session(
-    beast::tcp_stream stream,
-    http::request<Body, http::basic_fields<Allocator>> req)
-{
-    std::make_shared<plain_websocket_session>(
-        std::move(stream))->run(std::move(req));
-}
-
-template<class Body, class Allocator>
-void
-make_websocket_session(
-    beast::ssl_stream<beast::tcp_stream> stream,
-    http::request<Body, http::basic_fields<Allocator>> req)
-{
-    std::make_shared<ssl_websocket_session>(
-        std::move(stream))->run(std::move(req));
-}
-
 template <typename AsyncF, typename CallbackF>
 void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
     ioc_.post(cw::helper::y_combinator([asyncF, callbackF, &ioc_](auto handler){
@@ -379,7 +155,6 @@ void run_async_vector(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF ca
     }));
 }
 
-
 auto usersAdd(rapidjson::Document& document) {
     if (!document.HasMember("user")) throw std::runtime_error("user is not given");
     auto& user = document["user"];
@@ -404,146 +179,76 @@ auto usersAdd(rapidjson::Document& document) {
     };
 }
 
-
-//------------------------------------------------------------------------------
-
-// Handles an HTTP server connection.
-// This uses the Curiously Recurring Template Pattern so that
-// the same code works with both SSL streams and regular sockets.
-template<class Derived>
-class http_session
-{
-    // Access the derived class, this is part of
-    // the Curiously Recurring Template Pattern idiom.
-    Derived&
-    derived()
-    {
-        return static_cast<Derived&>(*this);
+bool read_cred(const std::string& cred_file, cw::helper::credentials::dict& creds) {
+    std::ifstream creds_fs(cred_file);
+    if (!creds_fs.good()) {
+        std::cout << "Could not open '" << cred_file << "' for reading" << std::endl;
+        return false;
     }
 
-    // This queue is used for HTTP pipelining.
-    class queue
-    {
-        enum
-        {
-            // Maximum number of responses we will queue
-            limit = 8
-        };
+    std::stringstream buffer;
+    buffer << creds_fs.rdbuf();
 
-        // The type-erased, saved work item
-        struct work
-        {
-            virtual ~work() = default;
-            virtual void operator()() = 0;
-        };
+    cw::helper::credentials::read(creds, buffer.str());
+    return true;
+}
 
-        http_session& self_;
-        std::vector<std::unique_ptr<work>> items_;
-
-    public:
-        explicit
-        queue(http_session& self)
-            : self_(self)
-        {
-            static_assert(limit > 0, "queue limit must be positive");
-            items_.reserve(limit);
-        }
-
-        // Returns `true` if we have reached the queue limit
-        bool
-        is_full() const
-        {
-            return items_.size() >= limit;
-        }
-
-        // Called when a message finishes sending
-        // Returns `true` if the caller should initiate a read
-        bool
-        on_write()
-        {
-            BOOST_ASSERT(! items_.empty());
-            auto const was_full = is_full();
-            items_.erase(items_.begin());
-            if(! items_.empty())
-                (*items_.front())();
-            return was_full;
-        }
-
-        // Called by the HTTP handler to send a response.
-        template<bool isRequest, class Body, class Fields>
-        void
-        operator()(http::message<isRequest, Body, Fields>&& msg)
-        {
-            // This holds a work item
-            struct work_impl : work
-            {
-                http_session& self_;
-                http::message<isRequest, Body, Fields> msg_;
-
-                work_impl(
-                    http_session& self,
-                    http::message<isRequest, Body, Fields>&& msg)
-                    : self_(self)
-                    , msg_(std::move(msg))
-                {
-                }
-
-                void
-                operator()()
-                {
-                    http::async_write(
-                        self_.derived().stream(),
-                        msg_,
-                        beast::bind_front_handler(
-                            &http_session::on_write,
-                            self_.derived().shared_from_this(),
-                            msg_.need_eof()));
-                }
-            };
-
-            // Allocate and store the work
-            items_.push_back(
-                boost::make_unique<work_impl>(self_, std::move(msg)));
-
-            // If there was no previous work, start this one
-            if(items_.size() == 1)
-                (*items_.front())();
-        }
-    };
-
-    queue queue_;
-
-    // The parser is stored in an optional container so we can
-    // construct it from scratch it at the beginning of each new message.
-    boost::optional<http::request_parser<http::string_body>> parser_;
-
-protected:
-    beast::flat_buffer buffer_;
-
-public:
-    // Construct the session
-    http_session(
-        beast::flat_buffer buffer)
-        : queue_(*this)
-        , buffer_(std::move(buffer))
-    {
+bool write_cred(const std::string& cred_file, const cw::helper::credentials::dict& creds) {
+    std::ofstream creds_fso(cred_file);
+    if (!creds_fso.good()) {
+        std::cout << "Could not open '" << cred_file << "' for writing" << std::endl;
+        return false;
     }
 
+    std::string out;
+    cw::helper::credentials::write(creds, out);
+    creds_fso << out;
+    return true;
+}
+
+int user_set(const std::string& cred_file, const std::string& username, const std::vector<std::string>& scopes) {
+    cw::helper::credentials::dict creds;
+    if (!read_cred(cred_file, creds)) return 1;
+    
+    std::set<std::string> scopes_set(scopes.begin(), scopes.end());
+    cw::helper::credentials::set_user(creds, username, scopes_set, prompt(defaults::password_prompt));
+
+    if (!write_cred(cred_file, creds)) return 1;
+    return 0;
+}
+
+int user_remove(const std::string& cred_file, const std::string& username) {
+    cw::helper::credentials::dict creds;
+    if (!read_cred(cred_file, creds)) return 1;
+
+    auto it = creds.find(username);
+    if (it == creds.end()) {
+        std::cout << "Username '" << username << "' not found" << std::endl;
+        return 1;
+    }
+    creds.erase(it);
+    
+    if (!write_cred(cred_file, creds)) return 1;
+    return 0;
+}
+
+struct Handler {
     // This function produces an HTTP response for the given
     // request. The type of the response object depends on the
     // contents of the request, so the interface requires the
     // caller to pass a generic lambda for receiving the response.
-    template<
+    template< class Derived,
         class Body, class Allocator,
         class Send>
-    void
+    static void
     handle_request(
+        Derived& derived,
         http::request<Body, http::basic_fields<Allocator>>&& req,
         Send&& send
         )
     {
-        boost::asio::io_context& ioc_ = derived().ioc_;
-
+        boost::asio::io_context& ioc_ = derived.ioc_;
+        
         auto content_type = req[http::field::content_type];
 
         auto const json_response =
@@ -740,458 +445,7 @@ public:
         }
         return send(bad_request());
     }
-
-    void
-    do_read()
-    {
-        // Construct a new parser for each message
-        parser_.emplace();
-
-        // Apply a reasonable limit to the allowed size
-        // of the body in bytes to prevent abuse.
-        parser_->body_limit(defaults::body_size_limit);
-
-        // Set the timeout.
-        beast::get_lowest_layer(
-            derived().stream()).expires_after(std::chrono::seconds(defaults::response_timeout));
-
-        // Read a request using the parser-oriented interface
-        http::async_read(
-            derived().stream(),
-            buffer_,
-            *parser_,
-            beast::bind_front_handler(
-                &http_session::on_read,
-                derived().shared_from_this()));
-    }
-
-    void
-    on_read(beast::error_code ec, std::size_t bytes_transferred)
-    {
-        boost::ignore_unused(bytes_transferred);
-
-        // This means they closed the connection
-        if(ec == http::error::end_of_stream)
-            return derived().do_eof();
-
-        if(ec)
-            return fail(ec, "read");
-
-        // See if it is a WebSocket Upgrade
-        if(websocket::is_upgrade(parser_->get()))
-        {
-            // Disable the timeout.
-            // The websocket::stream uses its own timeout settings.
-            beast::get_lowest_layer(derived().stream()).expires_never();
-
-            // Create a websocket session, transferring ownership
-            // of both the socket and the HTTP request.
-            return make_websocket_session(
-                derived().release_stream(),
-                parser_->release());
-        }
-
-        // Send the response
-        handle_request(parser_->release(), queue_);
-
-        // If we aren't at the queue limit, try to pipeline another request
-        if(! queue_.is_full())
-            do_read();
-    }
-
-    void
-    on_write(bool close, beast::error_code ec, std::size_t bytes_transferred)
-    {
-        boost::ignore_unused(bytes_transferred);
-
-        if(ec)
-            return fail(ec, "write");
-
-        if(close)
-        {
-            // This means we should close the connection, usually because
-            // the response indicated the "Connection: close" semantic.
-            return derived().do_eof();
-        }
-
-        // Inform the queue that a write completed
-        if(queue_.on_write())
-        {
-            // Read another request
-            do_read();
-        }
-    }
 };
-
-//------------------------------------------------------------------------------
-
-// Handles a plain HTTP connection
-class plain_http_session
-    : public http_session<plain_http_session>
-    , public std::enable_shared_from_this<plain_http_session>
-{
-    beast::tcp_stream stream_;
-
-public:
-    std::string buf;
-    net::io_context& ioc_;
-
-    // Create the session
-    plain_http_session(
-        beast::tcp_stream&& stream,
-        beast::flat_buffer&& buffer,
-        net::io_context& ioc)
-        : http_session<plain_http_session>(
-            std::move(buffer))
-        , stream_(std::move(stream))
-        , ioc_(ioc)
-    {
-    }
-
-    // Start the session
-    void
-    run()
-    {
-        this->do_read();
-    }
-
-    // Called by the base class
-    beast::tcp_stream&
-    stream()
-    {
-        return stream_;
-    }
-
-    // Called by the base class
-    beast::tcp_stream
-    release_stream()
-    {
-        return std::move(stream_);
-    }
-
-    // Called by the base class
-    void
-    do_eof()
-    {
-        // Send a TCP shutdown
-        beast::error_code ec;
-        stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
-
-        // At this point the connection is closed gracefully
-    }
-};
-
-//------------------------------------------------------------------------------
-
-// Handles an SSL HTTP connection
-class ssl_http_session
-    : public http_session<ssl_http_session>
-    , public std::enable_shared_from_this<ssl_http_session>
-{
-    beast::ssl_stream<beast::tcp_stream> stream_;
-
-public:
-    std::string buf;
-    net::io_context& ioc_;
-
-    // Create the http_session
-    ssl_http_session(
-        beast::tcp_stream&& stream,
-        ssl::context& ctx,
-        beast::flat_buffer&& buffer,
-        net::io_context& ioc)
-        : http_session<ssl_http_session>(
-            std::move(buffer))
-        , stream_(std::move(stream), ctx)
-        , ioc_(ioc)
-    {
-    }
-
-    // Start the session
-    void
-    run()
-    {
-        // Set the timeout.
-        beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
-
-        // Perform the SSL handshake
-        // Note, this is the buffered version of the handshake.
-        stream_.async_handshake(
-            ssl::stream_base::server,
-            buffer_.data(),
-            beast::bind_front_handler(
-                &ssl_http_session::on_handshake,
-                shared_from_this()));
-    }
-
-    // Called by the base class
-    beast::ssl_stream<beast::tcp_stream>&
-    stream()
-    {
-        return stream_;
-    }
-
-    // Called by the base class
-    beast::ssl_stream<beast::tcp_stream>
-    release_stream()
-    {
-        return std::move(stream_);
-    }
-
-    // Called by the base class
-    void
-    do_eof()
-    {
-        // Set the timeout.
-        beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
-
-        // Perform the SSL shutdown
-        stream_.async_shutdown(
-            beast::bind_front_handler(
-                &ssl_http_session::on_shutdown,
-                shared_from_this()));
-    }
-
-private:
-    void
-    on_handshake(
-        beast::error_code ec,
-        std::size_t bytes_used)
-    {
-        if(ec)
-            return fail(ec, "handshake");
-
-        // Consume the portion of the buffer used by the handshake
-        buffer_.consume(bytes_used);
-
-        do_read();
-    }
-
-    void
-    on_shutdown(beast::error_code ec)
-    {
-        if(ec)
-            return fail(ec, "shutdown");
-
-        // At this point the connection is closed gracefully
-    }
-};
-
-//------------------------------------------------------------------------------
-
-// Detects SSL handshakes
-class detect_session : public std::enable_shared_from_this<detect_session>
-{
-    beast::tcp_stream stream_;
-    ssl::context& ctx_;
-    beast::flat_buffer buffer_;
-    net::io_context& ioc_;
-    bool force_ssl_;
-
-public:
-    explicit
-    detect_session(
-        tcp::socket&& socket,
-        ssl::context& ctx,
-        net::io_context& ioc,
-        bool force_ssl)
-        : stream_(std::move(socket))
-        , ctx_(ctx)
-        , ioc_(ioc)
-        , force_ssl_(force_ssl)
-    {
-    }
-
-    // Launch the detector
-    void
-    run()
-    {
-        // Set the timeout.
-        stream_.expires_after(std::chrono::seconds(30));
-
-        beast::async_detect_ssl(
-            stream_,
-            buffer_,
-            beast::bind_front_handler(
-                &detect_session::on_detect,
-                this->shared_from_this()));
-    }
-
-    void
-    on_detect(beast::error_code ec, boost::tribool result)
-    {
-        if(ec)
-            return fail(ec, "detect");
-
-        if(result)
-        {
-            // Launch SSL session
-            std::make_shared<ssl_http_session>(
-                std::move(stream_),
-                ctx_,
-                std::move(buffer_),
-                ioc_)->run();
-            return;
-        }
-
-        if (force_ssl_) return;
-
-        // Launch plain session
-        std::make_shared<plain_http_session>(
-            std::move(stream_),
-            std::move(buffer_),
-            ioc_)->run();
-    }
-};
-
-// Accepts incoming connections and launches the sessions
-class listener : public std::enable_shared_from_this<listener>
-{
-    net::io_context& ioc_;
-    ssl::context& ctx_;
-    tcp::acceptor acceptor_;
-    bool force_ssl_;
-
-public:
-    listener(
-        net::io_context& ioc,
-        ssl::context& ctx,
-        tcp::endpoint endpoint,
-        bool force_ssl)
-        : ioc_(ioc)
-        , ctx_(ctx)
-        , acceptor_(net::make_strand(ioc))
-        , force_ssl_(force_ssl)
-    {
-        beast::error_code ec;
-
-        // Open the acceptor
-        acceptor_.open(endpoint.protocol(), ec);
-        if(ec)
-        {
-            fail(ec, "open");
-            return;
-        }
-
-        // Allow address reuse
-        acceptor_.set_option(net::socket_base::reuse_address(true), ec);
-        if(ec)
-        {
-            fail(ec, "set_option");
-            return;
-        }
-
-        // Bind to the server address
-        acceptor_.bind(endpoint, ec);
-        if(ec)
-        {
-            fail(ec, "bind");
-            return;
-        }
-
-        // Start listening for connections
-        acceptor_.listen(
-            net::socket_base::max_listen_connections, ec);
-        if(ec)
-        {
-            fail(ec, "listen");
-            return;
-        }
-    }
-
-    // Start accepting incoming connections
-    void
-    run()
-    {
-        do_accept();
-    }
-
-private:
-    void
-    do_accept()
-    {
-        // The new connection gets its own strand
-        acceptor_.async_accept(
-            net::make_strand(ioc_),
-            beast::bind_front_handler(
-                &listener::on_accept,
-                shared_from_this()));
-    }
-
-    void
-    on_accept(beast::error_code ec, tcp::socket socket)
-    {
-        if(ec)
-        {
-            fail(ec, "accept");
-        }
-        else
-        {
-            // Create the detector http_session and run it
-            std::make_shared<detect_session>(
-                std::move(socket),
-                ctx_,
-                ioc_,
-                force_ssl_)->run();
-        }
-
-        // Accept another connection
-        do_accept();
-    }
-};
-
-bool read_cred(const std::string& cred_file, cw::helper::credentials::dict& creds) {
-    std::ifstream creds_fs(cred_file);
-    if (!creds_fs.good()) {
-        std::cout << "Could not open '" << cred_file << "' for reading" << std::endl;
-        return false;
-    }
-
-    std::stringstream buffer;
-    buffer << creds_fs.rdbuf();
-
-    cw::helper::credentials::read(creds, buffer.str());
-    return true;
-}
-
-bool write_cred(const std::string& cred_file, const cw::helper::credentials::dict& creds) {
-    std::ofstream creds_fso(cred_file);
-    if (!creds_fso.good()) {
-        std::cout << "Could not open '" << cred_file << "' for writing" << std::endl;
-        return false;
-    }
-
-    std::string out;
-    cw::helper::credentials::write(creds, out);
-    creds_fso << out;
-    return true;
-}
-
-int user_set(const std::string& cred_file, const std::string& username, const std::vector<std::string>& scopes) {
-    cw::helper::credentials::dict creds;
-    if (!read_cred(cred_file, creds)) return 1;
-    
-    std::set<std::string> scopes_set(scopes.begin(), scopes.end());
-    cw::helper::credentials::set_user(creds, username, scopes_set, prompt(defaults::password_prompt));
-
-    if (!write_cred(cred_file, creds)) return 1;
-    return 0;
-}
-
-int user_remove(const std::string& cred_file, const std::string& username) {
-    cw::helper::credentials::dict creds;
-    if (!read_cred(cred_file, creds)) return 1;
-
-    auto it = creds.find(username);
-    if (it == creds.end()) {
-        std::cout << "Username '" << username << "' not found" << std::endl;
-        return 1;
-    }
-    creds.erase(it);
-    
-    if (!write_cred(cred_file, creds)) return 1;
-    return 0;
-}
 
 
 int main_loop(const std::string& cred, int threads, const std::string& host, int port, const std::string& cert, const std::string& priv, const std::string& dh, bool force_ssl, bool no_ssl) {
@@ -1229,7 +483,7 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
     cw::globals::init(creds, cred);
 
     // Create and launch a listening port
-    std::make_shared<listener>(
+    std::make_shared<cw::proxy::listener<Handler>>(
         ioc,
         ctx,
         tcp::endpoint{address, static_cast<unsigned short>(port)},
