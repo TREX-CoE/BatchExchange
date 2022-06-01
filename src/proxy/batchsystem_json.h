@@ -73,19 +73,37 @@ namespace cw_proxy_batch {
 
 using namespace cw::batch;
 
-
 auto runJob(BatchInterface& batch, rapidjson::Document& document) {
     JobOptions opts;
+    if (!document.HasMember("path")) {
+        throw std::runtime_error("No path given");
+    } else {
+        auto& path = document["path"];
+        if (!path.IsString()) throw std::runtime_error("path is not a string");
+        opts.path = std::string(path.GetString());
+    }
+
     if (document.HasMember("nodes")) {
             auto& nodes = document["nodes"];
-            if (!nodes.IsInt()) throw std::runtime_error("Nodes is not an int");
+            if (!nodes.IsInt()) throw std::runtime_error("nodes is not an int");
             int nnodes = nodes.GetInt();
-            if (nnodes < 1) throw std::runtime_error("Nodes has to be atleast 1");
+            if (nnodes < 1) throw std::runtime_error("nodes has to be atleast 1");
             opts.numberNodes = static_cast<uint32_t>(nnodes);
     }
-    // TODO add rest
-    // handle jobname out
-
+    if (document.HasMember("nodesMax")) {
+            auto& nodes = document["nodesMax"];
+            if (!nodes.IsInt()) throw std::runtime_error("nodesMax is not an int");
+            int nnodes = nodes.GetInt();
+            if (nnodes < 1) throw std::runtime_error("nodesMax has to be atleast 1");
+            opts.numberNodesMax = static_cast<uint32_t>(nnodes);
+    }
+    if (document.HasMember("gpus")) {
+            auto& nodes = document["gpus"];
+            if (!nodes.IsInt()) throw std::runtime_error("gpus is not an int");
+            int nnodes = nodes.GetInt();
+            if (nnodes < 1) throw std::runtime_error("gpus has to be atleast 1");
+            opts.numberNodesMax = static_cast<uint32_t>(nnodes);
+    }
     return batch.runJob(opts);
 }
 

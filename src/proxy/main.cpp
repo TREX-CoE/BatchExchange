@@ -66,6 +66,8 @@
 
 namespace defaults {
 
+constexpr int body_size_limit = 10000;
+constexpr unsigned int response_timeout = 30;
 constexpr int port = 2000;
 constexpr const char* host = "0.0.0.0";
 constexpr unsigned int threads = 10;
@@ -517,6 +519,8 @@ public:
     {
         boost::asio::io_context& ioc_ = derived().ioc_;
 
+        auto content_type = req[http::field::content_type];
+
         auto const json_response =
         [&](const rapidjson::Document& document, http::status status = http::status::ok)
         {
@@ -553,7 +557,7 @@ public:
         auto const check_auth =
         [&](const std::set<std::string>& scopes = {})
         {
-            const auto it = cw::helper::credentials::check_header(cw::creds::get(), req["Authorization"]);
+            const auto it = cw::helper::credentials::check_header(cw::creds::get(), req[http::field::authorization]);
             if (it == cw::creds::get().end()) {
                 send(json_error_response("Invalid credentials", "Could not authenticate user", http::status::unauthorized));
                 return false;
@@ -568,6 +572,25 @@ public:
             }
             return true;
         };
+
+        auto const check_json = 
+        [&](rapidjson::Document& document)
+        {
+            if (content_type != "application/json") {
+                send(empty_response(http::status::unsupported_media_type));
+                return false;
+            }
+
+            document.Parse(req.body());
+            if (document.HasParseError()) {
+                send(empty_response(http::status::unsupported_media_type));
+                return false;
+            }
+
+            return true;
+        };
+
+
 
         auto const exec_callback = [&send, &json_error_response, &ioc_](cw::batch::Result& res, const cw::batch::Cmd& cmd) {
             // start command
@@ -634,14 +657,19 @@ public:
                 }
             });
             return;
-        } else if (req.method() == http::verb::get && req.target() == "/jobs/submit") {
+        } else if (req.method() == http::verb::post && req.target() == "/jobs/submit") {
             if (!check_auth({"jobs_submit"})) return;
+            rapidjson::Document indocument;
+            if (!check_json(indocument)) return;
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            rapidjson::Document indocument;
-            // TODO read from request body
-            auto f = cw_proxy_batch::runJob(*batch, indocument);
-            ioc_.post(cw::helper::y_combinator([f, &send, &ioc_, &json_error_response, &json_response](auto handler){
+            std::function<cw::batch::runJob_f> f;
+            try {
+                f = cw_proxy_batch::runJob(*batch, indocument);
+            } catch (const std::runtime_error& e) {
+                return send(json_error_response("Request body validation failed", e.what(), http::status::internal_server_error));
+            }
+            ioc_.post(cw::helper::y_combinator([f, batch, &send, &ioc_, &json_error_response, &json_response](auto handler){
                 try {
                     std::string jobName;
                     if (f(jobName)) {
@@ -678,11 +706,11 @@ public:
 
         // Apply a reasonable limit to the allowed size
         // of the body in bytes to prevent abuse.
-        parser_->body_limit(10000);
+        parser_->body_limit(defaults::body_size_limit);
 
         // Set the timeout.
         beast::get_lowest_layer(
-            derived().stream()).expires_after(std::chrono::seconds(30));
+            derived().stream()).expires_after(std::chrono::seconds(defaults::response_timeout));
 
         // Read a request using the parser-oriented interface
         http::async_read(
