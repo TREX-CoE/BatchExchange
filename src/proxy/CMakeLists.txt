@@ -9,12 +9,12 @@ set( proxy_SRC
     main.cpp
     openapi_json.cpp
     credentials.cpp
-    creds.cpp
+    globals.cpp
 )
 set( proxy_HDR
     openapi_json.h
     credentials.h
-    creds.h
+    globals.h
     salt_hash.h
     json.h
     set_echo.h

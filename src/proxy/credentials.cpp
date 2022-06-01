@@ -5,8 +5,7 @@
 #include "shared/joinString.h"
 #include "shared/randomHex.h"
 
-#include <ostream>
-#include <istream>
+#include <sstream>
 
 static const std::string delimiter = ":";
 static const std::string scope_delimiter = ",";
@@ -23,7 +22,8 @@ namespace cw {
 namespace helper {
 namespace credentials {
 
-void read(dict& creds, std::istream& in) {
+void read(dict& creds, const std::string& s) {
+    std::stringstream in(s);
     std::string line;
     while(std::getline(in, line)) {
         if (line.empty()) continue;
@@ -54,10 +54,12 @@ void read(dict& creds, std::istream& in) {
     }
 }
 
-void write(const dict& creds, std::ostream &out) {
+std::string write(const dict& creds) {
+    std::stringstream out;
     for (const auto& p : creds) {
         out << p.first << delimiter.data() << cw::helper::joinString(p.second.scopes.begin(), p.second.scopes.end(), scope_delimiter) << delimiter.data() << p.second.salt << delimiter.data() << p.second.hash << std::endl;
     }
+    return out.str();
 }
 
 void set_user(credentials::dict& creds, string_view user, std::set<std::string> scopes, string_view password) {

@@ -76,7 +76,7 @@ using namespace cw::batch;
 auto runJob(BatchInterface& batch, rapidjson::Document& document) {
     JobOptions opts;
     if (!document.HasMember("path")) {
-        throw std::runtime_error("No path given");
+        throw std::runtime_error("path is not given");
     } else {
         auto& path = document["path"];
         if (!path.IsString()) throw std::runtime_error("path is not a string");

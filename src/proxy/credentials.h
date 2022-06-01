@@ -20,9 +20,9 @@ struct user_data {
 
 using dict = std::map<std::string, user_data>;
 
-void read(dict& creds, std::istream& in);
+void read(dict& creds, const std::string& s);
 
-void write(const dict& creds, std::ostream &out);
+std::string write(const dict& creds);
 
 void set_user(credentials::dict& creds, string_view user, std::set<std::string> scopes, string_view password);
 

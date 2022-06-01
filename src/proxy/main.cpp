@@ -47,7 +47,7 @@
 #include "proxy/openapi_json.h"
 #include "proxy/credentials.h"
 #include "proxy/batchsystem_json.h"
-#include "proxy/creds.h"
+#include "proxy/globals.h"
 #include "proxy/json.h"
 #include "shared/obfuscator.h"
 #include "shared/stream_cast.h"
@@ -380,6 +380,31 @@ void run_async_vector(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF ca
 }
 
 
+auto usersAdd(rapidjson::Document& document) {
+    if (!document.HasMember("user")) throw std::runtime_error("user is not given");
+    auto& user = document["user"];
+    if (!user.IsString()) throw std::runtime_error("user is not a string");
+
+    if (!document.HasMember("password")) throw std::runtime_error("password is not given");
+    auto& password = document["password"];
+    if (!password.IsString()) throw std::runtime_error("password is not a string");
+
+    std::set<std::string> scopesset;
+    if (document.HasMember("scopes")) {
+        auto& scopes = document["scopes"];
+        if (!scopes.IsArray()) throw std::runtime_error("scopes is not an array");
+        for (const auto& v : scopes.GetArray()) {
+            if (!v.IsString()) throw std::runtime_error("scopes array item is not an string");
+            scopesset.insert(v.GetString());
+        }
+    }
+
+    return [user=user.GetString(), password=password.GetString(), scopes=std::move(scopesset)](cw::helper::credentials::dict& creds){
+        cw::helper::credentials::set_user(creds, user, scopes, password);
+    };
+}
+
+
 //------------------------------------------------------------------------------
 
 // Handles an HTTP server connection.
@@ -557,20 +582,9 @@ public:
         auto const check_auth =
         [&](const std::set<std::string>& scopes = {})
         {
-            const auto it = cw::helper::credentials::check_header(cw::creds::get(), req[http::field::authorization]);
-            if (it == cw::creds::get().end()) {
-                send(json_error_response("Invalid credentials", "Could not authenticate user", http::status::unauthorized));
-                return false;
-            }
-            if (!scopes.empty()) {
-                for (const auto& s : scopes) {
-                    if (it->second.scopes.find(s) == it->second.scopes.end()) {
-                        send(json_error_response("Invalid scope", std::string("User does not have requested scope: ")+s, http::status::unauthorized));
-                        return false;
-                    }
-                }
-            }
-            return true;
+            bool authed = cw::globals::creds_check(req[http::field::authorization], scopes);
+            if (!authed) send(json_error_response("Invalid credentials or scope", "Could not authenticate user or user does not have requested scopes", http::status::unauthorized));
+            return authed;
         };
 
         auto const check_json = 
@@ -692,6 +706,31 @@ public:
                 }
                 ioc_.post(handler);
             }));
+
+            return;
+        } else if (req.method() == http::verb::post && req.target() == "/users") {
+            if (!check_auth({"users_add"})) return;
+            auto stream = std::make_shared<boost::asio::posix::stream_descriptor>(ioc_, ::creat(cw::globals::cred_file().c_str(), 0755));
+
+            rapidjson::Document indocument;
+            if (!check_json(indocument)) return;
+
+            try {
+                auto f = usersAdd(indocument);
+
+                auto creds = cw::globals::creds();
+                f(creds);
+                auto creds_str = cw::helper::credentials::write(creds);
+
+                boost::asio::async_write(*stream, boost::asio::buffer(creds_str), boost::asio::transfer_all(), [stream, creds](beast::error_code ec, size_t s){
+                    (void)ec;
+                    (void)s;
+                    // store new credentials in global after successfull write
+                    cw::globals::creds(creds);
+                });
+            } catch (const std::runtime_error& e) {
+                return send(json_error_response("Request body validation failed", e.what(), http::status::internal_server_error));
+            }
 
             return;
         }
@@ -1103,7 +1142,11 @@ bool read_cred(const std::string& cred_file, cw::helper::credentials::dict& cred
         std::cout << "Could not open '" << cred_file << "' for reading" << std::endl;
         return false;
     }
-    cw::helper::credentials::read(creds, creds_fs);
+
+    std::stringstream buffer;
+    buffer << creds_fs.rdbuf();
+
+    cw::helper::credentials::read(creds, buffer.str());
     return true;
 }
 
@@ -1113,7 +1156,7 @@ bool write_cred(const std::string& cred_file, const cw::helper::credentials::dic
         std::cout << "Could not open '" << cred_file << "' for writing" << std::endl;
         return false;
     }
-    cw::helper::credentials::write(creds, creds_fso);
+    creds_fso << cw::helper::credentials::write(creds);
     return true;
 }
 
@@ -1174,16 +1217,9 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
     ssl::context ctx{boost::asio::ssl::context::sslv23};
     if (!no_ssl) set_ssl_context(ctx, cert, priv, dh);
 
-    {
-        std::ifstream creds_fs(cred);
-        if (!creds_fs.good()) {
-            std::cout << "Could not open '" << cred << "' for reading" << std::endl;
-            return 1;
-        }
-        cw::helper::credentials::dict creds;
-        cw::helper::credentials::read(creds, creds_fs);
-        cw::creds::init(creds);
-    }
+    cw::helper::credentials::dict creds;
+    if (!read_cred(cred, creds)) return 1;
+    cw::globals::init(creds, cred);
 
     // Create and launch a listening port
     std::make_shared<listener>(
