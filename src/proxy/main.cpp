@@ -232,6 +232,34 @@ int user_remove(const std::string& cred_file, const std::string& username) {
     return 0;
 }
 
+http::response<http::string_body> api_openapi() {
+    http::string_body::value_type body{cw::openapi::openapi_json};
+    const auto size = body.size();
+    // Respond to GET request
+    http::response<http::string_body> res{
+        std::piecewise_construct,
+        std::make_tuple(std::move(body)),
+        std::make_tuple(http::status::ok, 11)};
+    res.set(http::field::content_type, "application/json");
+    res.content_length(size);
+    return res;
+}
+
+http::response<http::string_body> json_response(const rapidjson::Document& document, http::status status = http::status::ok) {
+    http::response<http::string_body> res{status, 11};
+    res.set(http::field::content_type, "application/json");
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    document.Accept(writer);
+    res.body() = buffer.GetString();
+    res.prepare_payload();
+    return res;
+}
+
+http::response<http::string_body> json_error_response(const std::string& type, const std::string& message, http::status status) {
+    return json_response(cw::proxy::json::generate_json_error(type, message, status), status);
+}
+
 struct Handler {
     constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
     constexpr static unsigned int body_limit() { return 10000; }
@@ -254,31 +282,11 @@ struct Handler {
     {
         auto content_type = req[http::field::content_type];
 
-        auto const json_response =
-        [&](const rapidjson::Document& document, http::status status = http::status::ok)
-        {
-            http::response<http::string_body> res{status, 11}; // req.version(); fails
-            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, "application/json");
-            rapidjson::StringBuffer buffer;
-            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-            document.Accept(writer);
-            res.body() = buffer.GetString();
-            res.prepare_payload();
-            return res;
-        };
-
         auto const empty_response =
         [&](http::status status)
         {
             http::response<http::string_body> res{status, 11}; // req.version(); fails
             return res;
-        };
-
-        auto const json_error_response =
-        [&](const std::string& type, const std::string& message, http::status status)
-        {
-            return json_response(cw::proxy::json::generate_json_error(type, message, status), status);
         };
 
         auto const bad_request =
@@ -314,10 +322,10 @@ struct Handler {
 
 
 
-        auto const exec_callback = [&send, &json_error_response, &ioc_](cw::batch::Result& res, const cw::batch::Cmd& cmd) {
+        auto const exec_callback = [&send, &ioc_](cw::batch::Result& res, const cw::batch::Cmd& cmd) {
             // start command
             std::shared_ptr<CmdProcess> process{new CmdProcess{}};
-            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > process->out, bp::std_err > process->err, ioc_, bp::on_exit=[process, &res, &send, &json_error_response](int ret, const std::error_code& ec){
+            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > process->out, bp::std_err > process->err, ioc_, bp::on_exit=[process, &res, &send](int ret, const std::error_code& ec){
                 res.exit = ec ? -2 : ret;
                 if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
                 if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
@@ -327,7 +335,7 @@ struct Handler {
             });
         };
 
-        auto const send_info = [&send, &json_error_response, &json_response](auto container, auto ec){
+        auto const send_info = [&send](auto container, auto ec){
             if (ec) {
                 send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
             } else {
@@ -336,16 +344,9 @@ struct Handler {
         };
             
         if (req.method() == http::verb::get && req.target() == "/openapi.json") {
-            http::string_body::value_type body{cw::openapi::openapi_json};
-            const auto size = body.size();
-            // Respond to GET request
-            http::response<http::string_body> res{
-                std::piecewise_construct,
-                std::make_tuple(std::move(body)),
-                std::make_tuple(http::status::ok, req.version())};
+            auto res = api_openapi();
+            res.version(req.version());
             res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.set(http::field::content_type, "application/json");
-            res.content_length(size);
             res.keep_alive(req.keep_alive());
             return send(std::move(res));
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
@@ -371,7 +372,7 @@ struct Handler {
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
             auto f = batch->deleteJobById("id", false);
-            run_async(ioc_, f, [&send, &json_error_response, &json_response, &empty_response](auto ec){
+            run_async(ioc_, f, [&send, &empty_response](auto ec){
                 if (ec) {
                     return send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
                 } else {
@@ -391,7 +392,7 @@ struct Handler {
             } catch (const std::runtime_error& e) {
                 return send(json_error_response("Request body validation failed", e.what(), http::status::internal_server_error));
             }
-            ioc_.post(cw::helper::y_combinator([f, batch, &send, &ioc_, &json_error_response, &json_response](auto handler){
+            ioc_.post(cw::helper::y_combinator([f, batch, &send, &ioc_](auto handler){
                 try {
                     std::string jobName;
                     if (f(jobName)) {
@@ -430,7 +431,7 @@ struct Handler {
                 f(creds);
                 auto s = std::make_shared<std::string>();
                 cw::helper::credentials::write(creds, *s);
-                boost::asio::async_write(*stream, boost::asio::buffer(*s), boost::asio::transfer_all(), [stream, s, creds, &empty_response, &json_error_response, &send](beast::error_code ec, size_t len){
+                boost::asio::async_write(*stream, boost::asio::buffer(*s), boost::asio::transfer_all(), [stream, s, creds, &empty_response, &send](beast::error_code ec, size_t len){
                     (void)len;
                     if (ec) {
                         return send(json_error_response("Writing credentials failed", ec.message(), http::status::internal_server_error));
