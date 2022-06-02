@@ -25,7 +25,6 @@
 #include <boost/asio/strand.hpp>
 #include <boost/make_unique.hpp>
 #include <boost/optional.hpp>
-#include <boost/process.hpp>
 #include <boost/asio/error.hpp>
 
 
@@ -38,10 +37,6 @@ namespace websocket = beast::websocket;         // from <boost/beast/websocket.h
 namespace net = boost::asio;                    // from <boost/asio.hpp>
 namespace ssl = boost::asio::ssl;               // from <boost/asio/ssl.hpp>
 using tcp = boost::asio::ip::tcp;               // from <boost/asio/ip/tcp.hpp>
-namespace bp = boost::process;
-
-namespace batch = cw::batch;
-
 
 // Report a failure
 void

@@ -6,12 +6,14 @@ find_package( Boost 1.70.0 COMPONENTS system filesystem REQUIRED )
 find_package( OpenSSL REQUIRED )
 
 set( proxy_SRC
+    batchsystem_process.cpp
     main.cpp
     openapi_json.cpp
     credentials.cpp
     globals.cpp
 )
 set( proxy_HDR
+    batchsystem_process.h
     openapi_json.h
     credentials.h
     globals.h
