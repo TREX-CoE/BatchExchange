@@ -233,22 +233,25 @@ int user_remove(const std::string& cred_file, const std::string& username) {
 }
 
 struct Handler {
+    constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
+    constexpr static unsigned int body_limit() { return 10000; }
+    constexpr static unsigned int limit() { return 8; }
+
+
     // This function produces an HTTP response for the given
     // request. The type of the response object depends on the
     // contents of the request, so the interface requires the
     // caller to pass a generic lambda for receiving the response.
-    template< class Derived,
+    template< 
         class Body, class Allocator,
         class Send>
     static void
     handle_request(
-        Derived& derived,
+        boost::asio::io_context& ioc_,
         http::request<Body, http::basic_fields<Allocator>>&& req,
         Send&& send
         )
     {
-        boost::asio::io_context& ioc_ = derived.ioc_;
-        
         auto content_type = req[http::field::content_type];
 
         auto const json_response =

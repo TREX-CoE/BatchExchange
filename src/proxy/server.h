@@ -282,12 +282,6 @@ class http_session : public Handler
     // This queue is used for HTTP pipelining.
     class queue
     {
-        enum
-        {
-            // Maximum number of responses we will queue
-            limit = 8
-        };
-
         // The type-erased, saved work item
         struct work
         {
@@ -303,15 +297,15 @@ class http_session : public Handler
         queue(http_session& self)
             : self_(self)
         {
-            static_assert(limit > 0, "queue limit must be positive");
-            items_.reserve(limit);
+            static_assert(Handler::limit() > 0, "queue limit must be positive");
+            items_.reserve(Handler::limit());
         }
 
         // Returns `true` if we have reached the queue limit
         bool
         is_full() const
         {
-            return items_.size() >= limit;
+            return items_.size() >= Handler::limit();
         }
 
         // Called when a message finishes sending
@@ -377,13 +371,15 @@ class http_session : public Handler
 
 protected:
     beast::flat_buffer buffer_;
+    net::io_context& ioc_;
 
 public:
     // Construct the session
     http_session(
-        beast::flat_buffer buffer)
+        beast::flat_buffer buffer, net::io_context& ioc)
         : queue_(*this)
         , buffer_(std::move(buffer))
+        , ioc_(ioc)
     {
     }
 
@@ -395,11 +391,11 @@ public:
 
         // Apply a reasonable limit to the allowed size
         // of the body in bytes to prevent abuse.
-        parser_->body_limit(10000);
+        parser_->body_limit(Handler::body_limit());
 
         // Set the timeout.
         beast::get_lowest_layer(
-            derived().stream()).expires_after(std::chrono::seconds(30));
+            derived().stream()).expires_after(Handler::timeout());
 
         // Read a request using the parser-oriented interface
         http::async_read(
@@ -438,7 +434,7 @@ public:
         }
 
         // Send the response
-        Handler::handle_request(derived(), parser_->release(), queue_);
+        Handler::handle_request(ioc_, parser_->release(), queue_);
 
         // If we aren't at the queue limit, try to pipeline another request
         if(! queue_.is_full())
@@ -472,7 +468,7 @@ public:
 //------------------------------------------------------------------------------
 
 // Handles a plain HTTP connection
-template <typename Handler>
+template <class Handler>
 class plain_http_session
     : public http_session<plain_http_session<Handler>, Handler>
     , public std::enable_shared_from_this<plain_http_session<Handler>>
@@ -481,7 +477,6 @@ class plain_http_session
 
 public:
     std::string buf;
-    net::io_context& ioc_;
 
     // Create the session
     plain_http_session(
@@ -489,9 +484,8 @@ public:
         beast::flat_buffer&& buffer,
         net::io_context& ioc)
         : http_session<plain_http_session<Handler>, Handler>(
-            std::move(buffer))
+            std::move(buffer), ioc)
         , stream_(std::move(stream))
-        , ioc_(ioc)
     {
     }
 
@@ -540,7 +534,6 @@ class ssl_http_session
 
 public:
     std::string buf;
-    net::io_context& ioc_;
 
     // Create the http_session
     ssl_http_session(
@@ -549,9 +542,8 @@ public:
         beast::flat_buffer&& buffer,
         net::io_context& ioc)
         : http_session<ssl_http_session<Handler>, Handler>(
-            std::move(buffer))
+            std::move(buffer), ioc)
         , stream_(std::move(stream), ctx)
-        , ioc_(ioc)
     {
     }
 
@@ -560,7 +552,7 @@ public:
     run()
     {
         // Set the timeout.
-        beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
+        beast::get_lowest_layer(stream_).expires_after(Handler::timeout());
 
         // Perform the SSL handshake
         // Note, this is the buffered version of the handshake.
@@ -591,7 +583,7 @@ public:
     do_eof()
     {
         // Set the timeout.
-        beast::get_lowest_layer(stream_).expires_after(std::chrono::seconds(30));
+        beast::get_lowest_layer(stream_).expires_after(Handler::timeout());
 
         // Perform the SSL shutdown
         stream_.async_shutdown(
@@ -656,7 +648,7 @@ public:
     run()
     {
         // Set the timeout.
-        stream_.expires_after(std::chrono::seconds(30));
+        stream_.expires_after(Handler::timeout());
 
         beast::async_detect_ssl(
             stream_,
