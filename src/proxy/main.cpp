@@ -103,10 +103,9 @@ std::string prompt(const std::string& prefix) {
 }
 
 struct CmdProcess {
-    int exit;
-    std::future<std::string> out; // before cp else "std::future_error: No associated state" because initialized afterwards
-    std::future<std::string> err; // before cp else "std::future_error: No associated state" because initialized afterwards
     boost::optional<bp::child> cp;
+    boost::optional<bp::async_pipe> pipe_out;
+    boost::optional<bp::async_pipe> pipe_err;
 };
 
 }
@@ -320,7 +319,7 @@ struct Handler {
         auto exec_callback = [&send, &ioc_, res](cw::batch::Result& result, const cw::batch::Cmd& cmd) mutable {
             // start command
             std::shared_ptr<CmdProcess> process{new CmdProcess{}};
-            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > process->out, bp::std_err > process->err, ioc_, bp::on_exit=[process, &result, &send, res](int ret, const std::error_code& ec) mutable {
+            auto cb = [process, &result, &send, res](int ret, const std::error_code& ec) mutable {
                 result.exit = ec ? -2 : ret;
                 if (ec) {
                     json_error_response(res, "Running command failed", "Could not run command", http::status::internal_server_error);
@@ -330,10 +329,25 @@ struct Handler {
                     json_error_response(res, "Running command failed", "Command exited with error code", http::status::internal_server_error);
                     return send(std::move(res));
                 }
+            };
+            if (cmd.opts & cw::batch::cmdopt::capture_stdout) {
+                process->pipe_out.emplace(ioc_);
+                boost::asio::async_read(*(process->pipe_out), boost::asio::dynamic_buffer(result.out), [](const boost::system::error_code &, std::size_t){});
+            }
+            if (cmd.opts & cw::batch::cmdopt::capture_stderr) {
+                process->pipe_err.emplace(ioc_);
+                boost::asio::async_read(*(process->pipe_err), boost::asio::dynamic_buffer(result.err), [](const boost::system::error_code &, std::size_t){});
+            }
 
-                result.out = process->out.get();
-                result.err = process->err.get();
-            });
+            if ((cmd.opts & cw::batch::cmdopt::capture_stdout_stderr) == cw::batch::cmdopt::capture_stdout_stderr) {
+                process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > *(process->pipe_out), bp::std_err > *(process->pipe_err), ioc_, bp::on_exit=cb);
+            } else if (cmd.opts & cw::batch::cmdopt::capture_stdout) {
+                process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > *(process->pipe_out), ioc_, bp::on_exit=cb);
+            } else if (cmd.opts & cw::batch::cmdopt::capture_stderr) {
+                process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_err > *(process->pipe_err), ioc_, bp::on_exit=cb);
+            } else {
+                process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), ioc_, bp::on_exit=cb);
+            }
         };
 
         auto send_info = [&send, res](auto container, auto ec) mutable {
