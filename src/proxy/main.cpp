@@ -124,7 +124,7 @@ void set_ssl_context(ssl::context& ctx, const std::string& cert, const std::stri
 
 template <typename AsyncF, typename CallbackF>
 void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
-    ioc_.post(cw::helper::y_combinator([asyncF, callbackF, &ioc_](auto handler){
+    ioc_.post(cw::helper::y_combinator([asyncF, callbackF, &ioc_](auto handler) mutable {
         try {
             if (asyncF()) {
                 callbackF(boost::system::error_code());
@@ -232,32 +232,33 @@ int user_remove(const std::string& cred_file, const std::string& username) {
     return 0;
 }
 
-http::response<http::string_body> api_openapi() {
-    http::string_body::value_type body{cw::openapi::openapi_json};
-    const auto size = body.size();
-    // Respond to GET request
-    http::response<http::string_body> res{
-        std::piecewise_construct,
-        std::make_tuple(std::move(body)),
-        std::make_tuple(http::status::ok, 11)};
+void api_openapi(http::response<http::string_body>& res) {
+    res.result(http::status::ok);
     res.set(http::field::content_type, "application/json");
-    res.content_length(size);
-    return res;
+    res.body() = cw::openapi::openapi_json;
+    res.prepare_payload();
 }
 
-http::response<http::string_body> json_response(const rapidjson::Document& document, http::status status = http::status::ok) {
-    http::response<http::string_body> res{status, 11};
+void json_response(http::response<http::string_body>& res, const rapidjson::Document& document, http::status status = http::status::ok) {
+    res.result(status);
     res.set(http::field::content_type, "application/json");
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     document.Accept(writer);
     res.body() = buffer.GetString();
     res.prepare_payload();
-    return res;
 }
 
-http::response<http::string_body> json_error_response(const std::string& type, const std::string& message, http::status status) {
-    return json_response(cw::proxy::json::generate_json_error(type, message, status), status);
+void json_error_response(http::response<http::string_body>& res, const std::string& type, const std::string& message, http::status status) {
+    json_response(res, cw::proxy::json::generate_json_error(type, message, status), status);
+}
+
+void bad_request(http::response<http::string_body>& res) {
+    json_error_response(res, "Bad request", "Unsupported API call", http::status::bad_request);
+}
+
+void invalid_auth(http::response<http::string_body>& res) {
+    json_error_response(res, "Invalid credentials or scope", "Could not authenticate user or user does not have requested scopes", http::status::unauthorized);
 }
 
 struct Handler {
@@ -282,72 +283,71 @@ struct Handler {
     {
         auto content_type = req[http::field::content_type];
 
-        auto const empty_response =
-        [&](http::status status)
-        {
-            http::response<http::string_body> res{status, 11}; // req.version(); fails
-            return res;
-        };
+        http::response<http::string_body> res{http::status::ok, req.version()};
+        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        res.keep_alive(req.keep_alive());
 
-        auto const bad_request =
-        [&]()
-        {
-            return json_error_response("Bad request", "Unsupported API call", http::status::bad_request);
-        };
-
-        auto const check_auth =
-        [&](const std::set<std::string>& scopes = {})
+        auto check_auth =
+        [&send, &res, &req](const std::set<std::string>& scopes = {}) mutable
         {
             bool authed = cw::globals::creds_check(req[http::field::authorization], scopes);
-            if (!authed) send(json_error_response("Invalid credentials or scope", "Could not authenticate user or user does not have requested scopes", http::status::unauthorized));
+            if (!authed) {
+                invalid_auth(res);
+                send(std::move(res));
+            }
             return authed;
         };
 
-        auto const check_json = 
-        [&](rapidjson::Document& document)
+        auto check_json = 
+        [&send, res, &content_type, &req](rapidjson::Document& document) mutable
         {
             if (content_type != "application/json") {
-                send(empty_response(http::status::unsupported_media_type));
+                res.result(http::status::unsupported_media_type);
+                send(std::move(res));
                 return false;
             }
 
             document.Parse(req.body());
             if (document.HasParseError()) {
-                send(empty_response(http::status::unsupported_media_type));
+                res.result(http::status::unsupported_media_type);
+                send(std::move(res));
                 return false;
             }
 
             return true;
         };
 
-
-
-        auto const exec_callback = [&send, &ioc_](cw::batch::Result& res, const cw::batch::Cmd& cmd) {
+        auto exec_callback = [&send, &ioc_, res](cw::batch::Result& result, const cw::batch::Cmd& cmd) mutable {
             // start command
             std::shared_ptr<CmdProcess> process{new CmdProcess{}};
-            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > process->out, bp::std_err > process->err, ioc_, bp::on_exit=[process, &res, &send](int ret, const std::error_code& ec){
-                res.exit = ec ? -2 : ret;
-                if (ec) return send(json_error_response("Running command failed", "Could not run command", http::status::internal_server_error));
-                if (ret != 0) return send(json_error_response("Running command failed", "Command exited with error code", http::status::internal_server_error));
+            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > process->out, bp::std_err > process->err, ioc_, bp::on_exit=[process, &result, &send, res](int ret, const std::error_code& ec) mutable {
+                result.exit = ec ? -2 : ret;
+                if (ec) {
+                    json_error_response(res, "Running command failed", "Could not run command", http::status::internal_server_error);
+                    return send(std::move(res));
+                }
+                if (ret != 0) {
+                    json_error_response(res, "Running command failed", "Command exited with error code", http::status::internal_server_error);
+                    return send(std::move(res));
+                }
 
-                res.out = process->out.get();
-                res.err = process->err.get();
+                result.out = process->out.get();
+                result.err = process->err.get();
             });
         };
 
-        auto const send_info = [&send](auto container, auto ec){
+        auto send_info = [&send, res](auto container, auto ec) mutable {
             if (ec) {
-                send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
+                json_error_response(res, "Running command failed", ec.message(), http::status::internal_server_error);
+                send(std::move(res));
             } else {
-                send(json_response(cw::helper::json::serialize_wrap(container)));
+                json_response(res, cw::helper::json::serialize_wrap(container));
+                send(std::move(res));
             }
         };
             
         if (req.method() == http::verb::get && req.target() == "/openapi.json") {
-            auto res = api_openapi();
-            res.version(req.version());
-            res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-            res.keep_alive(req.keep_alive());
+            api_openapi(res);
             return send(std::move(res));
         } else if (req.method() == http::verb::get && req.target() == "/nodes") {
             if (!check_auth({"nodes_info"})) return;
@@ -372,11 +372,13 @@ struct Handler {
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
             auto f = batch->deleteJobById("id", false);
-            run_async(ioc_, f, [&send, &empty_response](auto ec){
+            run_async(ioc_, f, [&send, res](auto ec) mutable {
                 if (ec) {
-                    return send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
+                    json_error_response(res, "Running command failed", ec.message(), http::status::internal_server_error);
+                    return send(std::move(res));
                 } else {
-                    return send(empty_response(http::status::ok));
+                    res.result(http::status::ok);
+                    return send(std::move(res));
                 }
             });
             return;
@@ -390,9 +392,10 @@ struct Handler {
             try {
                 f = cw_proxy_batch::runJob(*batch, indocument);
             } catch (const std::runtime_error& e) {
-                return send(json_error_response("Request body validation failed", e.what(), http::status::internal_server_error));
+                json_error_response(res, "Request body validation failed", e.what(), http::status::internal_server_error);
+                return send(std::move(res));
             }
-            ioc_.post(cw::helper::y_combinator([f, batch, &send, &ioc_](auto handler){
+            ioc_.post(cw::helper::y_combinator([f, batch, &send, &ioc_, res](auto handler) mutable {
                 try {
                     std::string jobName;
                     if (f(jobName)) {
@@ -407,11 +410,13 @@ struct Handler {
                             document.AddMember("data", data, allocator);
                         }
 
-                        send(json_response(document));
+                        json_response(res, document);
+                        send(std::move(res));
                     }
                 } catch (const boost::process::process_error& e) {
                     auto ec = e.code();
-                    return send(json_error_response("Running command failed", ec.message(), http::status::internal_server_error));
+                    json_error_response(res, "Running command failed", ec.message(), http::status::internal_server_error);
+                    return send(std::move(res));
                 }
                 ioc_.post(handler);
             }));
@@ -431,23 +436,27 @@ struct Handler {
                 f(creds);
                 auto s = std::make_shared<std::string>();
                 cw::helper::credentials::write(creds, *s);
-                boost::asio::async_write(*stream, boost::asio::buffer(*s), boost::asio::transfer_all(), [stream, s, creds, &empty_response, &send](beast::error_code ec, size_t len){
+                boost::asio::async_write(*stream, boost::asio::buffer(*s), boost::asio::transfer_all(), [stream, s, creds, res, &send](beast::error_code ec, size_t len) mutable {
                     (void)len;
                     if (ec) {
-                        return send(json_error_response("Writing credentials failed", ec.message(), http::status::internal_server_error));
+                        json_error_response(res, "Writing credentials failed", ec.message(), http::status::internal_server_error);
+                        return send(std::move(res));
                     } else {
                         // store new credentials in global after successfull write
                         cw::globals::creds(creds);
-                        return send(empty_response(http::status::created));
+                        res.result(http::status::created);
+                        return send(std::move(res));
                     }
                 });
             } catch (const std::runtime_error& e) {
-                return send(json_error_response("Request body validation failed", e.what(), http::status::internal_server_error));
+                json_error_response(res, "Request body validation failed", e.what(), http::status::internal_server_error);
+                return send(std::move(res));
             }
 
             return;
         }
-        return send(bad_request());
+        bad_request(res);
+        return send(std::move(res));
     }
 };
 
