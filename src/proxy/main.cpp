@@ -117,7 +117,7 @@ void set_ssl_context(ssl::context& ctx, const std::string& cert, const std::stri
 
 template <typename AsyncF, typename CallbackF>
 void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
-    ioc_.post(cw::helper::y_combinator([asyncF, callbackF, &ioc_](auto handler) mutable {
+    ioc_.post(cw::helper::y_combinator_shared([asyncF, callbackF, &ioc_](auto handler) mutable {
         try {
             if (asyncF()) {
                 callbackF(boost::system::error_code());
@@ -141,23 +141,6 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
             }
         } catch (const boost::process::process_error& e) {
             callbackF(e.code(), std::move(state));
-            return;
-        }
-        ioc_.post(handler);
-    }));
-}
-
-template <typename T, typename AsyncF, typename CallbackF>
-void run_async_vector(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
-    ioc_.post(cw::helper::y_combinator_shared([container=std::vector<T>{}, asyncF, callbackF, &ioc_](auto handler) mutable {
-        try {
-            bool done = asyncF([&container](auto n) { container.push_back(std::move(n)); return true; });
-            if (done) {
-                callbackF(boost::system::error_code(), std::move(container));
-                return;
-            }
-        } catch (const boost::process::process_error& e) {
-            callbackF(e.code(), std::move(container));
             return;
         }
         ioc_.post(handler);
@@ -360,19 +343,19 @@ struct Handler {
             if (!check_auth({"nodes_info"})) return;
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_vector<cw::batch::Node>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](auto... args){ (void)batch; return f(args...); }, send_info);
+            run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
             return;
         } else if (req.method() == http::verb::get && req.target() == "/queues") {
             if (!check_auth({"queues_info"})) return;
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_vector<cw::batch::Queue>(ioc_, [batch, f=batch->getQueues()](auto... args){ (void)batch; return f(args...); }, send_info);
+            run_async_state<std::vector<cw::batch::Queue>>(ioc_, [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
             return;
         } else if (req.method() == http::verb::get && req.target() == "/jobs") {
             if (!check_auth({"jobs_info"})) return;
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_vector<cw::batch::Job>(ioc_, [batch, f=batch->getJobs(std::vector<std::string>{})](auto... args){ (void)batch; return f(args...); }, send_info);
+            run_async_state<std::vector<cw::batch::Job>>(ioc_, [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
             return;
         } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
             if (!check_auth({"jobs_delete"})) return;
