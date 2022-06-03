@@ -181,6 +181,9 @@ class websocket_session
         if(ec)
             return fail(ec, "write");
 
+        // Clear the buffer
+        buffer_.consume(buffer_.size());
+
         // Do another read
         do_read();
     }

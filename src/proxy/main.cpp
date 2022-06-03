@@ -94,6 +94,13 @@ namespace batch = cw::batch;
 
 namespace {
 
+std::string jsonToString(const rapidjson::Document& document) {
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    document.Accept(writer);
+    return buffer.GetString();
+} 
+
 std::string prompt(const std::string& prefix) {
     if (!prefix.empty()) {
         std::cout << prefix;
@@ -238,10 +245,7 @@ void api_openapi(http::response<http::string_body>& res) {
 void json_response(http::response<http::string_body>& res, const rapidjson::Document& document, http::status status = http::status::ok) {
     res.result(status);
     res.set(http::field::content_type, "application/json");
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    document.Accept(writer);
-    res.body() = buffer.GetString();
+    res.body() = jsonToString(document);
     res.prepare_payload();
 }
 
@@ -291,7 +295,13 @@ struct Handler {
 
     template <class Send>
     static void handle_socket(std::string input, Send&& send) {
-        (void)input;
+        rapidjson::Document indocument;
+        indocument.Parse(input);
+        if (indocument.HasParseError()) {
+            return send(jsonToString(cw::proxy::json::generate_json_error("InvalidInput", "Input not json", http::status::internal_server_error)));
+        }
+
+
         send("test");
     }
 
