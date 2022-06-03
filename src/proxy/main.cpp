@@ -372,18 +372,25 @@ struct Handler {
             return;
         } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
             if (!check_auth({"jobs_delete"})) return;
+            rapidjson::Document indocument;
+            if (!check_json(indocument)) return;
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            auto f = batch->deleteJobById("id", false);
-            run_async(ioc_, f, [&send, res](auto ec) mutable {
-                if (ec) {
-                    json_error_response_ec(res, ec);
-                    return send(std::move(res));
-                } else {
-                    res.result(http::status::ok);
-                    return send(std::move(res));
-                }
-            });
+            try {
+                auto f = cw_proxy_batch::deleteJobById(*batch, indocument);
+                run_async(ioc_, f, [batch, &send, res](auto ec) mutable {
+                    if (ec) {
+                        json_error_response_ec(res, ec);
+                        return send(std::move(res));
+                    } else {
+                        res.result(http::status::ok);
+                        return send(std::move(res));
+                    }
+                });
+            } catch (const cw::helper::ValidationError& e) {
+                json_error_response_exc(res, e);
+                return send(std::move(res));
+            }
             return;
         } else if (req.method() == http::verb::post && req.target() == "/jobs/submit") {
             if (!check_auth({"jobs_submit"})) return;
@@ -431,7 +438,7 @@ struct Handler {
 
                 auto creds = cw::globals::creds();
                 f(creds);
-                write_creds_async(ioc_, creds, [res,&send](beast::error_code ec) mutable {
+                write_creds_async(ioc_, creds, [res,&send](auto ec) mutable {
                     if (ec) {
                         json_error_response_ec(res, ec, "Writing credentials failed");
                         return send(std::move(res));
