@@ -3,6 +3,9 @@
  * @brief Proxy
  *
  * ./src/proxy/proxy --cred ../data/creds run --cert ../data/server.crt --priv ../data/server.key --dh ../data/dh2048.pem --port 2000 --host 0.0.0.0
+ * wscat -n -c "wss://127.0.0.1:2000/"
+ * curl --insecure -u "admin:admin" https://127.0.0.1:2000/nodes
+ * curl --insecure -u "admin:admin" https://127.0.0.1:2000/users -H "Content-Type: application/json" -d '{"user": "e", "password": "a", "scopes": ["aa"]}'
  * 
  ***********************************************/
 
@@ -286,6 +289,11 @@ struct Handler {
     constexpr static unsigned int body_limit() { return 10000; }
     constexpr static unsigned int limit() { return 8; }
 
+    template <class Send>
+    static void handle_socket(std::string input, Send&& send) {
+        (void)input;
+        send("test");
+    }
 
     // This function produces an HTTP response for the given
     // request. The type of the response object depends on the
@@ -461,7 +469,7 @@ struct Handler {
 };
 
 
-int main_loop(const std::string& cred, int threads, const std::string& host, int port, const std::string& cert, const std::string& priv, const std::string& dh, bool force_ssl, bool no_ssl) {
+int main_loop(const std::string& cred, int threads, const std::string& host, int port, const std::string& cert, const std::string& priv, const std::string& dh, bool force_ssl, bool no_ssl, bool no_websocket) {
     if (threads < 1) {
         std::cout << "Minimum 1 thread" << std::endl;
         return 1;
@@ -500,7 +508,8 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
         ioc,
         ctx,
         tcp::endpoint{address, static_cast<unsigned short>(port)},
-        force_ssl)->run();
+        force_ssl,
+        !no_websocket)->run();
 
     std::cout << "Server running" << std::endl;
 
@@ -539,6 +548,7 @@ int main(int argc, char **argv) {
     std::vector<std::string> scopes;
     bool no_ssl = false;
     bool force_ssl = false;
+    bool no_websocket = false;
 
     auto cli = (
         (clipp::command("help").set(selected,mode::help) % "Show help message")
@@ -546,6 +556,7 @@ int main(int argc, char **argv) {
             (clipp::command("run").set(selected, mode::run) % "Run server",
                 (((clipp::option("--force-ssl").set(force_ssl)) % "Disable automatic HTTP/HTTPS detection and only support SSL")
                     |((clipp::option("--no-ssl").set(no_ssl)) % "Disable SSL encryption")),
+                (clipp::option("--no-ws").set(no_websocket)) % "Disable websocket support",
                 (clipp::option("--cert") & clipp::value("CERT", cert)) % "SSL certificate file",
                 (clipp::option("--priv") & clipp::value("KEY", priv)) % "SSL private key file",
                 (clipp::option("--dh") & clipp::value("DH", dh)) % "SSL dh file",
@@ -578,7 +589,7 @@ int main(int argc, char **argv) {
         }
         case mode::user_set: return user_set(cred, username, scopes);
         case mode::user_remove: return user_remove(cred, username);
-        case mode::run: return main_loop(cred, threads, host, port, cert, priv, dh, force_ssl, no_ssl);
+        case mode::run: return main_loop(cred, threads, host, port, cert, priv, dh, force_ssl, no_ssl, no_websocket);
     }
 
 

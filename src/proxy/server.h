@@ -26,7 +26,7 @@
 #include <boost/make_unique.hpp>
 #include <boost/optional.hpp>
 #include <boost/asio/error.hpp>
-
+#include <boost/asio/buffers_iterator.hpp>
 
 namespace cw {
 namespace proxy {
@@ -70,7 +70,7 @@ fail(beast::error_code ec, char const* what)
 // Echoes back all received WebSocket messages.
 // This uses the Curiously Recurring Template Pattern so that
 // the same code works with both SSL streams and regular sockets.
-template<class Derived>
+template<class Derived, class Handler>
 class websocket_session
 {
     // Access the derived class, this is part of
@@ -146,13 +146,29 @@ class websocket_session
         if(ec)
             fail(ec, "read");
 
-        // Echo the message
-        derived().ws().text(derived().ws().got_text());
-        derived().ws().async_write(
-            buffer_.data(),
-            beast::bind_front_handler(
+        auto const send = [&](std::string out){
+            auto size = out.size();
+            size_t n = boost::asio::buffer_copy(buffer_.prepare(size), boost::asio::buffer(std::move(out)));
+            buffer_.commit(n);
+
+            derived().ws().async_write(
+                buffer_.data(), beast::bind_front_handler(
                 &websocket_session::on_write,
                 derived().shared_from_this()));
+        };
+
+        derived().ws().text(derived().ws().got_text());
+        if (derived().ws().got_text()) {
+            auto d = buffer_.data();
+            std::string input(boost::asio::buffers_begin(d), boost::asio::buffers_end(d));
+
+            // Clear the buffer
+            buffer_.consume(buffer_.size());
+
+            Handler::handle_socket(std::move(input), send);
+        } else {
+            do_read();
+        }
     }
 
     void
@@ -164,9 +180,6 @@ class websocket_session
 
         if(ec)
             return fail(ec, "write");
-
-        // Clear the buffer
-        buffer_.consume(buffer_.size());
 
         // Do another read
         do_read();
@@ -186,9 +199,10 @@ public:
 //------------------------------------------------------------------------------
 
 // Handles a plain WebSocket connection
+template <class Handler>
 class plain_websocket_session
-    : public websocket_session<plain_websocket_session>
-    , public std::enable_shared_from_this<plain_websocket_session>
+    : public websocket_session<plain_websocket_session<Handler>, Handler>
+    , public std::enable_shared_from_this<plain_websocket_session<Handler>>
 {
     websocket::stream<beast::tcp_stream> ws_;
 
@@ -212,9 +226,10 @@ public:
 //------------------------------------------------------------------------------
 
 // Handles an SSL WebSocket connection
+template <class Handler>
 class ssl_websocket_session
-    : public websocket_session<ssl_websocket_session>
-    , public std::enable_shared_from_this<ssl_websocket_session>
+    : public websocket_session<ssl_websocket_session<Handler>, Handler>
+    , public std::enable_shared_from_this<ssl_websocket_session<Handler>>
 {
     websocket::stream<
         beast::ssl_stream<beast::tcp_stream>> ws_;
@@ -237,23 +252,23 @@ public:
     }
 };
 
-template<class Body, class Allocator>
+template<class Handler, class Body, class Allocator>
 void
 make_websocket_session(
     beast::tcp_stream stream,
     http::request<Body, http::basic_fields<Allocator>> req)
 {
-    std::make_shared<plain_websocket_session>(
+    std::make_shared<plain_websocket_session<Handler>>(
         std::move(stream))->run(std::move(req));
 }
 
-template<class Body, class Allocator>
+template<class Handler, class Body, class Allocator>
 void
 make_websocket_session(
     beast::ssl_stream<beast::tcp_stream> stream,
     http::request<Body, http::basic_fields<Allocator>> req)
 {
-    std::make_shared<ssl_websocket_session>(
+    std::make_shared<ssl_websocket_session<Handler>>(
         std::move(stream))->run(std::move(req));
 }
 
@@ -264,7 +279,7 @@ make_websocket_session(
 // This uses the Curiously Recurring Template Pattern so that
 // the same code works with both SSL streams and regular sockets.
 template<class Derived, class Handler>
-class http_session : public Handler
+class http_session
 {
     // Access the derived class, this is part of
     // the Curiously Recurring Template Pattern idiom.
@@ -367,14 +382,16 @@ class http_session : public Handler
 protected:
     beast::flat_buffer buffer_;
     net::io_context& ioc_;
+    bool websocket_support_;
 
 public:
     // Construct the session
     http_session(
-        beast::flat_buffer buffer, net::io_context& ioc)
+        beast::flat_buffer buffer, net::io_context& ioc, bool websocket_support)
         : queue_(*this)
         , buffer_(std::move(buffer))
         , ioc_(ioc)
+        , websocket_support_(websocket_support)
     {
     }
 
@@ -415,7 +432,7 @@ public:
             return fail(ec, "read");
 
         // See if it is a WebSocket Upgrade
-        if(websocket::is_upgrade(parser_->get()))
+        if(websocket_support_ && websocket::is_upgrade(parser_->get()))
         {
             // Disable the timeout.
             // The websocket::stream uses its own timeout settings.
@@ -423,7 +440,7 @@ public:
 
             // Create a websocket session, transferring ownership
             // of both the socket and the HTTP request.
-            return make_websocket_session(
+            return make_websocket_session<Handler>(
                 derived().release_stream(),
                 parser_->release());
         }
@@ -477,9 +494,10 @@ public:
     plain_http_session(
         beast::tcp_stream&& stream,
         beast::flat_buffer&& buffer,
-        net::io_context& ioc)
+        net::io_context& ioc,
+        bool websocket_support)
         : http_session<plain_http_session<Handler>, Handler>(
-            std::move(buffer), ioc)
+            std::move(buffer), ioc, websocket_support)
         , stream_(std::move(stream))
     {
     }
@@ -535,9 +553,10 @@ public:
         beast::tcp_stream&& stream,
         ssl::context& ctx,
         beast::flat_buffer&& buffer,
-        net::io_context& ioc)
+        net::io_context& ioc,
+        bool websocket_support)
         : http_session<ssl_http_session<Handler>, Handler>(
-            std::move(buffer), ioc)
+            std::move(buffer), ioc, websocket_support)
         , stream_(std::move(stream), ctx)
     {
     }
@@ -623,6 +642,7 @@ class detect_session : public std::enable_shared_from_this<detect_session<Handle
     beast::flat_buffer buffer_;
     net::io_context& ioc_;
     bool force_ssl_;
+    bool websocket_support_;
 
 public:
     explicit
@@ -630,11 +650,13 @@ public:
         tcp::socket&& socket,
         ssl::context& ctx,
         net::io_context& ioc,
-        bool force_ssl)
+        bool force_ssl,
+        bool websocket_support)
         : stream_(std::move(socket))
         , ctx_(ctx)
         , ioc_(ioc)
         , force_ssl_(force_ssl)
+        , websocket_support_(websocket_support)
     {
     }
 
@@ -666,7 +688,8 @@ public:
                 std::move(stream_),
                 ctx_,
                 std::move(buffer_),
-                ioc_)->run();
+                ioc_,
+                websocket_support_)->run();
             return;
         }
 
@@ -676,7 +699,8 @@ public:
         std::make_shared<plain_http_session<Handler>>(
             std::move(stream_),
             std::move(buffer_),
-            ioc_)->run();
+            ioc_,
+            websocket_support_)->run();
     }
 };
 
@@ -688,17 +712,20 @@ class listener : public std::enable_shared_from_this<listener<Handler>>
     ssl::context& ctx_;
     tcp::acceptor acceptor_;
     bool force_ssl_;
+    bool websocket_support_;
 
 public:
     listener(
         net::io_context& ioc,
         ssl::context& ctx,
         tcp::endpoint endpoint,
-        bool force_ssl)
+        bool force_ssl,
+        bool websocket_support)
         : ioc_(ioc)
         , ctx_(ctx)
         , acceptor_(net::make_strand(ioc))
         , force_ssl_(force_ssl)
+        , websocket_support_(websocket_support)
     {
         beast::error_code ec;
 
@@ -769,7 +796,8 @@ private:
                 std::move(socket),
                 ctx_,
                 ioc_,
-                force_ssl_)->run();
+                force_ssl_,
+                websocket_support_)->run();
         }
 
         // Accept another connection
