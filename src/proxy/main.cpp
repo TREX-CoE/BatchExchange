@@ -132,16 +132,32 @@ void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF
 }
 
 template <typename T, typename AsyncF, typename CallbackF>
+void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
+    ioc_.post(cw::helper::y_combinator_shared([state=T(), asyncF, callbackF, &ioc_](auto handler) mutable {
+        try {
+            if (asyncF(state)) {
+                callbackF(boost::system::error_code(), std::move(state));
+                return;
+            }
+        } catch (const boost::process::process_error& e) {
+            callbackF(e.code(), std::move(state));
+            return;
+        }
+        ioc_.post(handler);
+    }));
+}
+
+template <typename T, typename AsyncF, typename CallbackF>
 void run_async_vector(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
     ioc_.post(cw::helper::y_combinator_shared([container=std::vector<T>{}, asyncF, callbackF, &ioc_](auto handler) mutable {
         try {
             bool done = asyncF([&container](auto n) { container.push_back(std::move(n)); return true; });
             if (done) {
-                callbackF(std::move(container), boost::system::error_code());
+                callbackF(boost::system::error_code(), std::move(container));
                 return;
             }
         } catch (const boost::process::process_error& e) {
-            callbackF(std::move(container), e.code());
+            callbackF(e.code(), std::move(container));
             return;
         }
         ioc_.post(handler);
@@ -254,6 +270,21 @@ void invalid_auth(http::response<http::string_body>& res) {
     json_error_response(res, "Invalid credentials or scope", "Could not authenticate user or user does not have requested scopes", http::status::unauthorized);
 }
 
+template<typename CallbackF>
+void write_creds_async(boost::asio::io_context& ioc_, const cw::helper::credentials::dict& creds, CallbackF callbackF) {
+    auto stream = std::make_shared<boost::asio::posix::stream_descriptor>(ioc_, ::creat(cw::globals::cred_file().c_str(), 0755));
+    auto s = std::make_shared<std::string>();
+    cw::helper::credentials::write(creds, *s);
+    boost::asio::async_write(*stream, boost::asio::buffer(*s), boost::asio::transfer_all(), [stream, s, creds, callbackF](beast::error_code ec, size_t len) mutable {
+        (void)len;
+        if (!ec) {
+            // store new credentials in global after successfull write
+            cw::globals::creds(creds);
+        }
+        callbackF(ec);
+    });
+}
+
 struct Handler {
     constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
     constexpr static unsigned int body_limit() { return 10000; }
@@ -312,7 +343,7 @@ struct Handler {
 
         auto exec_callback = [&ioc_](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc_, result, cmd); };
 
-        auto send_info = [&send, res](auto container, auto ec) mutable {
+        auto send_info = [&send, res](auto ec, auto container) mutable {
             if (ec) {
                 json_error_response(res, "Running command failed", ec.message(), http::status::internal_server_error);
                 send(std::move(res));
@@ -364,18 +395,14 @@ struct Handler {
             if (!check_json(indocument)) return;
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            std::function<cw::batch::runJob_f> f;
             try {
-                f = cw_proxy_batch::runJob(*batch, indocument);
-            } catch (const std::runtime_error& e) {
-                json_error_response(res, "Request body validation failed", e.what(), http::status::internal_server_error);
-                return send(std::move(res));
-            }
-            ioc_.post(cw::helper::y_combinator([f, batch, &send, &ioc_, res](auto handler) mutable {
-                try {
-                    std::string jobName;
-                    if (f(jobName)) {
+                auto f = cw_proxy_batch::runJob(*batch, indocument);
 
+                run_async_state<std::string>(ioc_, f, [batch, &send, res](auto ec, std::string jobName) mutable {
+                    if (ec) {
+                        json_error_response(res, "Running command failed", ec.message(), http::status::internal_server_error);
+                        return send(std::move(res));
+                    } else {
                         rapidjson::Document document;
                         rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
                         document.SetObject();
@@ -389,18 +416,15 @@ struct Handler {
                         json_response(res, document);
                         send(std::move(res));
                     }
-                } catch (const boost::process::process_error& e) {
-                    auto ec = e.code();
-                    json_error_response(res, "Running command failed", ec.message(), http::status::internal_server_error);
-                    return send(std::move(res));
-                }
-                ioc_.post(handler);
-            }));
-
+                });
+                return;
+            } catch (const std::runtime_error& e) {
+                json_error_response(res, "Request body validation failed", e.what(), http::status::internal_server_error);
+                return send(std::move(res));
+            }
             return;
         } else if (req.method() == http::verb::post && req.target() == "/users") {
             if (!check_auth({"users_add"})) return;
-            auto stream = std::make_shared<boost::asio::posix::stream_descriptor>(ioc_, ::creat(cw::globals::cred_file().c_str(), 0755));
 
             rapidjson::Document indocument;
             if (!check_json(indocument)) return;
@@ -408,21 +432,18 @@ struct Handler {
             try {
                 auto f = usersAdd(indocument);
 
+
                 auto creds = cw::globals::creds();
                 f(creds);
-                auto s = std::make_shared<std::string>();
-                cw::helper::credentials::write(creds, *s);
-                boost::asio::async_write(*stream, boost::asio::buffer(*s), boost::asio::transfer_all(), [stream, s, creds, res, &send](beast::error_code ec, size_t len) mutable {
-                    (void)len;
+                write_creds_async(ioc_, creds, [res,&send](beast::error_code ec) mutable {
                     if (ec) {
                         json_error_response(res, "Writing credentials failed", ec.message(), http::status::internal_server_error);
                         return send(std::move(res));
                     } else {
-                        // store new credentials in global after successfull write
-                        cw::globals::creds(creds);
                         res.result(http::status::created);
                         return send(std::move(res));
                     }
+
                 });
             } catch (const std::runtime_error& e) {
                 json_error_response(res, "Request body validation failed", e.what(), http::status::internal_server_error);
