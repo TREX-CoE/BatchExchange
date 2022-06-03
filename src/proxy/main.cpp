@@ -56,6 +56,7 @@
 #include "shared/sha512.h"
 #include "proxy/salt_hash.h"
 #include "proxy/set_echo.h"
+#include "proxy/validation.h"
 #include "proxy/y_combinator.h"
 #include "shared/string_view.h"
 #include "shared/batch_json.h"
@@ -148,20 +149,20 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
 }
 
 auto usersAdd(rapidjson::Document& document) {
-    if (!document.HasMember("user")) throw std::runtime_error("user is not given");
+    if (!document.HasMember("user")) throw cw::helper::ValidationError("user is not given");
     auto& user = document["user"];
-    if (!user.IsString()) throw std::runtime_error("user is not a string");
+    if (!user.IsString()) throw cw::helper::ValidationError("user is not a string");
 
-    if (!document.HasMember("password")) throw std::runtime_error("password is not given");
+    if (!document.HasMember("password")) throw cw::helper::ValidationError("password is not given");
     auto& password = document["password"];
-    if (!password.IsString()) throw std::runtime_error("password is not a string");
+    if (!password.IsString()) throw cw::helper::ValidationError("password is not a string");
 
     std::set<std::string> scopesset;
     if (document.HasMember("scopes")) {
         auto& scopes = document["scopes"];
-        if (!scopes.IsArray()) throw std::runtime_error("scopes is not an array");
+        if (!scopes.IsArray()) throw cw::helper::ValidationError("scopes is not an array");
         for (const auto& v : scopes.GetArray()) {
-            if (!v.IsString()) throw std::runtime_error("scopes array item is not an string");
+            if (!v.IsString()) throw cw::helper::ValidationError("scopes array item is not an string");
             scopesset.insert(v.GetString());
         }
     }
@@ -249,6 +250,18 @@ void bad_request(http::response<http::string_body>& res) {
     json_error_response(res, "Bad request", "Unsupported API call", http::status::bad_request);
 }
 
+void json_error_response_ec(http::response<http::string_body>& res, std::error_code ec, const std::string& type = "Running command failed") {
+    json_error_response(res, type, ec.message(), http::status::internal_server_error);
+}
+
+void json_error_response_exc(http::response<http::string_body>& res, const std::exception& e, const std::string& type = "Exception thrown") {
+    json_error_response(res, type, e.what(), http::status::internal_server_error);
+}
+void json_error_response_exc(http::response<http::string_body>& res, const cw::helper::ValidationError& e, const std::string& type = "Request body validation failed") {
+    json_error_response(res, type, e.what(), http::status::bad_request);
+}
+
+
 void invalid_auth(http::response<http::string_body>& res) {
     json_error_response(res, "Invalid credentials or scope", "Could not authenticate user or user does not have requested scopes", http::status::unauthorized);
 }
@@ -328,7 +341,7 @@ struct Handler {
 
         auto send_info = [&send, res](auto ec, auto container) mutable {
             if (ec) {
-                json_error_response(res, "Running command failed", ec.message(), http::status::internal_server_error);
+                json_error_response_ec(res, ec);
                 send(std::move(res));
             } else {
                 json_response(res, cw::helper::json::serialize_wrap(container));
@@ -364,7 +377,7 @@ struct Handler {
             auto f = batch->deleteJobById("id", false);
             run_async(ioc_, f, [&send, res](auto ec) mutable {
                 if (ec) {
-                    json_error_response(res, "Running command failed", ec.message(), http::status::internal_server_error);
+                    json_error_response_ec(res, ec);
                     return send(std::move(res));
                 } else {
                     res.result(http::status::ok);
@@ -383,7 +396,7 @@ struct Handler {
 
                 run_async_state<std::string>(ioc_, f, [batch, &send, res](auto ec, std::string jobName) mutable {
                     if (ec) {
-                        json_error_response(res, "Running command failed", ec.message(), http::status::internal_server_error);
+                        json_error_response_ec(res, ec);
                         return send(std::move(res));
                     } else {
                         rapidjson::Document document;
@@ -401,8 +414,8 @@ struct Handler {
                     }
                 });
                 return;
-            } catch (const std::runtime_error& e) {
-                json_error_response(res, "Request body validation failed", e.what(), http::status::internal_server_error);
+            } catch (const cw::helper::ValidationError& e) {
+                json_error_response_exc(res, e);
                 return send(std::move(res));
             }
             return;
@@ -420,7 +433,7 @@ struct Handler {
                 f(creds);
                 write_creds_async(ioc_, creds, [res,&send](beast::error_code ec) mutable {
                     if (ec) {
-                        json_error_response(res, "Writing credentials failed", ec.message(), http::status::internal_server_error);
+                        json_error_response_ec(res, ec, "Writing credentials failed");
                         return send(std::move(res));
                     } else {
                         res.result(http::status::created);
@@ -428,8 +441,8 @@ struct Handler {
                     }
 
                 });
-            } catch (const std::runtime_error& e) {
-                json_error_response(res, "Request body validation failed", e.what(), http::status::internal_server_error);
+            } catch (const cw::helper::ValidationError& e) {
+                json_error_response_exc(res, e);
                 return send(std::move(res));
             }
 
