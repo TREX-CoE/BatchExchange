@@ -18,9 +18,9 @@ set( proxy_HDR
     credentials.h
     globals.h
     salt_hash.h
-    json.h
     set_echo.h
     validation.h
+    response.h
 )
 
 set( CMAKE_CXX_FLAGS "-Werror -Wall -Wextra -pedantic -Wshadow -Wswitch-enum -Wpointer-arith -Wwrite-strings -Wunreachable-code -Wformat=2 -Wundef -Wredundant-decls -Wcast-align -Wcast-qual -Wctor-dtor-privacy -Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-include-dirs -Wnoexcept -Woverloaded-virtual -Wredundant-decls -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=1 -Wundef -Wno-deprecated-copy -Wfloat-equal -Wswitch-default -Wconversion  -Wold-style-cast -Wstrict-overflow=2")

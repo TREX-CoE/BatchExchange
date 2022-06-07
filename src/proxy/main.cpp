@@ -52,7 +52,7 @@
 #include "proxy/batchsystem_json.h"
 #include "proxy/batchsystem_process.h"
 #include "proxy/globals.h"
-#include "proxy/json.h"
+#include "proxy/response.h"
 #include "proxy/server.h"
 #include "shared/obfuscator.h"
 #include "shared/stream_cast.h"
@@ -101,6 +101,13 @@ std::string jsonToString(const rapidjson::Document& document) {
     return buffer.GetString();
 } 
 
+void to_response(http::response<http::string_body>& res, const cw::proxy::response::resp& r) {
+    res.result(r.second);
+    res.set(http::field::content_type, "application/json");
+    res.body() = jsonToString(r.first);
+    res.prepare_payload();
+}
+
 std::string prompt(const std::string& prefix) {
     if (!prefix.empty()) {
         std::cout << prefix;
@@ -114,6 +121,9 @@ std::string prompt(const std::string& prefix) {
 }
 
 }
+
+namespace cw {
+namespace proxy {
 
 void set_ssl_context(ssl::context& ctx, const std::string& cert, const std::string& priv, const std::string& dh) {
     // The SSL context is required, and holds certificates
@@ -242,37 +252,6 @@ void api_openapi(http::response<http::string_body>& res) {
     res.prepare_payload();
 }
 
-void json_response(http::response<http::string_body>& res, const rapidjson::Document& document, http::status status = http::status::ok) {
-    res.result(status);
-    res.set(http::field::content_type, "application/json");
-    res.body() = jsonToString(document);
-    res.prepare_payload();
-}
-
-void json_error_response(http::response<http::string_body>& res, const std::string& type, const std::string& message, http::status status) {
-    json_response(res, cw::proxy::json::generate_json_error(type, message, status), status);
-}
-
-void bad_request(http::response<http::string_body>& res) {
-    json_error_response(res, "Bad request", "Unsupported API call", http::status::bad_request);
-}
-
-void json_error_response_ec(http::response<http::string_body>& res, std::error_code ec, const std::string& type = "Running command failed") {
-    json_error_response(res, type, ec.message(), http::status::internal_server_error);
-}
-
-void json_error_response_exc(http::response<http::string_body>& res, const std::exception& e, const std::string& type = "Exception thrown") {
-    json_error_response(res, type, e.what(), http::status::internal_server_error);
-}
-void json_error_response_exc(http::response<http::string_body>& res, const cw::helper::ValidationError& e, const std::string& type = "Request body validation failed") {
-    json_error_response(res, type, e.what(), http::status::bad_request);
-}
-
-
-void invalid_auth(http::response<http::string_body>& res) {
-    json_error_response(res, "Invalid credentials or scope", "Could not authenticate user or user does not have requested scopes", http::status::unauthorized);
-}
-
 template<typename CallbackF>
 void write_creds_async(boost::asio::io_context& ioc_, const cw::helper::credentials::dict& creds, CallbackF callbackF) {
     auto stream = std::make_shared<boost::asio::posix::stream_descriptor>(ioc_, ::creat(cw::globals::cred_file().c_str(), 0755));
@@ -299,11 +278,10 @@ struct Handler {
 
     template <class Session, class Send>
     static void handle_socket(Session& self, std::string input, Send&& send) {
-        self.scopes.insert("abc");
         rapidjson::Document indocument;
         indocument.Parse(input);
         if (indocument.HasParseError()) {
-            return send(jsonToString(cw::proxy::json::generate_json_error("InvalidInput", "Input not json", http::status::internal_server_error)));
+            return send(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::internal_server_error).first));
         }
 
         std::string tag;
@@ -312,17 +290,32 @@ struct Handler {
         std::string command;
         if (indocument.HasMember("command") && indocument["command"].IsString()) command = indocument["command"].GetString();
 
+        auto check_auth =
+        [&self, &send](std::initializer_list<std::string> scopes)
+        {
+            for (const auto& scope : scopes) {
+                if (!self.scopes.count(scope)) {
+                    send(jsonToString(response::invalid_auth(scope).first));
+                    return false;
+                }
+            }
+            return true;
+        };
+
         if (!command.empty()) {
             if (command == "login") {
                 if (!(indocument.HasMember("user") && indocument["user"].IsString())) throw cw::helper::ValidationError("user invalid");
                 if (!(indocument.HasMember("password") && indocument["password"].IsString())) throw cw::helper::ValidationError("password invalid");
                 if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), self.scopes)) {
-
+                    return send(jsonToString(response::command_status(true).first));
                 } else {
-                    return send(jsonToString(cw::proxy::json::generate_json_error("LoginFailed", "LoginFailed", http::status::internal_server_error)));
+                    return send(jsonToString(response::invalid_login().first));
                 }
+            } else if (command == "logout") {
+                self.scopes.clear();
+                return send(jsonToString(response::command_status(true).first));
             } else if (command == "a") {
-                if (!self.scopes.count("nodes_info")) return send(jsonToString(cw::proxy::json::generate_json_error("AuthError", "scopes missing", http::status::internal_server_error)));
+                if (!check_auth({"nodes_info"})) return;
             }
         }
 
@@ -365,7 +358,7 @@ struct Handler {
                     return true;
                 }
             }
-            invalid_auth(res);
+            to_response(res, response::invalid_auth());
             send(std::move(res));
             return false;
         };
@@ -393,10 +386,10 @@ struct Handler {
 
         auto send_info = [&send, res](auto ec, auto container) mutable {
             if (ec) {
-                json_error_response_ec(res, ec);
+                to_response(res, response::json_error_ec(ec));
                 send(std::move(res));
             } else {
-                json_response(res, cw::helper::json::serialize_wrap(container));
+                to_response(res, {cw::helper::json::serialize_wrap(container), http::status::ok});
                 send(std::move(res));
             }
         };
@@ -432,7 +425,7 @@ struct Handler {
                 auto f = cw_proxy_batch::deleteJobById(*batch, indocument);
                 run_async(ioc_, f, [batch, &send, res](auto ec) mutable {
                     if (ec) {
-                        json_error_response_ec(res, ec);
+                        to_response(res, response::json_error_ec(ec));
                         return send(std::move(res));
                     } else {
                         res.result(http::status::ok);
@@ -440,7 +433,7 @@ struct Handler {
                     }
                 });
             } catch (const cw::helper::ValidationError& e) {
-                json_error_response_exc(res, e);
+                to_response(res, response::json_error_exc(e));
                 return send(std::move(res));
             }
             return;
@@ -455,7 +448,7 @@ struct Handler {
 
                 run_async_state<std::string>(ioc_, f, [batch, &send, res](auto ec, std::string jobName) mutable {
                     if (ec) {
-                        json_error_response_ec(res, ec);
+                        to_response(res, response::json_error_ec(ec));
                         return send(std::move(res));
                     } else {
                         rapidjson::Document document;
@@ -468,13 +461,13 @@ struct Handler {
                             document.AddMember("data", data, allocator);
                         }
 
-                        json_response(res, document);
+                        to_response(res, {std::move(document), http::status::ok});
                         send(std::move(res));
                     }
                 });
                 return;
             } catch (const cw::helper::ValidationError& e) {
-                json_error_response_exc(res, e);
+                to_response(res, response::json_error_exc(e));
                 return send(std::move(res));
             }
             return;
@@ -492,7 +485,7 @@ struct Handler {
                 f(creds);
                 write_creds_async(ioc_, creds, [res,&send](auto ec) mutable {
                     if (ec) {
-                        json_error_response_ec(res, ec, "Writing credentials failed");
+                        to_response(res, response::json_error_ec(ec, "Writing credentials failed"));
                         return send(std::move(res));
                     } else {
                         res.result(http::status::created);
@@ -501,13 +494,13 @@ struct Handler {
 
                 });
             } catch (const cw::helper::ValidationError& e) {
-                json_error_response_exc(res, e);
+                to_response(res, response::json_error_exc(e));
                 return send(std::move(res));
             }
 
             return;
         }
-        bad_request(res);
+        to_response(res, response::bad_request());
         return send(std::move(res));
     }
 };
@@ -577,7 +570,13 @@ int main_loop(const std::string& cred, int threads, const std::string& host, int
     return 0;
 }
 
+}
+}
+
+
 int main(int argc, char **argv) {
+    using namespace cw::proxy;
+
     enum class mode { run, user_set, user_remove, help };
     mode selected;
 
