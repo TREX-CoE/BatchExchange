@@ -73,6 +73,9 @@ fail(beast::error_code ec, char const* what)
 template<class Derived, class Handler>
 class websocket_session : public Handler::websocket_session
 {
+private:
+    boost::asio::io_context& ioc_;
+
     // Access the derived class, this is part of
     // the Curiously Recurring Template Pattern idiom.
     Derived&
@@ -165,7 +168,7 @@ class websocket_session : public Handler::websocket_session
             // Clear the buffer
             buffer_.consume(buffer_.size());
 
-            Handler::handle_socket(*this, std::move(input), send);
+            Handler::handle_socket(*this, ioc_, std::move(input), send);
         } else {
             do_read();
         }
@@ -189,6 +192,8 @@ class websocket_session : public Handler::websocket_session
     }
 
 public:
+    websocket_session(boost::asio::io_context& ioc): ioc_(ioc) {}
+
     // Start the asynchronous operation
     template<class Body, class Allocator>
     void
@@ -213,8 +218,9 @@ public:
     // Create the session
     explicit
     plain_websocket_session(
-        beast::tcp_stream&& stream)
-        : ws_(std::move(stream))
+        beast::tcp_stream&& stream,
+        boost::asio::io_context& ioc)
+        : websocket_session<plain_websocket_session<Handler>, Handler>(ioc), ws_(std::move(stream))
     {
     }
 
@@ -241,8 +247,9 @@ public:
     // Create the ssl_websocket_session
     explicit
     ssl_websocket_session(
-        beast::ssl_stream<beast::tcp_stream>&& stream)
-        : ws_(std::move(stream))
+        beast::ssl_stream<beast::tcp_stream>&& stream,
+        boost::asio::io_context& ioc)
+        : websocket_session<ssl_websocket_session<Handler>, Handler>(ioc), ws_(std::move(stream))
     {
     }
 
@@ -259,20 +266,22 @@ template<class Handler, class Body, class Allocator>
 void
 make_websocket_session(
     beast::tcp_stream stream,
-    http::request<Body, http::basic_fields<Allocator>> req)
+    http::request<Body, http::basic_fields<Allocator>> req,
+    boost::asio::io_context& ioc_)
 {
     std::make_shared<plain_websocket_session<Handler>>(
-        std::move(stream))->run(std::move(req));
+        std::move(stream), ioc_)->run(std::move(req));
 }
 
 template<class Handler, class Body, class Allocator>
 void
 make_websocket_session(
     beast::ssl_stream<beast::tcp_stream> stream,
-    http::request<Body, http::basic_fields<Allocator>> req)
+    http::request<Body, http::basic_fields<Allocator>> req,
+    boost::asio::io_context& ioc_)
 {
     std::make_shared<ssl_websocket_session<Handler>>(
-        std::move(stream))->run(std::move(req));
+        std::move(stream), ioc_)->run(std::move(req));
 }
 
 
@@ -445,7 +454,8 @@ public:
             // of both the socket and the HTTP request.
             return make_websocket_session<Handler>(
                 derived().release_stream(),
-                parser_->release());
+                parser_->release(),
+                ioc_);
         }
 
         // Send the response
