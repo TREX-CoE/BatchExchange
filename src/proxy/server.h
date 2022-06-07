@@ -71,7 +71,7 @@ fail(beast::error_code ec, char const* what)
 // This uses the Curiously Recurring Template Pattern so that
 // the same code works with both SSL streams and regular sockets.
 template<class Derived, class Handler>
-class websocket_session
+class websocket_session : public Handler::websocket_session
 {
     // Access the derived class, this is part of
     // the Curiously Recurring Template Pattern idiom.
@@ -165,7 +165,7 @@ class websocket_session
             // Clear the buffer
             buffer_.consume(buffer_.size());
 
-            Handler::handle_socket(std::move(input), send);
+            Handler::handle_socket(*this, std::move(input), send);
         } else {
             do_read();
         }

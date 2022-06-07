@@ -26,24 +26,35 @@ cw::helper::credentials::dict creds() {
     return creds_;
 }
 
-bool creds_check(string_view header, const std::set<std::string>& scopes) {
-    std::string user, pass;
-    if (cw::http::parse_auth_header(header, user, pass)) {
-        std::lock_guard<std::mutex> guard(m_creds_);
-        auto it = creds_.find(user);
-        if (it != creds_.end()) {
-            const auto hash = cw::proxy::salt_hash(it->second.salt, pass);
-            if (hash == it->second.hash) {
-                if (!scopes.empty()) {
-                    for (const auto& s : scopes) {
-                        if (it->second.scopes.find(s) == it->second.scopes.end()) {
-                            // user does not have requested scope
-                            return false;
-                        }
+bool creds_get(const std::string& user, const std::string& pass, std::set<std::string>& scopes) {
+    std::lock_guard<std::mutex> guard(m_creds_);
+    auto it = creds_.find(user);
+    if (it != creds_.end()) {
+        const auto hash = cw::proxy::salt_hash(it->second.salt, pass);
+        if (hash == it->second.hash) {
+            scopes = it->second.scopes;
+            return true;
+        }
+    }
+    return false;
+}
+
+
+bool creds_check(const std::string& user, const std::string& pass, const std::set<std::string>& scopes) {
+    std::lock_guard<std::mutex> guard(m_creds_);
+    auto it = creds_.find(user);
+    if (it != creds_.end()) {
+        const auto hash = cw::proxy::salt_hash(it->second.salt, pass);
+        if (hash == it->second.hash) {
+            if (!scopes.empty()) {
+                for (const auto& s : scopes) {
+                    if (it->second.scopes.find(s) == it->second.scopes.end()) {
+                        // user does not have requested scope
+                        return false;
                     }
                 }
-                return true;
             }
+            return true;
         }
     }
     return false;

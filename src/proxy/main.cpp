@@ -293,16 +293,47 @@ struct Handler {
     constexpr static unsigned int body_limit() { return 10000; }
     constexpr static unsigned int limit() { return 8; }
 
-    template <class Send>
-    static void handle_socket(std::string input, Send&& send) {
+    struct websocket_session {
+        std::set<std::string> scopes;
+    };
+
+    template <class Session, class Send>
+    static void handle_socket(Session& self, std::string input, Send&& send) {
+        self.scopes.insert("abc");
         rapidjson::Document indocument;
         indocument.Parse(input);
         if (indocument.HasParseError()) {
             return send(jsonToString(cw::proxy::json::generate_json_error("InvalidInput", "Input not json", http::status::internal_server_error)));
         }
 
+        std::string tag;
+        if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
+        
+        std::string command;
+        if (indocument.HasMember("command") && indocument["command"].IsString()) command = indocument["command"].GetString();
 
-        send("test");
+        if (!command.empty()) {
+            if (command == "login") {
+                if (!(indocument.HasMember("user") && indocument["user"].IsString())) throw cw::helper::ValidationError("user invalid");
+                if (!(indocument.HasMember("password") && indocument["password"].IsString())) throw cw::helper::ValidationError("password invalid");
+                if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), self.scopes)) {
+
+                } else {
+                    return send(jsonToString(cw::proxy::json::generate_json_error("LoginFailed", "LoginFailed", http::status::internal_server_error)));
+                }
+            } else if (command == "a") {
+                if (!self.scopes.count("nodes_info")) return send(jsonToString(cw::proxy::json::generate_json_error("AuthError", "scopes missing", http::status::internal_server_error)));
+            }
+        }
+
+
+        rapidjson::Document document;
+        rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+        document.SetObject();
+        if (!tag.empty()) {
+            document.AddMember("tag", tag, allocator);
+        }
+        send(jsonToString(document));
     }
 
     // This function produces an HTTP response for the given
@@ -328,12 +359,15 @@ struct Handler {
         auto check_auth =
         [&send, &res, &req](const std::set<std::string>& scopes = {}) mutable
         {
-            bool authed = cw::globals::creds_check(req[http::field::authorization], scopes);
-            if (!authed) {
-                invalid_auth(res);
-                send(std::move(res));
+            std::string user, pass;
+            if (cw::http::parse_auth_header(req[http::field::authorization], user, pass)) {
+                if (cw::globals::creds_check(user, pass, scopes)) {
+                    return true;
+                }
             }
-            return authed;
+            invalid_auth(res);
+            send(std::move(res));
+            return false;
         };
 
         auto check_json = 
