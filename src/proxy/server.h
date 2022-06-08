@@ -140,8 +140,7 @@ private:
         if(ec)
             return fail(ec, "read");
 
-        // Send to all connections
-        // TODO state_->send(beast::buffers_to_string(buffer_.data()));
+        // Handle message
         Handler::handle_socket(*this, ioc_, beast::buffers_to_string(buffer_.data()));
 
 
@@ -195,6 +194,11 @@ private:
         do_accept(std::move(req));
     }
 
+    template<class H, class Body, class Allocator>
+    friend void make_websocket_session(beast::tcp_stream stream, http::request<Body, http::basic_fields<Allocator>> req, boost::asio::io_context& ioc_);
+    template<class H, class Body, class Allocator>
+    friend void make_websocket_session(beast::ssl_stream<beast::tcp_stream> stream, http::request<Body, http::basic_fields<Allocator>> req, boost::asio::io_context& ioc_);
+
 protected:
     websocket_session(boost::asio::io_context& ioc): ioc_(ioc) {}
 public:
@@ -211,13 +215,6 @@ public:
                 derived().shared_from_this(),
                 ss));
     }
-
-    template<class H, class Body, class Allocator>
-    friend void make_websocket_session(beast::tcp_stream stream, http::request<Body, http::basic_fields<Allocator>> req, boost::asio::io_context& ioc_);
-    template<class H, class Body, class Allocator>
-    friend void make_websocket_session(beast::ssl_stream<beast::tcp_stream> stream, http::request<Body, http::basic_fields<Allocator>> req, boost::asio::io_context& ioc_);
-
-
 };
 
 

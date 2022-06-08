@@ -267,11 +267,6 @@ void write_creds_async(boost::asio::io_context& ioc_, const cw::helper::credenti
     });
 }
 
-struct CmdCache {
-    unsigned int cnt;
-    std::vector<std::string> outputs;
-};
-
 struct Handler {
     constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
     constexpr static unsigned int body_limit() { return 10000; }
@@ -281,109 +276,24 @@ struct Handler {
         std::set<std::string> scopes;
     };
 
-    template <class Session, class Send>
-    static void handle_socket2(Session& self, boost::asio::io_context& ioc_, std::string input, Send&& send) {
-        rapidjson::Document indocument;
-        indocument.Parse(input);
-        if (indocument.HasParseError()) {
-            return send(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::internal_server_error).first));
-        }
-
-        auto check_auth =
-        [&self, &send](std::initializer_list<std::string> scopes)
-        {
-            for (const auto& scope : scopes) {
-                if (!self.scopes.count(scope)) {
-                    send(jsonToString(response::invalid_auth(scope).first));
-                    return false;
-                }
-            }
-            return true;
-        };
-
-        auto exec_callback = [&ioc_](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc_, result, cmd); };
-
-
-        if (indocument.IsArray()) {
-            auto cache = std::make_shared<CmdCache>();
-            for (const auto& command_ : indocument.GetArray()) {
-                const auto& cmd = command_.GetObject();
-                std::string cmd_;
-                if (cmd.HasMember("command") && cmd["command"].IsString()) cmd_ = cmd["command"].GetString();
-
-                if (cmd_ == "getNodes") {
-                    if (!check_auth({"nodes_info"})) return;
-
-                    std::cout << "1" << std::endl;
-
-
-                    cache->cnt++;
-                    std::cout << "2" << std::endl;
-
-
-                    std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                    run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [&send, cache](auto ec, auto container) mutable {
-                        
-                        if (ec) {
-                            cache->outputs.push_back(jsonToString(response::json_error_ec(ec).first));
-                        } else {
-                            cache->outputs.push_back(jsonToString(cw::helper::json::serialize_wrap(container)));
-                        }
-                        if (cache->outputs.size() == cache->cnt) {
-                            std::string out;
-                            for (const auto o : cache->outputs) {
-                                out += o;
-                            }
-                            return send(std::move(out));
-                        } 
-                    });
-                }
-            }
-
-            return;
-            
-        } else {
-
-            std::string tag;
-            if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
-            
-            std::string command;
-            if (indocument.HasMember("command") && indocument["command"].IsString()) command = indocument["command"].GetString();
-
-
-            if (!command.empty()) {
-                if (command == "login") {
-                    if (!(indocument.HasMember("user") && indocument["user"].IsString())) throw cw::helper::ValidationError("user invalid");
-                    if (!(indocument.HasMember("password") && indocument["password"].IsString())) throw cw::helper::ValidationError("password invalid");
-                    if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), self.scopes)) {
-                        return send(jsonToString(response::command_status(true).first));
-                    } else {
-                        return send(jsonToString(response::invalid_login().first));
-                    }
-                } else if (command == "logout") {
-                    self.scopes.clear();
-                    return send(jsonToString(response::command_status(true).first));
-                } else if (command == "a") {
-                    if (!check_auth({"nodes_info"})) return;
-                }
-            }
-        }
-
-        rapidjson::Document document;
-        document.SetObject();
-        //if (!tag.empty()) {
-        //    document.AddMember("tag", tag, allocator);
-        //}
-        send(jsonToString(document));
-    }
-
     template <class Session>
     static void handle_socket(Session& self, boost::asio::io_context& ioc_, std::string input) {
         rapidjson::Document indocument;
         indocument.Parse(input);
         if (indocument.HasParseError()) {
-            return self.send(std::make_shared<std::string>(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::internal_server_error).first)));
+            return self.send(std::make_shared<std::string>(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::bad_request).first)));
         }
+        if (!indocument.IsObject()) {
+            return self.send(std::make_shared<std::string>(jsonToString(response::json_error("InvalidInput", "Input not a json object", http::status::bad_request).first)));
+        }
+        
+        if (!(indocument.HasMember("command") && indocument["command"].IsString())) {
+            return self.send(std::make_shared<std::string>(jsonToString(response::json_error("Command Error", "Command string not given", http::status::bad_request).first)));
+        }
+        std::string command = indocument["command"].GetString();
+
+        std::string tag;
+        if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
 
         auto check_auth =
         [&self](std::initializer_list<std::string> scopes)
@@ -397,72 +307,37 @@ struct Handler {
             return true;
         };
 
+        // note capture send functor by copy to ensure tag's lifetime
+        auto send = [&self, tag](rapidjson::Document document) {
+            if (!tag.empty()) document.AddMember("tag", tag, document.GetAllocator());
+            self.send(std::make_shared<std::string>(jsonToString(document)));
+        };
+
         auto exec_callback = [&ioc_](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc_, result, cmd); };
 
-
-        if (indocument.IsArray()) {
-            auto cache = std::make_shared<CmdCache>();
-            for (const auto& command_ : indocument.GetArray()) {
-                const auto& cmd = command_.GetObject();
-                std::string cmd_;
-                if (cmd.HasMember("command") && cmd["command"].IsString()) cmd_ = cmd["command"].GetString();
-
-                if (cmd_ == "getNodes") {
-                    if (!check_auth({"nodes_info"})) return;
-
-                    std::cout << "1" << std::endl;
-
-
-                    cache->cnt++;
-                    std::cout << "2" << std::endl;
-
-
-                    std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                    run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [&self, cache](auto ec, auto container) mutable {
-                        
-                        if (ec) {
-                            cache->outputs.push_back(jsonToString(response::json_error_ec(ec).first));
-                        } else {
-                            cache->outputs.push_back(jsonToString(cw::helper::json::serialize_wrap(container)));
-                        }
-                        if (cache->outputs.size() == cache->cnt) {
-
-                            auto out = std::make_shared<std::string>();
-                            for (const auto o : cache->outputs) {
-                                (*out) += o;
-                            }
-                            return self.send(out);
-                        } 
-                    });
-                }
+        if (command == "login") {
+            if (!(indocument.HasMember("user") && indocument["user"].IsString())) throw cw::helper::ValidationError("user invalid");
+            if (!(indocument.HasMember("password") && indocument["password"].IsString())) throw cw::helper::ValidationError("password invalid");
+            if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), self.scopes)) {
+                return send(response::command_status(true).first);
+            } else {
+                return send(response::invalid_login().first);
             }
-
-            return;
+        } else if (command == "logout") {
+            self.scopes.clear();
+            return send(response::command_status(true).first);
+        } else if (command == "getNodes") {
+            if (!check_auth({"nodes_info"})) return;
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+                if (ec) {
+                    return send(response::json_error_ec(ec).first);
+                } else {
+                    return send(cw::helper::json::serialize_wrap(container));
+                }
+            });
         } else {
-            std::string tag;
-            if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
-            
-            std::string command;
-            if (indocument.HasMember("command") && indocument["command"].IsString()) command = indocument["command"].GetString();
-
-
-            if (!command.empty()) {
-                if (command == "login") {
-                    if (!(indocument.HasMember("user") && indocument["user"].IsString())) throw cw::helper::ValidationError("user invalid");
-                    if (!(indocument.HasMember("password") && indocument["password"].IsString())) throw cw::helper::ValidationError("password invalid");
-                    if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), self.scopes)) {
-                        return self.send(std::make_shared<std::string>(jsonToString(response::command_status(true).first)));
-                    } else {
-                        return self.send(std::make_shared<std::string>(jsonToString(response::invalid_login().first)));
-                    }
-                } else if (command == "logout") {
-                    self.scopes.clear();
-                    return self.send(std::make_shared<std::string>(jsonToString(response::command_status(true).first)));
-                } else if (command == "a") {
-                    if (!check_auth({"nodes_info"})) return;
-                }
-            }
-
+            return send(response::json_error("Command Unknown", "Unknown command: "+command, http::status::bad_request).first);
         }
     }
 
