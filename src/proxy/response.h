@@ -10,6 +10,8 @@
 
 #include <string>
 
+#include "batchsystem/json.h"
+
 namespace cw {
 namespace proxy {
 namespace response {
@@ -55,13 +57,75 @@ resp invalid_login() {
     return json_error("Invalid login", "Could not authenticate user for login", boost::beast::http::status::unauthorized);
 }
 
-resp command_status(bool success) {
+resp commandUnknown(const std::string& command) {
+    return json_error("Command Unknown", "Unknown command: "+command, boost::beast::http::status::bad_request);
+}
+
+resp commandSuccess() {
     resp r;
     rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
     r.first.SetObject();
-    r.first.AddMember("success", success, allocator);
+    r.first.AddMember("success", true, allocator);
     r.second = boost::beast::http::status::ok;
     return r;
+}
+
+resp commandReturn(std::error_code ec, const std::string& failType = "Running command failed", boost::beast::http::status statusFail=boost::beast::http::status::ok) {
+    if (ec) {
+        return json_error_ec(ec, failType);
+    } else {
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.second = statusFail;
+        r.first.SetObject();
+        {
+            rapidjson::Value data;
+            data.SetObject();
+            data.AddMember("success", true, allocator);
+            r.first.AddMember("data", data, allocator);
+        }
+        return r;
+    }
+}
+
+template <typename T>
+resp containerReturn(std::error_code ec, const std::vector<T>& entry) {
+    if (ec) {
+        return json_error_ec(ec);
+    } else {
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.first.SetObject();
+
+        rapidjson::Value entryArr;
+        entryArr.SetArray();
+        for (const auto& e : entry) {
+            rapidjson::Document subdocument(&r.first.GetAllocator());
+            cw::batch::json::serialize(e, subdocument);
+            entryArr.PushBack(subdocument, allocator);
+        }
+        r.first.AddMember("data", entryArr, allocator);
+        r.second = boost::beast::http::status::ok;
+        return r;
+    }
+}
+
+resp runJobReturn(std::error_code ec, const std::string& jobName) {
+    if (ec) {
+        return json_error_ec(ec);
+    } else {
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.second = boost::beast::http::status::ok;
+        r.first.SetObject();
+        {
+            rapidjson::Value data;
+            data.SetObject();
+            data.AddMember("job", jobName, allocator);
+            r.first.AddMember("data", data, allocator);
+        }
+        return r;
+    }
 }
 
 }

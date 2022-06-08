@@ -62,8 +62,6 @@
 #include "proxy/validation.h"
 #include "proxy/y_combinator.h"
 #include "shared/string_view.h"
-#include "shared/batch_json.h"
-
 
 #include "clipp.h"
 
@@ -295,22 +293,22 @@ struct Handler {
         std::string tag;
         if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
 
-        auto check_auth =
-        [&self](std::initializer_list<std::string> scopes)
-        {
-            for (const auto& scope : scopes) {
-                if (!self.scopes.count(scope)) {
-                    self.send(std::make_shared<std::string>(jsonToString(response::invalid_auth(scope).first)));
-                    return false;
-                }
-            }
-            return true;
-        };
-
         // note capture send functor by copy to ensure tag's lifetime
         auto send = [&self, tag](rapidjson::Document document) {
             if (!tag.empty()) document.AddMember("tag", tag, document.GetAllocator());
             self.send(std::make_shared<std::string>(jsonToString(document)));
+        };
+
+        auto check_auth =
+        [&self, send](std::initializer_list<std::string> scopes)
+        {
+            for (const auto& scope : scopes) {
+                if (!self.scopes.count(scope)) {
+                    send(response::invalid_auth(scope).first);
+                    return false;
+                }
+            }
+            return true;
         };
 
         auto exec_callback = [&ioc_](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc_, result, cmd); };
@@ -319,25 +317,21 @@ struct Handler {
             if (!(indocument.HasMember("user") && indocument["user"].IsString())) throw cw::helper::ValidationError("user invalid");
             if (!(indocument.HasMember("password") && indocument["password"].IsString())) throw cw::helper::ValidationError("password invalid");
             if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), self.scopes)) {
-                return send(response::command_status(true).first);
+                return send(response::commandSuccess().first);
             } else {
                 return send(response::invalid_login().first);
             }
         } else if (command == "logout") {
             self.scopes.clear();
-            return send(response::command_status(true).first);
+            return send(response::commandSuccess().first);
         } else if (command == "getNodes") {
             if (!check_auth({"nodes_info"})) return;
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
             run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
-                if (ec) {
-                    return send(response::json_error_ec(ec).first);
-                } else {
-                    return send(cw::helper::json::serialize_wrap(container));
-                }
+                return send(response::containerReturn(ec, container).first);
             });
         } else {
-            return send(response::json_error("Command Unknown", "Unknown command: "+command, http::status::bad_request).first);
+            return send(response::commandUnknown(command).first);
         }
     }
 
@@ -398,123 +392,79 @@ struct Handler {
         auto exec_callback = [&ioc_](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc_, result, cmd); };
 
         auto send_info = [&send, res](auto ec, auto container) mutable {
-            if (ec) {
-                to_response(res, response::json_error_ec(ec));
-                send(std::move(res));
-            } else {
-                to_response(res, {cw::helper::json::serialize_wrap(container), http::status::ok});
-                send(std::move(res));
-            }
-        };
-            
-        if (req.method() == http::verb::get && req.target() == "/openapi.json") {
-            api_openapi(res);
+            to_response(res, response::containerReturn(ec, container));
             return send(std::move(res));
-        } else if (req.method() == http::verb::get && req.target() == "/nodes") {
-            if (!check_auth({"nodes_info"})) return;
+        };
+        
+        try {
+            if (req.method() == http::verb::get && req.target() == "/openapi.json") {
+                api_openapi(res);
+                return send(std::move(res));
+            } else if (req.method() == http::verb::get && req.target() == "/nodes") {
+                if (!check_auth({"nodes_info"})) return;
 
-            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
-            return;
-        } else if (req.method() == http::verb::get && req.target() == "/queues") {
-            if (!check_auth({"queues_info"})) return;
+                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+                run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
+                return;
+            } else if (req.method() == http::verb::get && req.target() == "/queues") {
+                if (!check_auth({"queues_info"})) return;
 
-            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_state<std::vector<cw::batch::Queue>>(ioc_, [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
-            return;
-        } else if (req.method() == http::verb::get && req.target() == "/jobs") {
-            if (!check_auth({"jobs_info"})) return;
+                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+                run_async_state<std::vector<cw::batch::Queue>>(ioc_, [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
+                return;
+            } else if (req.method() == http::verb::get && req.target() == "/jobs") {
+                if (!check_auth({"jobs_info"})) return;
 
-            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_state<std::vector<cw::batch::Job>>(ioc_, [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
-            return;
-        } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
-            if (!check_auth({"jobs_delete"})) return;
-            rapidjson::Document indocument;
-            if (!check_json(indocument)) return;
+                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+                run_async_state<std::vector<cw::batch::Job>>(ioc_, [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
+                return;
+            } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
+                if (!check_auth({"jobs_delete"})) return;
+                rapidjson::Document indocument;
+                if (!check_json(indocument)) return;
 
-            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            try {
+                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
                 auto f = cw_proxy_batch::deleteJobById(*batch, indocument);
                 run_async(ioc_, f, [batch, &send, res](auto ec) mutable {
-                    if (ec) {
-                        to_response(res, response::json_error_ec(ec));
-                        return send(std::move(res));
-                    } else {
-                        res.result(http::status::ok);
-                        return send(std::move(res));
-                    }
+                    to_response(res, response::commandReturn(ec));
+                    return send(std::move(res));
                 });
-            } catch (const cw::helper::ValidationError& e) {
-                to_response(res, response::json_error_exc(e));
-                return send(std::move(res));
-            }
-            return;
-        } else if (req.method() == http::verb::post && req.target() == "/jobs/submit") {
-            if (!check_auth({"jobs_submit"})) return;
-            rapidjson::Document indocument;
-            if (!check_json(indocument)) return;
+                return;
+            } else if (req.method() == http::verb::post && req.target() == "/jobs/submit") {
+                if (!check_auth({"jobs_submit"})) return;
+                rapidjson::Document indocument;
+                if (!check_json(indocument)) return;
 
-            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            try {
+                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
                 auto f = cw_proxy_batch::runJob(*batch, indocument);
 
                 run_async_state<std::string>(ioc_, f, [batch, &send, res](auto ec, std::string jobName) mutable {
-                    if (ec) {
-                        to_response(res, response::json_error_ec(ec));
-                        return send(std::move(res));
-                    } else {
-                        rapidjson::Document document;
-                        rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
-                        document.SetObject();
-                        {
-                            rapidjson::Value data;
-                            data.SetObject();
-                            data.AddMember("job", jobName, allocator);
-                            document.AddMember("data", data, allocator);
-                        }
-
-                        to_response(res, {std::move(document), http::status::ok});
-                        send(std::move(res));
-                    }
+                    to_response(res, response::runJobReturn(ec, jobName));
+                    send(std::move(res));
                 });
                 return;
-            } catch (const cw::helper::ValidationError& e) {
-                to_response(res, response::json_error_exc(e));
-                return send(std::move(res));
-            }
-            return;
-        } else if (req.method() == http::verb::post && req.target() == "/users") {
-            if (!check_auth({"users_add"})) return;
+            } else if (req.method() == http::verb::post && req.target() == "/users") {
+                if (!check_auth({"users_add"})) return;
 
-            rapidjson::Document indocument;
-            if (!check_json(indocument)) return;
+                rapidjson::Document indocument;
+                if (!check_json(indocument)) return;
 
-            try {
                 auto f = usersAdd(indocument);
-
-
                 auto creds = cw::globals::creds();
                 f(creds);
                 write_creds_async(ioc_, creds, [res,&send](auto ec) mutable {
-                    if (ec) {
-                        to_response(res, response::json_error_ec(ec, "Writing credentials failed"));
-                        return send(std::move(res));
-                    } else {
-                        res.result(http::status::created);
-                        return send(std::move(res));
-                    }
-
+                    to_response(res, response::commandReturn(ec, "Writing credentials failed", http::status::created));
+                    return send(std::move(res));
                 });
-            } catch (const cw::helper::ValidationError& e) {
-                to_response(res, response::json_error_exc(e));
+                return;
+            } else {
+                to_response(res, response::bad_request());
                 return send(std::move(res));
             }
-
-            return;
+        } catch (const cw::helper::ValidationError& e) {
+            to_response(res, response::json_error_exc(e));
+            return send(std::move(res));
         }
-        to_response(res, response::bad_request());
-        return send(std::move(res));
     }
 };
 

@@ -24,7 +24,6 @@ set(SHARED_HDR
     joinString.h
     http.h
     randomHex.h
-    batch_json.h
 )
 
 include_directories(${MAIN_INCLUDE_DIR})
