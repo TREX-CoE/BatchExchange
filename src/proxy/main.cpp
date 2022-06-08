@@ -166,10 +166,13 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
     }));
 }
 
-auto usersAdd(rapidjson::Document& document) {
-    if (!document.HasMember("user")) throw cw::helper::ValidationError("user is not given");
-    auto& user = document["user"];
-    if (!user.IsString()) throw cw::helper::ValidationError("user is not a string");
+auto usersAdd(rapidjson::Document& document, std::string username="") {
+    if (username.empty()) {
+        if (!document.HasMember("user")) throw cw::helper::ValidationError("user is not given");
+        auto& user = document["user"];
+        if (!user.IsString()) throw cw::helper::ValidationError("user is not a string");
+        username = user.GetString();
+    }
 
     if (!document.HasMember("password")) throw cw::helper::ValidationError("password is not given");
     auto& password = document["password"];
@@ -185,8 +188,8 @@ auto usersAdd(rapidjson::Document& document) {
         }
     }
 
-    return [user=user.GetString(), password=password.GetString(), scopes=std::move(scopesset)](cw::helper::credentials::dict& creds){
-        cw::helper::credentials::set_user(creds, user, scopes, password);
+    return [username, password=password.GetString(), scopes=std::move(scopesset)](cw::helper::credentials::dict& creds){
+        cw::helper::credentials::set_user(creds, username, scopes, password);
     };
 }
 
@@ -243,11 +246,22 @@ int user_remove(const std::string& cred_file, const std::string& username) {
     return 0;
 }
 
+
 void api_openapi(http::response<http::string_body>& res) {
     res.result(http::status::ok);
     res.set(http::field::content_type, "application/json");
     res.body() = cw::openapi::openapi_json;
     res.prepare_payload();
+}
+
+response::resp ws_login(std::set<std::string>& scopes, const rapidjson::Document& indocument) {
+     if (!(indocument.HasMember("user") && indocument["user"].IsString())) throw cw::helper::ValidationError("user invalid");
+    if (!(indocument.HasMember("password") && indocument["password"].IsString())) throw cw::helper::ValidationError("password invalid");
+    if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), scopes)) {
+        return response::commandSuccess();
+    } else {
+        return response::invalid_login();
+    }
 }
 
 template<typename CallbackF>
@@ -284,11 +298,6 @@ struct Handler {
         if (!indocument.IsObject()) {
             return self.send(std::make_shared<std::string>(jsonToString(response::json_error("InvalidInput", "Input not a json object", http::status::bad_request).first)));
         }
-        
-        if (!(indocument.HasMember("command") && indocument["command"].IsString())) {
-            return self.send(std::make_shared<std::string>(jsonToString(response::json_error("Command Error", "Command string not given", http::status::bad_request).first)));
-        }
-        std::string command = indocument["command"].GetString();
 
         std::string tag;
         if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
@@ -298,6 +307,14 @@ struct Handler {
             if (!tag.empty()) document.AddMember("tag", tag, document.GetAllocator());
             self.send(std::make_shared<std::string>(jsonToString(document)));
         };
+        
+        if (!(indocument.HasMember("command") && indocument["command"].IsString())) {
+            return send(response::json_error("Command Error", "Command string not given", http::status::bad_request).first);
+        }
+        std::string command = indocument["command"].GetString();
+
+
+        
 
         auto check_auth =
         [&self, send](std::initializer_list<std::string> scopes)
@@ -313,25 +330,33 @@ struct Handler {
 
         auto exec_callback = [&ioc_](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc_, result, cmd); };
 
-        if (command == "login") {
-            if (!(indocument.HasMember("user") && indocument["user"].IsString())) throw cw::helper::ValidationError("user invalid");
-            if (!(indocument.HasMember("password") && indocument["password"].IsString())) throw cw::helper::ValidationError("password invalid");
-            if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), self.scopes)) {
+        try {
+            if (command == "login") {
+                return send(ws_login(self.scopes, indocument).first);
+            } else if (command == "logout") {
+                self.scopes.clear();
                 return send(response::commandSuccess().first);
+            } else if (command == "getNodes") {
+                if (!check_auth({"nodes_info"})) return;
+                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+                run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+                    return send(response::containerReturn(ec, container).first);
+                });
+            } else if (command == "addUser") {
+                if (!check_auth({"users_add"})) return;
+
+                auto f = usersAdd(indocument);
+                auto creds = cw::globals::creds();
+                f(creds);
+                write_creds_async(ioc_, creds, [send](auto ec) {
+                    return send(response::addUserReturn(ec).first);
+                });
+                return;
             } else {
-                return send(response::invalid_login().first);
+                return send(response::commandUnknown(command).first);
             }
-        } else if (command == "logout") {
-            self.scopes.clear();
-            return send(response::commandSuccess().first);
-        } else if (command == "getNodes") {
-            if (!check_auth({"nodes_info"})) return;
-            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
-                return send(response::containerReturn(ec, container).first);
-            });
-        } else {
-            return send(response::commandUnknown(command).first);
+        } catch (const cw::helper::ValidationError& e) {
+            return send(response::json_error_exc(e).first);
         }
     }
 
@@ -452,13 +477,13 @@ struct Handler {
                 auto f = usersAdd(indocument);
                 auto creds = cw::globals::creds();
                 f(creds);
-                write_creds_async(ioc_, creds, [res,&send](auto ec) mutable {
-                    to_response(res, response::commandReturn(ec, "Writing credentials failed", http::status::created));
+                write_creds_async(ioc_, creds, [res, &send](auto ec) mutable {
+                    to_response(res, response::addUserReturn(ec));
                     return send(std::move(res));
                 });
                 return;
             } else {
-                to_response(res, response::bad_request());
+                to_response(res, response::requestUnknown(std::string(req.target()), req.method()));
                 return send(std::move(res));
             }
         } catch (const cw::helper::ValidationError& e) {

@@ -61,6 +61,10 @@ resp commandUnknown(const std::string& command) {
     return json_error("Command Unknown", "Unknown command: "+command, boost::beast::http::status::bad_request);
 }
 
+resp requestUnknown(const std::string& uri, boost::beast::http::verb method) {
+    return json_error("BadRequest", "Unknown request: "+std::string(boost::beast::http::to_string(method))+" "+uri, boost::beast::http::status::bad_request);
+}
+
 resp commandSuccess() {
     resp r;
     rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
@@ -127,6 +131,11 @@ resp runJobReturn(std::error_code ec, const std::string& jobName) {
         return r;
     }
 }
+
+resp addUserReturn(std::error_code ec) {
+    return commandReturn(ec, "Writing credentials failed", boost::beast::http::status::created);
+}
+
 
 }
 }
