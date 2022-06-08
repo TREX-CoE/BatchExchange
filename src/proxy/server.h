@@ -74,6 +74,7 @@ template<class Derived, class Handler>
 class websocket_session : public Handler::websocket_session
 {
 private:
+    std::vector<std::shared_ptr<std::string const>> queue_;
     boost::asio::io_context& ioc_;
 
     // Access the derived class, this is part of
@@ -115,16 +116,6 @@ private:
     }
 
     void
-    on_accept(beast::error_code ec)
-    {
-        if(ec)
-            return fail(ec, "accept");
-
-        // Read a message
-        do_read();
-    }
-
-    void
     do_read()
     {
         // Read a message into our buffer
@@ -135,64 +126,65 @@ private:
                 derived().shared_from_this()));
     }
 
-    void
-    on_read(
-        beast::error_code ec,
-        std::size_t bytes_transferred)
-    {
-        boost::ignore_unused(bytes_transferred);
-
-        // This indicates that the websocket_session was closed
-        if(ec == websocket::error::closed)
-            return;
-
+    void on_accept(beast::error_code ec) {
+        // Handle the error, if any
         if(ec)
-            fail(ec, "read");
+            return fail(ec, "accept");
 
-        auto const send = [&](std::string out){
-            auto size = out.size();
-            size_t n = boost::asio::buffer_copy(buffer_.prepare(size), boost::asio::buffer(std::move(out)));
-            buffer_.commit(n);
-
-            derived().ws().async_write(
-                buffer_.data(), beast::bind_front_handler(
-                &websocket_session::on_write,
-                derived().shared_from_this()));
-        };
-
-        derived().ws().text(derived().ws().got_text());
-        if (derived().ws().got_text()) {
-            auto d = buffer_.data();
-            std::string input(boost::asio::buffers_begin(d), boost::asio::buffers_end(d));
-
-            // Clear the buffer
-            buffer_.consume(buffer_.size());
-
-            Handler::handle_socket(*this, ioc_, std::move(input), send);
-        } else {
-            do_read();
-        }
+        // Read a message
+        do_read();
     }
 
-    void
-    on_write(
-        beast::error_code ec,
-        std::size_t bytes_transferred)
-    {
-        boost::ignore_unused(bytes_transferred);
-
+    void on_read(beast::error_code ec, std::size_t) {
+        // Handle the error, if any
         if(ec)
-            return fail(ec, "write");
+            return fail(ec, "read");
+
+        // Send to all connections
+        // TODO state_->send(beast::buffers_to_string(buffer_.data()));
+        Handler::handle_socket(*this, ioc_, beast::buffers_to_string(buffer_.data()));
+
 
         // Clear the buffer
         buffer_.consume(buffer_.size());
 
-        // Do another read
+        // Read another message
         do_read();
     }
 
-public:
-    websocket_session(boost::asio::io_context& ioc): ioc_(ioc) {}
+    void on_send(std::shared_ptr<std::string const> const& ss) {
+        // Always add to queue
+        queue_.push_back(ss);
+
+        // Are we already writing?
+        if(queue_.size() > 1)
+            return;
+
+        // We are not currently writing, so send this immediately
+        derived().ws().async_write(
+            net::buffer(*queue_.front()),
+            beast::bind_front_handler(
+                &websocket_session::on_write,
+                derived().shared_from_this()));
+    }
+
+    void on_write(beast::error_code ec, size_t) {
+        // Handle the error, if any
+        if(ec)
+            return fail(ec, "write");
+
+        // Remove the string from the queue
+        queue_.erase(queue_.begin());
+
+        // Send the next message if any
+        if(!queue_.empty())
+            derived().ws().async_write(
+                net::buffer(*queue_.front()),
+                beast::bind_front_handler(
+                    &websocket_session::on_write,
+                    derived().shared_from_this()));
+    }
+
 
     // Start the asynchronous operation
     template<class Body, class Allocator>
@@ -202,7 +194,33 @@ public:
         // Accept the WebSocket upgrade request
         do_accept(std::move(req));
     }
+
+protected:
+    websocket_session(boost::asio::io_context& ioc): ioc_(ioc) {}
+public:
+
+    void send(std::shared_ptr<std::string const> const& ss) {
+        // Post our work to the strand, this ensures
+        // that the members of `this` will not be
+        // accessed concurrently.
+
+        net::post(
+            derived().ws().get_executor(),
+            beast::bind_front_handler(
+                &websocket_session::on_send,
+                derived().shared_from_this(),
+                ss));
+    }
+
+    template<class H, class Body, class Allocator>
+    friend void make_websocket_session(beast::tcp_stream stream, http::request<Body, http::basic_fields<Allocator>> req, boost::asio::io_context& ioc_);
+    template<class H, class Body, class Allocator>
+    friend void make_websocket_session(beast::ssl_stream<beast::tcp_stream> stream, http::request<Body, http::basic_fields<Allocator>> req, boost::asio::io_context& ioc_);
+
+
 };
+
+
 
 //------------------------------------------------------------------------------
 

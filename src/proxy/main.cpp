@@ -282,7 +282,7 @@ struct Handler {
     };
 
     template <class Session, class Send>
-    static void handle_socket(Session& self, boost::asio::io_context& ioc_, std::string input, Send&& send) {
+    static void handle_socket2(Session& self, boost::asio::io_context& ioc_, std::string input, Send&& send) {
         rapidjson::Document indocument;
         indocument.Parse(input);
         if (indocument.HasParseError()) {
@@ -376,6 +376,96 @@ struct Handler {
         //}
         send(jsonToString(document));
     }
+
+    template <class Session>
+    static void handle_socket(Session& self, boost::asio::io_context& ioc_, std::string input) {
+        rapidjson::Document indocument;
+        indocument.Parse(input);
+        if (indocument.HasParseError()) {
+            return self.send(std::make_shared<std::string>(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::internal_server_error).first)));
+        }
+
+        auto check_auth =
+        [&self](std::initializer_list<std::string> scopes)
+        {
+            for (const auto& scope : scopes) {
+                if (!self.scopes.count(scope)) {
+                    self.send(std::make_shared<std::string>(jsonToString(response::invalid_auth(scope).first)));
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        auto exec_callback = [&ioc_](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc_, result, cmd); };
+
+
+        if (indocument.IsArray()) {
+            auto cache = std::make_shared<CmdCache>();
+            for (const auto& command_ : indocument.GetArray()) {
+                const auto& cmd = command_.GetObject();
+                std::string cmd_;
+                if (cmd.HasMember("command") && cmd["command"].IsString()) cmd_ = cmd["command"].GetString();
+
+                if (cmd_ == "getNodes") {
+                    if (!check_auth({"nodes_info"})) return;
+
+                    std::cout << "1" << std::endl;
+
+
+                    cache->cnt++;
+                    std::cout << "2" << std::endl;
+
+
+                    std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+                    run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [&self, cache](auto ec, auto container) mutable {
+                        
+                        if (ec) {
+                            cache->outputs.push_back(jsonToString(response::json_error_ec(ec).first));
+                        } else {
+                            cache->outputs.push_back(jsonToString(cw::helper::json::serialize_wrap(container)));
+                        }
+                        if (cache->outputs.size() == cache->cnt) {
+
+                            auto out = std::make_shared<std::string>();
+                            for (const auto o : cache->outputs) {
+                                (*out) += o;
+                            }
+                            return self.send(out);
+                        } 
+                    });
+                }
+            }
+
+            return;
+        } else {
+            std::string tag;
+            if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
+            
+            std::string command;
+            if (indocument.HasMember("command") && indocument["command"].IsString()) command = indocument["command"].GetString();
+
+
+            if (!command.empty()) {
+                if (command == "login") {
+                    if (!(indocument.HasMember("user") && indocument["user"].IsString())) throw cw::helper::ValidationError("user invalid");
+                    if (!(indocument.HasMember("password") && indocument["password"].IsString())) throw cw::helper::ValidationError("password invalid");
+                    if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), self.scopes)) {
+                        return self.send(std::make_shared<std::string>(jsonToString(response::command_status(true).first)));
+                    } else {
+                        return self.send(std::make_shared<std::string>(jsonToString(response::invalid_login().first)));
+                    }
+                } else if (command == "logout") {
+                    self.scopes.clear();
+                    return self.send(std::make_shared<std::string>(jsonToString(response::command_status(true).first)));
+                } else if (command == "a") {
+                    if (!check_auth({"nodes_info"})) return;
+                }
+            }
+
+        }
+    }
+
 
     // This function produces an HTTP response for the given
     // request. The type of the response object depends on the
