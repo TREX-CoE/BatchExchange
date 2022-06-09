@@ -279,6 +279,7 @@ void write_creds_async(boost::asio::io_context& ioc_, const cw::helper::credenti
     });
 }
 
+
 struct Handler {
     constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
     constexpr static unsigned int body_limit() { return 10000; }
@@ -339,6 +340,23 @@ struct Handler {
                 run_async_state<std::vector<cw::batch::Node>>(session->ioc(), [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
                     return send(response::containerReturn(ec, container).first);
                 });
+                return;
+            } else if (command == "getQueues") {
+                if (!check_auth({"queues_info"})) return;
+
+                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+                run_async_state<std::vector<cw::batch::Queue>>(session->ioc(), [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+                    return send(response::containerReturn(ec, container).first);
+                });
+                return;
+            } else if (command == "getJobs") {
+                if (!check_auth({"jobs_info"})) return;
+
+                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+                run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+                    return send(response::containerReturn(ec, container).first);
+                });
+                return;
             } else if (command == "addUser") {
                 if (!check_auth({"users_add"})) return;
 
