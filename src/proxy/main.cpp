@@ -360,19 +360,16 @@ struct Handler {
         }
     }
 
-
     // This function produces an HTTP response for the given
     // request. The type of the response object depends on the
     // contents of the request, so the interface requires the
     // caller to pass a generic lambda for receiving the response.
-    template< 
-        class Body, class Allocator,
-        class Send>
+    template< class Session,
+        class Body, class Allocator>
     static void
     handle_request(
-        boost::asio::io_context& ioc_,
-        http::request<Body, http::basic_fields<Allocator>>&& req,
-        Send&& send
+        std::shared_ptr<Session> session,
+        http::request<Body, http::basic_fields<Allocator>>&& req
         )
     {
         auto content_type = req[http::field::content_type];
@@ -382,7 +379,7 @@ struct Handler {
         res.keep_alive(req.keep_alive());
 
         auto check_auth =
-        [&send, &res, &req](const std::set<std::string>& scopes = {}) mutable
+        [session, &res, &req](const std::set<std::string>& scopes = {}) mutable
         {
             std::string user, pass;
             if (cw::http::parse_auth_header(req[http::field::authorization], user, pass)) {
@@ -391,57 +388,57 @@ struct Handler {
                 }
             }
             to_response(res, response::invalid_auth());
-            send(std::move(res));
+            session->send(std::move(res));
             return false;
         };
 
         auto check_json = 
-        [&send, res, &content_type, &req](rapidjson::Document& document) mutable
+        [session, res, &content_type, &req](rapidjson::Document& document) mutable
         {
             if (content_type != "application/json") {
                 res.result(http::status::unsupported_media_type);
-                send(std::move(res));
+                session->send(std::move(res));
                 return false;
             }
 
             document.Parse(req.body());
             if (document.HasParseError()) {
                 res.result(http::status::unsupported_media_type);
-                send(std::move(res));
+                session->send(std::move(res));
                 return false;
             }
 
             return true;
         };
 
-        auto exec_callback = [&ioc_](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc_, result, cmd); };
+        auto exec_callback = [session](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(session->ioc(), result, cmd); };
 
-        auto send_info = [&send, res](auto ec, auto container) mutable {
+        auto send_info = [session, res](auto ec, auto container) mutable {
             to_response(res, response::containerReturn(ec, container));
-            return send(std::move(res));
+            return session->send(std::move(res));
         };
         
         try {
             if (req.method() == http::verb::get && req.target() == "/openapi.json") {
                 api_openapi(res);
-                return send(std::move(res));
+                return session->send(std::move(res));
             } else if (req.method() == http::verb::get && req.target() == "/nodes") {
                 if (!check_auth({"nodes_info"})) return;
 
                 std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
+                run_async_state<std::vector<cw::batch::Node>>(session->ioc(), [session, batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
                 return;
             } else if (req.method() == http::verb::get && req.target() == "/queues") {
                 if (!check_auth({"queues_info"})) return;
 
                 std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Queue>>(ioc_, [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
+                run_async_state<std::vector<cw::batch::Queue>>(session->ioc(), [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
                 return;
             } else if (req.method() == http::verb::get && req.target() == "/jobs") {
                 if (!check_auth({"jobs_info"})) return;
 
                 std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Job>>(ioc_, [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
+                run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
                 return;
             } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
                 if (!check_auth({"jobs_delete"})) return;
@@ -450,9 +447,9 @@ struct Handler {
 
                 std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
                 auto f = cw_proxy_batch::deleteJobById(*batch, indocument);
-                run_async(ioc_, f, [batch, &send, res](auto ec) mutable {
+                run_async(session->ioc(), f, [batch, session, res](auto ec) mutable {
                     to_response(res, response::commandReturn(ec));
-                    return send(std::move(res));
+                    return session->send(std::move(res));
                 });
                 return;
             } else if (req.method() == http::verb::post && req.target() == "/jobs/submit") {
@@ -463,9 +460,9 @@ struct Handler {
                 std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
                 auto f = cw_proxy_batch::runJob(*batch, indocument);
 
-                run_async_state<std::string>(ioc_, f, [batch, &send, res](auto ec, std::string jobName) mutable {
+                run_async_state<std::string>(session->ioc(), f, [batch, session, res](auto ec, std::string jobName) mutable {
                     to_response(res, response::runJobReturn(ec, jobName));
-                    send(std::move(res));
+                    session->send(std::move(res));
                 });
                 return;
             } else if (req.method() == http::verb::post && req.target() == "/users") {
@@ -477,20 +474,22 @@ struct Handler {
                 auto f = usersAdd(indocument);
                 auto creds = cw::globals::creds();
                 f(creds);
-                write_creds_async(ioc_, creds, [res, &send](auto ec) mutable {
+                write_creds_async(session->ioc(), creds, [res, session](auto ec) mutable {
                     to_response(res, response::addUserReturn(ec));
-                    return send(std::move(res));
+                    return session->send(std::move(res));
                 });
                 return;
             } else {
                 to_response(res, response::requestUnknown(std::string(req.target()), req.method()));
-                return send(std::move(res));
+                return session->send(std::move(res));
             }
         } catch (const cw::helper::ValidationError& e) {
             to_response(res, response::json_error_exc(e));
-            return send(std::move(res));
+            return session->send(std::move(res));
         }
     }
+
+
 };
 
 

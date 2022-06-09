@@ -207,7 +207,6 @@ public:
         // Post our work to the strand, this ensures
         // that the members of `this` will not be
         // accessed concurrently.
-
         net::post(
             derived().ws().get_executor(),
             beast::bind_front_handler(
@@ -406,6 +405,8 @@ class http_session
     // construct it from scratch it at the beginning of each new message.
     boost::optional<http::request_parser<http::string_body>> parser_;
 
+
+
 protected:
     beast::flat_buffer buffer_;
     net::io_context& ioc_;
@@ -422,6 +423,7 @@ public:
     {
     }
 
+protected:
     void
     do_read()
     {
@@ -474,7 +476,7 @@ public:
         }
 
         // Send the response
-        Handler::handle_request(ioc_, parser_->release(), queue_);
+        Handler::handle_request(derived().shared_from_this(), parser_->release());
 
         // If we aren't at the queue limit, try to pipeline another request
         if(! queue_.is_full())
@@ -503,6 +505,17 @@ public:
             do_read();
         }
     }
+public:
+
+    net::io_context& ioc() { return ioc_; }
+
+    template<bool isRequest, class Body, class Fields>
+    void
+    send(http::message<isRequest, Body, Fields>&& msg)
+    {
+        return queue_(std::forward<http::message<isRequest, Body, Fields>>(msg));
+    }
+
 };
 
 //------------------------------------------------------------------------------
