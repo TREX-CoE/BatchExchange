@@ -20,8 +20,8 @@
 #include "CBatchSlurm.h"
 #include "CXCat.h"
 #include "clipp.h"
-#include "restClient.h"
-#include "sessionTokenTypes.h"
+#include "../restclient/src/restClient.h"
+#include "../restclient/src/sessionTokenTypes.h"
 #include "utils.h"
 
 #define DRAIN_SLEEP 3000

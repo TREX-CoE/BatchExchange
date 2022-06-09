@@ -11,8 +11,8 @@
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
-#include "restClient.h"
-#include "sessionTokenTypes.h"
+#include "../restclient/src/restClient.h"
+#include "../restclient/src/sessionTokenTypes.h"
 
 /**
  * @class CBatchSlurm

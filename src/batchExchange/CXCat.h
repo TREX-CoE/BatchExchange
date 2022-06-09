@@ -10,8 +10,8 @@
 
 #include <string>
 
-#include "restClient.h"
-#include "sessionTokenTypes.h"
+#include "../restclient/src/restClient.h"
+#include "../restclient/src/sessionTokenTypes.h"
 
 class CXCat {
    private:
