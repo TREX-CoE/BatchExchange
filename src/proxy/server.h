@@ -74,7 +74,7 @@ template<class Derived, class Handler>
 class websocket_session : public Handler::websocket_session
 {
 private:
-    std::vector<std::shared_ptr<std::string const>> queue_;
+    std::vector<std::string> queue_;
     boost::asio::io_context& ioc_;
 
     // Access the derived class, this is part of
@@ -151,9 +151,9 @@ private:
         do_read();
     }
 
-    void on_send(std::shared_ptr<std::string const> const& ss) {
+    void on_send(std::string s) {
         // Always add to queue
-        queue_.push_back(ss);
+        queue_.push_back(s);
 
         // Are we already writing?
         if(queue_.size() > 1)
@@ -161,7 +161,7 @@ private:
 
         // We are not currently writing, so send this immediately
         derived().ws().async_write(
-            net::buffer(*queue_.front()),
+            net::buffer(queue_.front()),
             beast::bind_front_handler(
                 &websocket_session::on_write,
                 derived().shared_from_this()));
@@ -178,7 +178,7 @@ private:
         // Send the next message if any
         if(!queue_.empty())
             derived().ws().async_write(
-                net::buffer(*queue_.front()),
+                net::buffer(queue_.front()),
                 beast::bind_front_handler(
                     &websocket_session::on_write,
                     derived().shared_from_this()));
@@ -203,7 +203,7 @@ protected:
     websocket_session(boost::asio::io_context& ioc): ioc_(ioc) {}
 public:
 
-    void send(std::shared_ptr<std::string const> const& ss) {
+    void send(std::string s) {
         // Post our work to the strand, this ensures
         // that the members of `this` will not be
         // accessed concurrently.
@@ -213,7 +213,7 @@ public:
             beast::bind_front_handler(
                 &websocket_session::on_send,
                 derived().shared_from_this(),
-                ss));
+                std::move(s)));
     }
 };
 

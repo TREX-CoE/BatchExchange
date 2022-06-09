@@ -293,10 +293,10 @@ struct Handler {
         rapidjson::Document indocument;
         indocument.Parse(input);
         if (indocument.HasParseError()) {
-            return self.send(std::make_shared<std::string>(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::bad_request).first)));
+            return self.send(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::bad_request).first));
         }
         if (!indocument.IsObject()) {
-            return self.send(std::make_shared<std::string>(jsonToString(response::json_error("InvalidInput", "Input not a json object", http::status::bad_request).first)));
+            return self.send(jsonToString(response::json_error("InvalidInput", "Input not a json object", http::status::bad_request).first));
         }
 
         std::string tag;
@@ -305,7 +305,7 @@ struct Handler {
         // note capture send functor by copy to ensure tag's lifetime
         auto send = [&self, tag](rapidjson::Document document) {
             if (!tag.empty()) document.AddMember("tag", tag, document.GetAllocator());
-            self.send(std::make_shared<std::string>(jsonToString(document)));
+            self.send(jsonToString(document));
         };
         
         if (!(indocument.HasMember("command") && indocument["command"].IsString())) {
