@@ -141,7 +141,7 @@ private:
             return fail(ec, "read");
 
         // Handle message
-        Handler::handle_socket(*this, ioc_, beast::buffers_to_string(buffer_.data()));
+        Handler::handle_socket(derived().shared_from_this(), beast::buffers_to_string(buffer_.data()));
 
 
         // Clear the buffer
@@ -202,6 +202,8 @@ private:
 protected:
     websocket_session(boost::asio::io_context& ioc): ioc_(ioc) {}
 public:
+
+    net::io_context& ioc() { return ioc_; }
 
     void send(std::string s) {
         // Post our work to the strand, this ensures
@@ -412,7 +414,6 @@ protected:
     net::io_context& ioc_;
     bool websocket_support_;
 
-public:
     // Construct the session
     http_session(
         beast::flat_buffer buffer, net::io_context& ioc, bool websocket_support)
@@ -423,7 +424,6 @@ public:
     {
     }
 
-protected:
     void
     do_read()
     {

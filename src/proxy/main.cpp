@@ -289,23 +289,23 @@ struct Handler {
     };
 
     template <class Session>
-    static void handle_socket(Session& self, boost::asio::io_context& ioc_, std::string input) {
+    static void handle_socket(std::shared_ptr<Session> session, std::string input) {
         rapidjson::Document indocument;
         indocument.Parse(input);
         if (indocument.HasParseError()) {
-            return self.send(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::bad_request).first));
+            return session->send(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::bad_request).first));
         }
         if (!indocument.IsObject()) {
-            return self.send(jsonToString(response::json_error("InvalidInput", "Input not a json object", http::status::bad_request).first));
+            return session->send(jsonToString(response::json_error("InvalidInput", "Input not a json object", http::status::bad_request).first));
         }
 
         std::string tag;
         if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
 
         // note capture send functor by copy to ensure tag's lifetime
-        auto send = [&self, tag](rapidjson::Document document) {
+        auto send = [session, tag](rapidjson::Document document) {
             if (!tag.empty()) document.AddMember("tag", tag, document.GetAllocator());
-            self.send(jsonToString(document));
+            session->send(jsonToString(document));
         };
         
         if (!(indocument.HasMember("command") && indocument["command"].IsString())) {
@@ -313,14 +313,11 @@ struct Handler {
         }
         std::string command = indocument["command"].GetString();
 
-
-        
-
         auto check_auth =
-        [&self, send](std::initializer_list<std::string> scopes)
+        [session, send](std::initializer_list<std::string> scopes)
         {
             for (const auto& scope : scopes) {
-                if (!self.scopes.count(scope)) {
+                if (!session->scopes.count(scope)) {
                     send(response::invalid_auth(scope).first);
                     return false;
                 }
@@ -328,18 +325,18 @@ struct Handler {
             return true;
         };
 
-        auto exec_callback = [&ioc_](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc_, result, cmd); };
+        auto exec_callback = [session](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(session->ioc(), result, cmd); };
 
         try {
             if (command == "login") {
-                return send(ws_login(self.scopes, indocument).first);
+                return send(ws_login(session->scopes, indocument).first);
             } else if (command == "logout") {
-                self.scopes.clear();
+                session->scopes.clear();
                 return send(response::commandSuccess().first);
             } else if (command == "getNodes") {
                 if (!check_auth({"nodes_info"})) return;
                 std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Node>>(ioc_, [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+                run_async_state<std::vector<cw::batch::Node>>(session->ioc(), [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
                     return send(response::containerReturn(ec, container).first);
                 });
             } else if (command == "addUser") {
@@ -348,7 +345,7 @@ struct Handler {
                 auto f = usersAdd(indocument);
                 auto creds = cw::globals::creds();
                 f(creds);
-                write_creds_async(ioc_, creds, [send](auto ec) {
+                write_creds_async(session->ioc(), creds, [send](auto ec) {
                     return send(response::addUserReturn(ec).first);
                 });
                 return;
