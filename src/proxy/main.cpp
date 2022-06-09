@@ -166,7 +166,7 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
     }));
 }
 
-auto usersAdd(rapidjson::Document& document, std::string username="") {
+auto usersAdd(const rapidjson::Document& document, std::string username="") {
     if (username.empty()) {
         if (!document.HasMember("user")) throw cw::helper::ValidationError("user is not given");
         auto& user = document["user"];
@@ -279,6 +279,17 @@ void write_creds_async(boost::asio::io_context& ioc_, const cw::helper::credenti
     });
 }
 
+template <typename Session, typename CheckAuth, typename Send>
+auto f_usersAdd(Session session, CheckAuth check_auth, const rapidjson::Document& indocument, Send send) {
+    if (!check_auth({"users_add"})) return;
+
+    auto f = usersAdd(indocument);
+    auto creds = cw::globals::creds();
+    f(creds);
+    write_creds_async(session->ioc(), creds, [send](auto ec) mutable {
+        return send(response::addUserReturn(ec));
+    });
+}
 
 struct Handler {
     constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
@@ -307,6 +318,11 @@ struct Handler {
         auto send = [session, tag](rapidjson::Document document) {
             if (!tag.empty()) document.AddMember("tag", tag, document.GetAllocator());
             session->send(jsonToString(document));
+        };
+        // note capture send functor by copy to ensure tag's lifetime
+        auto send2 = [session, tag](response::resp r) {
+            if (!tag.empty()) r.first.AddMember("tag", tag, r.first.GetAllocator());
+            session->send(jsonToString(r.first));
         };
         
         if (!(indocument.HasMember("command") && indocument["command"].IsString())) {
@@ -358,15 +374,7 @@ struct Handler {
                 });
                 return;
             } else if (command == "addUser") {
-                if (!check_auth({"users_add"})) return;
-
-                auto f = usersAdd(indocument);
-                auto creds = cw::globals::creds();
-                f(creds);
-                write_creds_async(session->ioc(), creds, [send](auto ec) {
-                    return send(response::addUserReturn(ec).first);
-                });
-                return;
+                f_usersAdd(session, check_auth, indocument, send2);
             } else {
                 return send(response::commandUnknown(command).first);
             }
@@ -432,6 +440,12 @@ struct Handler {
             to_response(res, response::containerReturn(ec, container));
             return session->send(std::move(res));
         };
+
+        auto send = [res, session](response::resp r) mutable {
+            to_response(res, r);
+            return session->send(std::move(res));
+        };
+                
         
         try {
             if (req.method() == http::verb::get && req.target() == "/openapi.json") {
@@ -473,7 +487,10 @@ struct Handler {
                 if (!check_json(indocument)) return;
 
                 std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                auto f = cw_proxy_batch::runJob(*batch, indocument);
+
+                std::string err;
+                auto o = cw_proxy_batch::runJob(indocument, err);
+                auto f = batch->runJob(*o);
 
                 run_async_state<std::string>(session->ioc(), f, [batch, session, res](auto ec, std::string jobName) mutable {
                     to_response(res, response::runJobReturn(ec, jobName));
@@ -481,19 +498,9 @@ struct Handler {
                 });
                 return;
             } else if (req.method() == http::verb::post && req.target() == "/users") {
-                if (!check_auth({"users_add"})) return;
-
                 rapidjson::Document indocument;
                 if (!check_json(indocument)) return;
-
-                auto f = usersAdd(indocument);
-                auto creds = cw::globals::creds();
-                f(creds);
-                write_creds_async(session->ioc(), creds, [res, session](auto ec) mutable {
-                    to_response(res, response::addUserReturn(ec));
-                    return session->send(std::move(res));
-                });
-                return;
+                f_usersAdd(session, check_auth, indocument, send);
             } else {
                 to_response(res, response::requestUnknown(std::string(req.target()), req.method()));
                 return session->send(std::move(res));

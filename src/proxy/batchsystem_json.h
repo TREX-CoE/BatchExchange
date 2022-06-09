@@ -4,6 +4,8 @@
 #include "batchsystem/batchsystem.h"
 #include "proxy/validation.h"
 
+#include <boost/optional.hpp>
+
 namespace {
 
 using namespace cw::batch;
@@ -74,39 +76,62 @@ namespace cw_proxy_batch {
 
 using namespace cw::batch;
 
-auto runJob(BatchInterface& batch, rapidjson::Document& document) {
+boost::optional<JobOptions> runJob(rapidjson::Document& document, std::string& err) {
     JobOptions opts;
     if (!document.HasMember("path")) {
-        throw cw::helper::ValidationError("path is not given");
+        err = "path is not given";
+        return {};
     } else {
         auto& path = document["path"];
-        if (!path.IsString()) throw cw::helper::ValidationError("path is not a string");
+        if (!path.IsString()) {
+                err = "path is not a string";
+                return {};
+        }
         opts.path = std::string(path.GetString());
     }
 
     if (document.HasMember("nodes")) {
             auto& nodes = document["nodes"];
-            if (!nodes.IsInt()) throw cw::helper::ValidationError("nodes is not an int");
+            if (!nodes.IsInt()) {
+                err = "nodes is not an int";
+                return {};
+            }
             int nnodes = nodes.GetInt();
-            if (nnodes < 1) throw cw::helper::ValidationError("nodes has to be atleast 1");
+            if (nnodes < 1) {
+                err = "nodes has to be atleast 1";
+                return {};
+            }
             opts.numberNodes = static_cast<uint32_t>(nnodes);
     }
     if (document.HasMember("nodesMax")) {
             auto& nodes = document["nodesMax"];
-            if (!nodes.IsInt()) throw cw::helper::ValidationError("nodesMax is not an int");
+            if (!nodes.IsInt()) {
+                err = "nodesMax is not an int";
+                return {};
+            }
             int nnodes = nodes.GetInt();
-            if (nnodes < 1) throw cw::helper::ValidationError("nodesMax has to be atleast 1");
+            if (nnodes < 1) {
+                err = "nodesMax has to be atleast 1";
+                return {};
+            }
             opts.numberNodesMax = static_cast<uint32_t>(nnodes);
     }
     if (document.HasMember("gpus")) {
             auto& nodes = document["gpus"];
-            if (!nodes.IsInt()) throw cw::helper::ValidationError("gpus is not an int");
+            if (!nodes.IsInt()) {
+                err = "gpus is not an int";
+                return {};
+            }
             int nnodes = nodes.GetInt();
-            if (nnodes < 1) throw cw::helper::ValidationError("gpus has to be atleast 1");
+            if (nnodes < 1) {
+                err = "gpus has to be atleast 1";
+                return {};
+            }
             opts.numberNodesMax = static_cast<uint32_t>(nnodes);
     }
-    return batch.runJob(opts);
+    return {opts};
 }
+
 
 auto deleteJobById(BatchInterface& batch, rapidjson::Document& document) {
     return batch.deleteJobById(getJob(document), getForce(document)); 
