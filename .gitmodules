@@ -1,4 +1,4 @@
-[submodule "src/restclient"]
-	path = src/restclient
+[submodule "external/restclient"]
+	path = external/restclient
 	url = ../../Megware/restclient.git
 	branch = main

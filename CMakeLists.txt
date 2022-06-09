@@ -8,5 +8,6 @@ include(cmake/findPackages.cmake)
 include(cmake/compilerSettings.cmake)
 
 # project itself
+add_subdirectory(external/)
 add_subdirectory(src/)
 add_subdirectory(test/)
