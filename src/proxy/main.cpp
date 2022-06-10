@@ -485,6 +485,17 @@ void f_getNodes(Session session, CheckAuth check_auth, Send send, const rapidjso
     });
 }
 
+template <typename Session, typename CheckAuth, typename Send>
+void f_getBatchInfo(Session session, CheckAuth check_auth, Send send, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"batch_info"})) return;
+
+    run_async_state<BatchInfo>(session->ioc(), [batch, f=batch->getBatchInfo()](BatchInfo& state){ return f(state); }, [send](auto ec, auto batchinfo) mutable {
+        return send(response::getBatchInfoReturn(ec, batchinfo));
+    });
+}
+
+
+
 struct Handler {
     constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
     constexpr static unsigned int body_limit() { return 10000; }
@@ -540,6 +551,9 @@ struct Handler {
         } else if (command == "logout") {
             session->scopes.clear();
             return send(response::commandSuccess());
+        } else if (command == "getBatchInfo") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_getBatchInfo(session, check_auth, send, batch);
         } else if (command == "getNodes") {
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
             f_getNodes(session, check_auth, send, indocument, batch);

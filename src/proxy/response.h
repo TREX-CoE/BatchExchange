@@ -118,6 +118,23 @@ resp containerReturn(std::error_code ec, const std::vector<T>& entry) {
     }
 }
 
+resp getBatchInfoReturn(std::error_code ec, const cw::batch::BatchInfo& batchinfo) {
+    if (ec) {
+        return json_error_ec(ec);
+    } else {
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.second = boost::beast::http::status::ok;
+        r.first.SetObject();
+        {
+            rapidjson::Document subdocument(&r.first.GetAllocator());
+            cw::batch::json::serialize(batchinfo, subdocument);
+            r.first.AddMember("data", subdocument, allocator);
+        }
+        return r;
+    }
+}
+
 resp runJobReturn(std::error_code ec, const std::string& jobName) {
     if (ec) {
         return json_error_ec(ec);
