@@ -170,33 +170,6 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
     }));
 }
 
-auto usersAdd(const rapidjson::Document& document, std::string username="") {
-    if (username.empty()) {
-        if (!document.HasMember("user")) throw cw::helper::ValidationError("user is not given");
-        auto& user = document["user"];
-        if (!user.IsString()) throw cw::helper::ValidationError("user is not a string");
-        username = user.GetString();
-    }
-
-    if (!document.HasMember("password")) throw cw::helper::ValidationError("password is not given");
-    auto& password = document["password"];
-    if (!password.IsString()) throw cw::helper::ValidationError("password is not a string");
-
-    std::set<std::string> scopesset;
-    if (document.HasMember("scopes")) {
-        auto& scopes = document["scopes"];
-        if (!scopes.IsArray()) throw cw::helper::ValidationError("scopes is not an array");
-        for (const auto& v : scopes.GetArray()) {
-            if (!v.IsString()) throw cw::helper::ValidationError("scopes array item is not an string");
-            scopesset.insert(v.GetString());
-        }
-    }
-
-    return [username, password=password.GetString(), scopes=std::move(scopesset)](cw::helper::credentials::dict& creds){
-        cw::helper::credentials::set_user(creds, username, scopes, password);
-    };
-}
-
 bool read_cred(const std::string& cred_file, cw::helper::credentials::dict& creds) {
     std::ifstream creds_fs(cred_file);
     if (!creds_fs.good()) {
@@ -287,9 +260,12 @@ template <typename Session, typename CheckAuth, typename Send>
 auto f_usersAdd(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument) {
     if (!check_auth({"users_add"})) return;
 
-    auto f = usersAdd(indocument);
+    std::string err;
+    auto o = cw_proxy_batch::usersAdd(indocument, "", err);
+    if (!o) return send(response::validationError(err));
+
     auto creds = cw::globals::creds();
-    f(creds);
+    nonstd::apply([&creds](auto&&... args){cw::helper::credentials::set_user(creds, args...);}, std::move(*o));
     write_creds_async(session->ioc(), creds, [send](auto ec) mutable {
         return send(response::addUserReturn(ec));
     });

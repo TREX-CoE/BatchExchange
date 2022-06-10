@@ -306,6 +306,52 @@ std::vector<std::string> getNodes(const rapidjson::Document& document, std::stri
     return nodes;
 }
 
+boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> usersAdd(const rapidjson::Document& document, std::string username, std::string& err) {
+    std::tuple<std::string, std::set<std::string>, std::string> t;
+
+    if (username.empty()) {
+        if (!document.HasMember("user")) {
+            err = "user not given";
+            return {};
+        }
+        auto& user = document["user"];
+        if (!user.IsString()) {
+            err = "user is not a string";
+            return {};
+        }
+        username = user.GetString();
+    }
+    std::get<0>(t) = std::move(username);
+
+    if (!document.HasMember("password")) {
+        err = "password not given";
+        return {};
+    }
+    auto& password = document["password"];
+    if (!password.IsString()) {
+        err = "password is not a string";
+        return {};
+    }
+    std::get<2>(t) = password.GetString();
+
+    if (document.HasMember("scopes")) {
+        auto& scopes = document["scopes"];
+        if (!scopes.IsArray()) {
+            err = "scopes is not an array";
+            return {};
+        }
+        for (const auto& v : scopes.GetArray()) {
+            if (!v.IsString()) {
+                err = "scopes array item is not an string";
+                return {};
+            }
+            std::get<1>(t).insert(v.GetString());
+        }
+    }
+
+    return {t};
+}
+
 }
 
 
