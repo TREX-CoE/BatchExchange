@@ -65,6 +65,10 @@ resp requestUnknown(const std::string& uri, boost::beast::http::verb method) {
     return json_error("BadRequest", "Unknown request: "+std::string(boost::beast::http::to_string(method))+" "+uri, boost::beast::http::status::bad_request);
 }
 
+resp validationError(const std::string& msg) {
+    return json_error("ValidationError", msg, boost::beast::http::status::bad_request);
+}
+
 resp commandSuccess() {
     resp r;
     rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();

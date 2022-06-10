@@ -315,18 +315,13 @@ struct Handler {
         if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
 
         // note capture send functor by copy to ensure tag's lifetime
-        auto send = [session, tag](rapidjson::Document document) {
-            if (!tag.empty()) document.AddMember("tag", tag, document.GetAllocator());
-            session->send(jsonToString(document));
-        };
-        // note capture send functor by copy to ensure tag's lifetime
-        auto send2 = [session, tag](response::resp r) {
+        auto send = [session, tag](response::resp r) {
             if (!tag.empty()) r.first.AddMember("tag", tag, r.first.GetAllocator());
             session->send(jsonToString(r.first));
         };
         
         if (!(indocument.HasMember("command") && indocument["command"].IsString())) {
-            return send(response::json_error("Command Error", "Command string not given", http::status::bad_request).first);
+            return send(response::json_error("Command Error", "Command string not given", http::status::bad_request));
         }
         std::string command = indocument["command"].GetString();
 
@@ -335,7 +330,7 @@ struct Handler {
         {
             for (const auto& scope : scopes) {
                 if (!session->scopes.count(scope)) {
-                    send(response::invalid_auth(scope).first);
+                    send(response::invalid_auth(scope));
                     return false;
                 }
             }
@@ -344,42 +339,38 @@ struct Handler {
 
         auto exec_callback = [session](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(session->ioc(), result, cmd); };
 
-        try {
-            if (command == "login") {
-                return send(ws_login(session->scopes, indocument).first);
-            } else if (command == "logout") {
-                session->scopes.clear();
-                return send(response::commandSuccess().first);
-            } else if (command == "getNodes") {
-                if (!check_auth({"nodes_info"})) return;
-                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Node>>(session->ioc(), [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
-                    return send(response::containerReturn(ec, container).first);
-                });
-                return;
-            } else if (command == "getQueues") {
-                if (!check_auth({"queues_info"})) return;
+        if (command == "login") {
+            return send(ws_login(session->scopes, indocument));
+        } else if (command == "logout") {
+            session->scopes.clear();
+            return send(response::commandSuccess());
+        } else if (command == "getNodes") {
+            if (!check_auth({"nodes_info"})) return;
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_state<std::vector<cw::batch::Node>>(session->ioc(), [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+                return send(response::containerReturn(ec, container));
+            });
+            return;
+        } else if (command == "getQueues") {
+            if (!check_auth({"queues_info"})) return;
 
-                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Queue>>(session->ioc(), [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
-                    return send(response::containerReturn(ec, container).first);
-                });
-                return;
-            } else if (command == "getJobs") {
-                if (!check_auth({"jobs_info"})) return;
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_state<std::vector<cw::batch::Queue>>(session->ioc(), [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+                return send(response::containerReturn(ec, container));
+            });
+            return;
+        } else if (command == "getJobs") {
+            if (!check_auth({"jobs_info"})) return;
 
-                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
-                    return send(response::containerReturn(ec, container).first);
-                });
-                return;
-            } else if (command == "addUser") {
-                f_usersAdd(session, check_auth, indocument, send2);
-            } else {
-                return send(response::commandUnknown(command).first);
-            }
-        } catch (const cw::helper::ValidationError& e) {
-            return send(response::json_error_exc(e).first);
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+                return send(response::containerReturn(ec, container));
+            });
+            return;
+        } else if (command == "addUser") {
+            f_usersAdd(session, check_auth, indocument, send);
+        } else {
+            return send(response::commandUnknown(command));
         }
     }
 
@@ -445,69 +436,63 @@ struct Handler {
             to_response(res, r);
             return session->send(std::move(res));
         };
-                
-        
-        try {
-            if (req.method() == http::verb::get && req.target() == "/openapi.json") {
-                api_openapi(res);
-                return session->send(std::move(res));
-            } else if (req.method() == http::verb::get && req.target() == "/nodes") {
-                if (!check_auth({"nodes_info"})) return;
 
-                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Node>>(session->ioc(), [session, batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
-                return;
-            } else if (req.method() == http::verb::get && req.target() == "/queues") {
-                if (!check_auth({"queues_info"})) return;
-
-                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Queue>>(session->ioc(), [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
-                return;
-            } else if (req.method() == http::verb::get && req.target() == "/jobs") {
-                if (!check_auth({"jobs_info"})) return;
-
-                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
-                return;
-            } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
-                if (!check_auth({"jobs_delete"})) return;
-                rapidjson::Document indocument;
-                if (!check_json(indocument)) return;
-
-                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-                auto f = cw_proxy_batch::deleteJobById(*batch, indocument);
-                run_async(session->ioc(), f, [batch, session, res](auto ec) mutable {
-                    to_response(res, response::commandReturn(ec));
-                    return session->send(std::move(res));
-                });
-                return;
-            } else if (req.method() == http::verb::post && req.target() == "/jobs/submit") {
-                if (!check_auth({"jobs_submit"})) return;
-                rapidjson::Document indocument;
-                if (!check_json(indocument)) return;
-
-                std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-
-                std::string err;
-                auto o = cw_proxy_batch::runJob(indocument, err);
-                auto f = batch->runJob(*o);
-
-                run_async_state<std::string>(session->ioc(), f, [batch, session, res](auto ec, std::string jobName) mutable {
-                    to_response(res, response::runJobReturn(ec, jobName));
-                    session->send(std::move(res));
-                });
-                return;
-            } else if (req.method() == http::verb::post && req.target() == "/users") {
-                rapidjson::Document indocument;
-                if (!check_json(indocument)) return;
-                f_usersAdd(session, check_auth, indocument, send);
-            } else {
-                to_response(res, response::requestUnknown(std::string(req.target()), req.method()));
-                return session->send(std::move(res));
-            }
-        } catch (const cw::helper::ValidationError& e) {
-            to_response(res, response::json_error_exc(e));
+        if (req.method() == http::verb::get && req.target() == "/openapi.json") {
+            api_openapi(res);
             return session->send(std::move(res));
+        } else if (req.method() == http::verb::get && req.target() == "/nodes") {
+            if (!check_auth({"nodes_info"})) return;
+
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_state<std::vector<cw::batch::Node>>(session->ioc(), [session, batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
+            return;
+        } else if (req.method() == http::verb::get && req.target() == "/queues") {
+            if (!check_auth({"queues_info"})) return;
+
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_state<std::vector<cw::batch::Queue>>(session->ioc(), [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
+            return;
+        } else if (req.method() == http::verb::get && req.target() == "/jobs") {
+            if (!check_auth({"jobs_info"})) return;
+
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
+            return;
+        } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
+            if (!check_auth({"jobs_delete"})) return;
+            rapidjson::Document indocument;
+            if (!check_json(indocument)) return;
+
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            auto f = cw_proxy_batch::deleteJobById(*batch, indocument);
+            run_async(session->ioc(), f, [batch, session, res](auto ec) mutable {
+                to_response(res, response::commandReturn(ec));
+                return session->send(std::move(res));
+            });
+            return;
+        } else if (req.method() == http::verb::post && req.target() == "/jobs/submit") {
+            if (!check_auth({"jobs_submit"})) return;
+            rapidjson::Document indocument;
+            if (!check_json(indocument)) return;
+
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+
+            std::string err;
+            auto o = cw_proxy_batch::runJob(indocument, err);
+            if (!o) return send(response::validationError(err));
+            auto f = batch->runJob(*o);
+
+            run_async_state<std::string>(session->ioc(), f, [batch, session, res](auto ec, std::string jobName) mutable {
+                to_response(res, response::runJobReturn(ec, jobName));
+                session->send(std::move(res));
+            });
+            return;
+        } else if (req.method() == http::verb::post && req.target() == "/users") {
+            rapidjson::Document indocument;
+            if (!check_json(indocument)) return;
+            f_usersAdd(session, check_auth, indocument, send);
+        } else {
+            return send(response::requestUnknown(std::string(req.target()), req.method()));
         }
     }
 
