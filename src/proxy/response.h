@@ -57,16 +57,16 @@ resp invalid_login() {
     return json_error("Invalid login", "Could not authenticate user for login", boost::beast::http::status::unauthorized);
 }
 
-resp commandUnknown(const std::string& command) {
-    return json_error("Command Unknown", "Unknown command: "+command, boost::beast::http::status::bad_request);
-}
-
 resp requestUnknown(const std::string& uri, boost::beast::http::verb method) {
     return json_error("BadRequest", "Unknown request: "+std::string(boost::beast::http::to_string(method))+" "+uri, boost::beast::http::status::bad_request);
 }
 
 resp validationError(const std::string& msg) {
     return json_error("ValidationError", msg, boost::beast::http::status::bad_request);
+}
+
+resp commandUnknown(const std::string& command) {
+    return validationError("Unknown command: "+command);
 }
 
 resp commandSuccess() {

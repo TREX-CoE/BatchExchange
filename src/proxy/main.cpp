@@ -125,6 +125,8 @@ std::string prompt(const std::string& prefix) {
 namespace cw {
 namespace proxy {
 
+using namespace cw::batch;
+
 void set_ssl_context(ssl::context& ctx, const std::string& cert, const std::string& priv, const std::string& dh) {
     // The SSL context is required, and holds certificates
     ctx.set_options(
@@ -282,7 +284,7 @@ void write_creds_async(boost::asio::io_context& ioc_, const cw::helper::credenti
 }
 
 template <typename Session, typename CheckAuth, typename Send>
-auto f_usersAdd(Session session, CheckAuth check_auth, const rapidjson::Document& indocument, Send send) {
+auto f_usersAdd(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument) {
     if (!check_auth({"users_add"})) return;
 
     auto f = usersAdd(indocument);
@@ -293,7 +295,195 @@ auto f_usersAdd(Session session, CheckAuth check_auth, const rapidjson::Document
     });
 }
 
-using namespace cw::batch;
+template <typename Session, typename CheckAuth, typename Send>
+void f_jobsSubmit(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"jobs_submit"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::runJob(indocument, err);
+    if (!o) return send(response::validationError(err));
+    auto f = batch->runJob(*o);
+
+    run_async_state<std::string>(session->ioc(), f, [batch, send](auto ec, std::string jobName) mutable {
+        return send(response::runJobReturn(ec, jobName));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_jobsDeleteById(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"jobs_delete"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::deleteJobById(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->deleteJobById(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_jobsDeleteByUser(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"jobs_user_delete"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::deleteJobByUser(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->deleteJobByUser(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_changeNodeState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"nodes_edit"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::changeNodeState(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->changeNodeState(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_setQueueState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"queues_edit"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::setQueueState(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->setQueueState(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_setNodeComment(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"nodes_edit"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::setNodeComment(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->setNodeComment(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_holdJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"jobs_edit"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::holdJob(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->holdJob(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_releaseJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"jobs_edit"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::releaseJob(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->releaseJob(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_suspendJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"jobs_edit"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::suspendJob(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->suspendJob(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_resumeJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"jobs_edit"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::resumeJob(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->resumeJob(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_rescheduleRunningJobInQueue(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"jobs_edit"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::rescheduleRunningJobInQueue(indocument, err);
+    if (!o) return send(response::validationError(err));
+
+    auto f = nonstd::apply([batch](auto&&... args){ return batch->rescheduleRunningJobInQueue(args...); }, std::move(*o));
+    run_async(session->ioc(), f, [batch, send](auto ec) mutable {
+        return send(response::commandReturn(ec));
+    });
+}
+
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_getJobs(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"jobs_info"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::getJobs(indocument, err);
+    if (!err.empty()) return send(response::validationError(err));
+
+    run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(o)](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+        return send(response::containerReturn(ec, container));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_getQueues(Session session, CheckAuth check_auth, Send send, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"queues_info"})) return;
+
+    run_async_state<std::vector<cw::batch::Queue>>(session->ioc(), [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+        return send(response::containerReturn(ec, container));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_getNodes(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
+    if (!check_auth({"nodes_info"})) return;
+
+    std::string err;
+    auto o = cw_proxy_batch::getNodes(indocument, err);
+    if (!err.empty()) return send(response::validationError(err));
+
+    run_async_state<std::vector<cw::batch::Node>>(session->ioc(), [batch, f=batch->getNodes(o)](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
+        return send(response::containerReturn(ec, container));
+    });
+}
 
 struct Handler {
     constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
@@ -309,14 +499,17 @@ struct Handler {
         rapidjson::Document indocument;
         indocument.Parse(input);
         if (indocument.HasParseError()) {
-            return session->send(jsonToString(response::json_error("InvalidInput", "Input not json", http::status::bad_request).first));
+            return session->send(jsonToString(response::validationError("input is not json").first));
         }
         if (!indocument.IsObject()) {
-            return session->send(jsonToString(response::json_error("InvalidInput", "Input not a json object", http::status::bad_request).first));
+            return session->send(jsonToString(response::validationError("input is not an object").first));
         }
 
         std::string tag;
-        if (indocument.HasMember("tag") && indocument["tag"].IsString()) tag = indocument["tag"].GetString();
+        if (indocument.HasMember("tag")) {
+            if (!indocument["tag"].IsString()) return session->send(jsonToString(response::validationError("tag is not a string").first));
+            tag = indocument["tag"].GetString();
+        }
 
         // note capture send functor by copy to ensure tag's lifetime
         auto send = [session, tag](response::resp r) {
@@ -324,9 +517,8 @@ struct Handler {
             session->send(jsonToString(r.first));
         };
         
-        if (!(indocument.HasMember("command") && indocument["command"].IsString())) {
-            return send(response::json_error("Command Error", "Command string not given", http::status::bad_request));
-        }
+        if (!indocument.HasMember("command")) return send(response::json_error("CommandError", "command not given", http::status::bad_request)); 
+        if (!indocument["command"].IsString()) return send(response::json_error("CommandError", "command is not a string", http::status::bad_request));
         std::string command = indocument["command"].GetString();
 
         auto check_auth =
@@ -349,32 +541,51 @@ struct Handler {
             session->scopes.clear();
             return send(response::commandSuccess());
         } else if (command == "getNodes") {
-            if (!check_auth({"nodes_info"})) return;
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_state<std::vector<cw::batch::Node>>(session->ioc(), [batch, f=batch->getNodes(std::vector<std::string>{})](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
-                return send(response::containerReturn(ec, container));
-            });
-            return;
+            f_getNodes(session, check_auth, send, indocument, batch);
         } else if (command == "getQueues") {
-            if (!check_auth({"queues_info"})) return;
-
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_state<std::vector<cw::batch::Queue>>(session->ioc(), [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
-                return send(response::containerReturn(ec, container));
-            });
-            return;
+            f_getQueues(session, check_auth, send, batch);
         } else if (command == "getJobs") {
-            if (!check_auth({"jobs_info"})) return;
-
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
-                return send(response::containerReturn(ec, container));
-            });
-            return;
+            f_getJobs(session, check_auth, send, indocument, batch);
         } else if (command == "addUser") {
-            f_usersAdd(session, check_auth, indocument, send);
+            f_usersAdd(session, check_auth, send, indocument);
+        } else if (command == "jobsSubmit") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_jobsSubmit(session, check_auth, send, indocument, batch);
+        } else if (command == "jobsDeleteById") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_jobsDeleteById(session, check_auth, send, indocument, batch);
+        } else if (command == "jobsDeleteByUser") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_jobsDeleteByUser(session, check_auth, send, indocument, batch);
+        } else if (command == "changeNodeState") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_changeNodeState(session, check_auth, send, indocument, batch);
+        } else if (command == "setQueueState") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_setQueueState(session, check_auth, send, indocument, batch);
+        } else if (command == "setNodeComment") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_setNodeComment(session, check_auth, send, indocument, batch);
+        } else if (command == "holdJob") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_holdJob(session, check_auth, send, indocument, batch);
+        } else if (command == "releaseJob") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_releaseJob(session, check_auth, send, indocument, batch);
+        } else if (command == "suspendJob") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_suspendJob(session, check_auth, send, indocument, batch);
+        } else if (command == "resumeJob") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_resumeJob(session, check_auth, send, indocument, batch);
+        } else if (command == "rescheduleRunningJobInQueue") {
+            std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
+            f_rescheduleRunningJobInQueue(session, check_auth, send, indocument, batch);
         } else {
-            return send(response::commandUnknown(command));
+            send(response::commandUnknown(command));
         }
     }
 
@@ -463,43 +674,19 @@ struct Handler {
             run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(std::vector<std::string>{})](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, send_info);
             return;
         } else if (req.method() == http::verb::get && req.target() == "/jobs/delete") {
-            if (!check_auth({"jobs_delete"})) return;
             rapidjson::Document indocument;
             if (!check_json(indocument)) return;
-
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-
-            std::string err;
-            auto o = cw_proxy_batch::deleteJobById(indocument, err);
-            if (!o) return send(response::validationError(err));
-
-            auto f = nonstd::apply([batch](auto&&... args){ return batch->deleteJobById(args...); }, std::move(*o));
-            run_async(session->ioc(), f, [batch, session, res](auto ec) mutable {
-                to_response(res, response::commandReturn(ec));
-                return session->send(std::move(res));
-            });
-            return;
+            f_jobsDeleteById(session, check_auth, send, indocument, batch);
         } else if (req.method() == http::verb::post && req.target() == "/jobs/submit") {
-            if (!check_auth({"jobs_submit"})) return;
             rapidjson::Document indocument;
             if (!check_json(indocument)) return;
-
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-
-            std::string err;
-            auto o = cw_proxy_batch::runJob(indocument, err);
-            if (!o) return send(response::validationError(err));
-            auto f = batch->runJob(*o);
-
-            run_async_state<std::string>(session->ioc(), f, [batch, session, res](auto ec, std::string jobName) mutable {
-                to_response(res, response::runJobReturn(ec, jobName));
-                session->send(std::move(res));
-            });
-            return;
+            f_jobsSubmit(session, check_auth, send, indocument, batch);
         } else if (req.method() == http::verb::post && req.target() == "/users") {
             rapidjson::Document indocument;
             if (!check_json(indocument)) return;
-            f_usersAdd(session, check_auth, indocument, send);
+            f_usersAdd(session, check_auth, send, indocument);
         } else {
             return send(response::requestUnknown(std::string(req.target()), req.method()));
         }

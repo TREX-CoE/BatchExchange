@@ -269,6 +269,43 @@ constexpr auto suspendJob = holdJob;
 constexpr auto resumeJob = holdJob;
 constexpr auto rescheduleRunningJobInQueue = holdJob;
 
+
+std::vector<std::string> getJobs(const rapidjson::Document& document, std::string& err) {
+    std::vector<std::string> jobs;
+    if (document.HasMember("filterJobs")) {
+            if (document["filterJobs"].IsArray()) {
+                    err = "filterJobs is not an array";
+                    return jobs;
+            }
+            for (const auto& v : document["filterJobs"].GetArray()) {
+                if (!v.IsString()) {
+                        err = "filterJobs entry is not a string";
+                        return jobs;
+                }
+                jobs.push_back(v.GetString());
+            }
+    }
+    return jobs;
+}
+
+std::vector<std::string> getNodes(const rapidjson::Document& document, std::string& err) {
+    std::vector<std::string> nodes;
+    if (document.HasMember("filterNodes")) {
+            if (document["filterNodes"].IsArray()) {
+                    err = "filterNodes is not an array";
+                    return nodes;
+            }
+            for (const auto& v : document["filterNodes"].GetArray()) {
+                if (!v.IsString()) {
+                        err = "filterNodes entry is not a string";
+                        return nodes;
+                }
+                nodes.push_back(v.GetString());
+            }
+    }
+    return nodes;
+}
+
 }
 
 
