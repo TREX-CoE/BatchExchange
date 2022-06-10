@@ -39,6 +39,8 @@
 #include <boost/process.hpp>
 #include <boost/asio/error.hpp>
 
+#include "nonstd/invoke.hpp"
+
 #include <cassert>
 #include <stdlib.h>
 
@@ -291,6 +293,8 @@ auto f_usersAdd(Session session, CheckAuth check_auth, const rapidjson::Document
     });
 }
 
+using namespace cw::batch;
+
 struct Handler {
     constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
     constexpr static unsigned int body_limit() { return 10000; }
@@ -464,7 +468,12 @@ struct Handler {
             if (!check_json(indocument)) return;
 
             std::shared_ptr<cw::batch::BatchInterface> batch = create_batch(cw::batch::System::Pbs, exec_callback);
-            auto f = cw_proxy_batch::deleteJobById(*batch, indocument);
+
+            std::string err;
+            auto o = cw_proxy_batch::deleteJobById(indocument, err);
+            if (!o) return send(response::validationError(err));
+
+            auto f = nonstd::apply([batch](auto&&... args){ return batch->deleteJobById(args...); }, std::move(*o));
             run_async(session->ioc(), f, [batch, session, res](auto ec) mutable {
                 to_response(res, response::commandReturn(ec));
                 return session->send(std::move(res));

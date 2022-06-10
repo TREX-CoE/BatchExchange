@@ -10,63 +10,72 @@ namespace {
 
 using namespace cw::batch;
 
-bool getForce(const rapidjson::Document& document) {
-        return document.HasMember("force") && document["force"].IsBool() && document["force"].GetBool();
+std::string getForce(const rapidjson::Document& document, bool& out) {
+        if (document.HasMember("force")) {
+                if (!document["force"].IsBool()) return "force is not a bool";
+                out = document["force"].GetBool();
+        }
+        return "";
 }
 
-std::string getJob(const rapidjson::Document& document) {
-        if (!document.HasMember("job")) throw cw::helper::ValidationError("No job given");
+std::string getJob(const rapidjson::Document& document, std::string& out) {
+        if (!document.HasMember("job")) return "job not given";
         auto& job = document["job"];
-        if (!job.IsString()) throw cw::helper::ValidationError("Job is not a string");
-        return std::string(job.GetString());
+        if (!job.IsString()) return "job is not a string";
+        out = std::string(job.GetString());
+        return "";
 }
 
-std::string getNode(const rapidjson::Document& document) {
-        if (!document.HasMember("node")) throw cw::helper::ValidationError("No node given");
+std::string getNode(const rapidjson::Document& document, std::string& out) {
+        if (!document.HasMember("node")) return "No node given";
         auto& node = document["node"];
-        if (!node.IsString()) throw cw::helper::ValidationError("Node is not a string");
-        return std::string(node.GetString());
+        if (!node.IsString()) return "Node is not a string";
+        out = std::string(node.GetString());
+        return "";
 }
 
-std::string getQueue(const rapidjson::Document& document) {
-        if (!document.HasMember("queue")) throw cw::helper::ValidationError("No queue given");
+std::string getQueue(const rapidjson::Document& document, std::string& out) {
+        if (!document.HasMember("queue")) return "queue not given";
         auto& queue = document["queue"];
-        if (!queue.IsString()) throw cw::helper::ValidationError("Queue is not a string");
-        return std::string(queue.GetString());
+        if (!queue.IsString()) return "queue is not a string";
+        out = std::string(queue.GetString());
+        return "";
 }
 
-std::string getState(const rapidjson::Document& document) {
-        if (!document.HasMember("state")) throw cw::helper::ValidationError("No state given");
+std::string getState(const rapidjson::Document& document, std::string& out) {
+        if (!document.HasMember("state")) return "state not given";
         auto& queue = document["state"];
-        if (!queue.IsString()) throw cw::helper::ValidationError("State is not a string");
-        return std::string(queue.GetString());
+        if (!queue.IsString()) return "state is not a string";
+        out = std::string(queue.GetString());
+        return "";
 }
 
-QueueState convertQueue(const std::string& str) {
+std::string convertQueue(const std::string& str, QueueState& state) {
         if (str == "open") {
-                return QueueState::Open;
+                state = QueueState::Open;
         } else if (str == "closed") {
-                return QueueState::Closed;
+                state = QueueState::Closed;
         } else if (str == "inactive") {
-                return QueueState::Inactive;
+                state = QueueState::Inactive;
         } else if (str == "draining") {
-                return QueueState::Draining;
+                state = QueueState::Draining;
         } else {
-                throw cw::helper::ValidationError("Invalid queue state");
+                return "Invalid queue state";
         }
+        return "";
 }
 
-
-NodeChangeState convertNodeChange(const std::string& str) {
+std::string convertNodeChange(const std::string& str, NodeChangeState& state) {
         if (str == "resume") {
-                return NodeChangeState::Resume;
+                state = NodeChangeState::Resume;
         } else if (str == "drain") {
-                return NodeChangeState::Drain;
+                state = NodeChangeState::Drain;
         } else if (str == "undrain") {
-                return NodeChangeState::Undrain;
+                state = NodeChangeState::Undrain;
         } else {
-                throw cw::helper::ValidationError("Invalid node state");
+                return "Invalid node state";
         }
+        return "";
 }
 
 }
@@ -76,10 +85,10 @@ namespace cw_proxy_batch {
 
 using namespace cw::batch;
 
-boost::optional<JobOptions> runJob(rapidjson::Document& document, std::string& err) {
+boost::optional<JobOptions> runJob(const rapidjson::Document& document, std::string& err) {
     JobOptions opts;
     if (!document.HasMember("path")) {
-        err = "path is not given";
+        err = "path not given";
         return {};
     } else {
         auto& path = document["path"];
@@ -133,61 +142,132 @@ boost::optional<JobOptions> runJob(rapidjson::Document& document, std::string& e
 }
 
 
-auto deleteJobById(BatchInterface& batch, rapidjson::Document& document) {
-    return batch.deleteJobById(getJob(document), getForce(document)); 
+boost::optional<std::tuple<std::string, bool>> deleteJobById(const rapidjson::Document& document, std::string& err) {
+    std::tuple<std::string, bool> t;
+    err = getJob(document, std::get<0>(t));
+    if (!err.empty()) return {};
+    err = getForce(document, std::get<1>(t));
+    if (!err.empty()) return {};
+    return {t};
 }
 
-auto deleteJobByUser(BatchInterface& batch, rapidjson::Document& document) {
-    if (!document.HasMember("user")) throw cw::helper::ValidationError("No user given");
+boost::optional<std::tuple<std::string, bool>> deleteJobByUser(const rapidjson::Document& document, std::string& err) {
+    std::tuple<std::string, bool> t;
+    if (!document.HasMember("user")) {
+        err = "user not given";
+        return {};
+    }
     auto& user = document["user"];
-    if (!user.IsString()) throw cw::helper::ValidationError("User is not a string");
-    return batch.deleteJobByUser(std::string(user.GetString()), getForce(document));
+    if (!user.IsString()) {
+        err = "user is not a string";
+        return {};
+    }
+    err = getForce(document, std::get<1>(t));
+    if (!err.empty()) return {};
+    return {t};
 }
 
-auto changeNodeState(BatchInterface& batch, rapidjson::Document& document) {
-    std::string reasonText;
+boost::optional<std::tuple<std::string, NodeChangeState, bool, std::string, bool>> changeNodeState(const rapidjson::Document& document, std::string& err) {
+    std::tuple<std::string, NodeChangeState, bool, std::string, bool> t;
+    err = getNode(document, std::get<0>(t));
+    if (!err.empty()) return {};
+
+    std::string state;
+    err = getState(document, state);
+    if (!err.empty()) return {};
+    err = convertNodeChange(state, std::get<1>(t));
+    if (!err.empty()) return {};
+
+    err = getForce(document, std::get<2>(t));
+    if (!err.empty()) return {};
+
     if (document.HasMember("reason")) {
             auto& reason = document["reason"];
-            if (!reason.IsString()) throw cw::helper::ValidationError("Reason is not a string");
-            reasonText = reason.GetString();
+            if (!reason.IsString()) {
+                err = "reason is not a string";
+                return {};
+            }
+            std::get<3>(t) = reason.GetString();
     }
-    bool appendReason = document.HasMember("append") && document["append"].IsBool() && document["append"].GetBool();
+    if (document.HasMember("append")) {
+            if (!document["append"].IsBool()) {
+                    err = "append is not a bool";
+                    return {};
+            }
+            std::get<4>(t) = document["append"].GetBool();
+    } else {
+            std::get<4>(t) = false;
+    }
 
-    return batch.changeNodeState(getNode(document), convertNodeChange(getState(document)), getForce(document), reasonText, appendReason);
+    return {t};
 }
 
-auto setQueueState(BatchInterface& batch, rapidjson::Document& document) {
-    return batch.setQueueState(getQueue(document), convertQueue(getState(document)), getForce(document));
+boost::optional<std::tuple<std::string, QueueState, bool>> setQueueState(const rapidjson::Document& document, std::string& err) {
+    std::tuple<std::string, QueueState, bool> t;
+    err = getQueue(document, std::get<0>(t));
+    if (!err.empty()) return {};
+
+    std::string state;
+    err = getState(document, state);
+    if (!err.empty()) return {};
+    err = convertQueue(state, std::get<1>(t));
+    if (!err.empty()) return {};
+
+    err = getForce(document, std::get<2>(t));
+    if (!err.empty()) return {};
+
+    return {t};
 }
 
-auto setNodeComment(BatchInterface& batch, rapidjson::Document& document) {
-    if (!document.HasMember("comment")) throw cw::helper::ValidationError("No comment given");
+boost::optional<std::tuple<std::string, bool, std::string, bool>> setNodeComment(const rapidjson::Document& document, std::string& err) {
+    std::tuple<std::string, bool, std::string, bool> t;
+
+    err = getNode(document, std::get<0>(t));
+    if (!err.empty()) return {};
+
+    err = getForce(document, std::get<1>(t));
+    if (!err.empty()) return {};
+
+    if (!document.HasMember("comment")) {
+        err = "comment not given";
+        return {};
+    }
     auto& comment = document["comment"];
-    if (!comment.IsString()) throw cw::helper::ValidationError("Comment is not a string");
-    bool appendComment = document.HasMember("append") && document["append"].IsBool() && document["append"].GetBool();
+    if (!comment.IsString()) {
+        err = "comment is not a string";
+        return {};
+    }
+    std::get<2>(t) = comment.GetString();
 
-    return batch.setNodeComment(getNode(document), getForce(document), std::string(comment.GetString()), appendComment);
+    if (document.HasMember("append")) {
+        if (!document["append"].IsBool()) {
+                err = "append is not a bool";
+                return {};
+        }
+        std::get<3>(t) = document["append"].GetBool();
+    } else {
+        std::get<3>(t) = false;
+    }
+
+    return {t};
 }
 
-auto holdJob(BatchInterface& batch, rapidjson::Document& document) {
-    return batch.holdJob(getJob(document), getForce(document));
+boost::optional<std::tuple<std::string, bool>> holdJob(const rapidjson::Document& document, std::string& err) {
+    std::tuple<std::string, bool> t;
+
+    err = getJob(document, std::get<0>(t));
+    if (!err.empty()) return {};
+
+    err = getForce(document, std::get<1>(t));
+    if (!err.empty()) return {};
+
+    return {t};
 }
 
-auto releaseJob(BatchInterface& batch, rapidjson::Document& document) {
-    return batch.releaseJob(getJob(document), getForce(document));
-}
-
-auto suspendJob(BatchInterface& batch, rapidjson::Document& document) {
-    return batch.suspendJob(getJob(document), getForce(document));
-}
-
-auto resumeJob(BatchInterface& batch, rapidjson::Document& document) {
-    return batch.resumeJob(getJob(document), getForce(document));
-}
-
-auto rescheduleRunningJobInQueue(BatchInterface& batch, rapidjson::Document& document) {
-    return batch.rescheduleRunningJobInQueue(getJob(document), getForce(document));
-}
+constexpr auto releaseJob = holdJob;
+constexpr auto suspendJob = holdJob;
+constexpr auto resumeJob = holdJob;
+constexpr auto rescheduleRunningJobInQueue = holdJob;
 
 }
 
