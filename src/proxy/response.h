@@ -69,6 +69,10 @@ resp commandUnknown(const std::string& command) {
     return validationError("Unknown command: "+command);
 }
 
+resp commandUnsupported() {
+    return json_error("CommandUnsupported", "Command not supported by batchsystem", boost::beast::http::status::bad_request);
+}
+
 resp commandSuccess() {
     resp r;
     rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();

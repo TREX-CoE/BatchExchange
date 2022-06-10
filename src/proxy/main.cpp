@@ -299,6 +299,8 @@ template <typename Session, typename CheckAuth, typename Send>
 void f_jobsSubmit(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"jobs_submit"})) return;
 
+    if (!batch->runJob(supported)) return send(response::commandUnsupported());
+
     std::string err;
     auto o = cw_proxy_batch::runJob(indocument, err);
     if (!o) return send(response::validationError(err));
@@ -312,6 +314,8 @@ void f_jobsSubmit(Session session, CheckAuth check_auth, Send send, const rapidj
 template <typename Session, typename CheckAuth, typename Send>
 void f_jobsDeleteById(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"jobs_delete"})) return;
+
+    if (!batch->deleteJobById(supported)) return send(response::commandUnsupported());
 
     std::string err;
     auto o = cw_proxy_batch::deleteJobById(indocument, err);
@@ -327,6 +331,8 @@ template <typename Session, typename CheckAuth, typename Send>
 void f_jobsDeleteByUser(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"jobs_user_delete"})) return;
 
+    if (!batch->deleteJobByUser(supported)) return send(response::commandUnsupported());
+
     std::string err;
     auto o = cw_proxy_batch::deleteJobByUser(indocument, err);
     if (!o) return send(response::validationError(err));
@@ -340,6 +346,8 @@ void f_jobsDeleteByUser(Session session, CheckAuth check_auth, Send send, const 
 template <typename Session, typename CheckAuth, typename Send>
 void f_changeNodeState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"nodes_edit"})) return;
+
+    if (!batch->changeNodeState(supported)) return send(response::commandUnsupported());
 
     std::string err;
     auto o = cw_proxy_batch::changeNodeState(indocument, err);
@@ -355,6 +363,8 @@ template <typename Session, typename CheckAuth, typename Send>
 void f_setQueueState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"queues_edit"})) return;
 
+    if (!batch->setQueueState(supported)) return send(response::commandUnsupported());
+
     std::string err;
     auto o = cw_proxy_batch::setQueueState(indocument, err);
     if (!o) return send(response::validationError(err));
@@ -368,6 +378,8 @@ void f_setQueueState(Session session, CheckAuth check_auth, Send send, const rap
 template <typename Session, typename CheckAuth, typename Send>
 void f_setNodeComment(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"nodes_edit"})) return;
+
+    if (!batch->setNodeComment(supported)) return send(response::commandUnsupported());
 
     std::string err;
     auto o = cw_proxy_batch::setNodeComment(indocument, err);
@@ -383,6 +395,8 @@ template <typename Session, typename CheckAuth, typename Send>
 void f_holdJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"jobs_edit"})) return;
 
+    if (!batch->holdJob(supported)) return send(response::commandUnsupported());
+
     std::string err;
     auto o = cw_proxy_batch::holdJob(indocument, err);
     if (!o) return send(response::validationError(err));
@@ -396,6 +410,8 @@ void f_holdJob(Session session, CheckAuth check_auth, Send send, const rapidjson
 template <typename Session, typename CheckAuth, typename Send>
 void f_releaseJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"jobs_edit"})) return;
+
+    if (!batch->releaseJob(supported)) return send(response::commandUnsupported());
 
     std::string err;
     auto o = cw_proxy_batch::releaseJob(indocument, err);
@@ -411,6 +427,8 @@ template <typename Session, typename CheckAuth, typename Send>
 void f_suspendJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"jobs_edit"})) return;
 
+    if (!batch->suspendJob(supported)) return send(response::commandUnsupported());
+
     std::string err;
     auto o = cw_proxy_batch::suspendJob(indocument, err);
     if (!o) return send(response::validationError(err));
@@ -425,6 +443,8 @@ template <typename Session, typename CheckAuth, typename Send>
 void f_resumeJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"jobs_edit"})) return;
 
+    if (!batch->resumeJob(supported)) return send(response::commandUnsupported());
+
     std::string err;
     auto o = cw_proxy_batch::resumeJob(indocument, err);
     if (!o) return send(response::validationError(err));
@@ -438,6 +458,8 @@ void f_resumeJob(Session session, CheckAuth check_auth, Send send, const rapidjs
 template <typename Session, typename CheckAuth, typename Send>
 void f_rescheduleRunningJobInQueue(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"jobs_edit"})) return;
+
+    if (!batch->rescheduleRunningJobInQueue(supported)) return send(response::commandUnsupported());
 
     std::string err;
     auto o = cw_proxy_batch::rescheduleRunningJobInQueue(indocument, err);
@@ -454,6 +476,8 @@ template <typename Session, typename CheckAuth, typename Send>
 void f_getJobs(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"jobs_info"})) return;
 
+    if (!batch->getJobs(supported)) return send(response::commandUnsupported());
+
     std::string err;
     auto o = cw_proxy_batch::getJobs(indocument, err);
     if (!err.empty()) return send(response::validationError(err));
@@ -467,6 +491,8 @@ template <typename Session, typename CheckAuth, typename Send>
 void f_getQueues(Session session, CheckAuth check_auth, Send send, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"queues_info"})) return;
 
+    if (!batch->getQueues(supported)) return send(response::commandUnsupported());
+
     run_async_state<std::vector<cw::batch::Queue>>(session->ioc(), [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
         return send(response::containerReturn(ec, container));
     });
@@ -475,6 +501,8 @@ void f_getQueues(Session session, CheckAuth check_auth, Send send, std::shared_p
 template <typename Session, typename CheckAuth, typename Send>
 void f_getNodes(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"nodes_info"})) return;
+
+    if (!batch->getNodes(supported)) return send(response::commandUnsupported());
 
     std::string err;
     auto o = cw_proxy_batch::getNodes(indocument, err);
@@ -488,6 +516,8 @@ void f_getNodes(Session session, CheckAuth check_auth, Send send, const rapidjso
 template <typename Session, typename CheckAuth, typename Send>
 void f_getBatchInfo(Session session, CheckAuth check_auth, Send send, std::shared_ptr<BatchInterface> batch) {
     if (!check_auth({"batch_info"})) return;
+
+    if (!batch->getBatchInfo(supported)) return send(response::commandUnsupported());
 
     run_async_state<BatchInfo>(session->ioc(), [batch, f=batch->getBatchInfo()](BatchInfo& state){ return f(state); }, [send](auto ec, auto batchinfo) mutable {
         return send(response::getBatchInfoReturn(ec, batchinfo));
