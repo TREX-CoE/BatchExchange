@@ -19,7 +19,6 @@ set( proxy_HDR
     globals.h
     salt_hash.h
     set_echo.h
-    validation.h
     response.h
 )
 

@@ -45,9 +45,6 @@ resp json_error_ec(std::error_code ec, const std::string& type = "Running comman
 resp json_error_exc(const std::exception& e, const std::string& type = "Exception thrown") {
     return json_error(type, e.what(), boost::beast::http::status::internal_server_error);
 }
-resp json_error_exc(const cw::helper::ValidationError& e, const std::string& type = "Request body validation failed") {
-    return json_error(type, e.what(), boost::beast::http::status::bad_request);
-}
 
 resp invalid_auth(const std::string& scope="") {
     return json_error("Invalid credentials or scope", "Could not authenticate user or user does not have requested scope(s)" + (scope.empty() ? "" : (": " + scope)), boost::beast::http::status::unauthorized);
@@ -64,6 +61,11 @@ resp requestUnknown(const std::string& uri, boost::beast::http::verb method) {
 resp validationError(const std::string& msg) {
     return json_error("ValidationError", msg, boost::beast::http::status::bad_request);
 }
+
+resp invalidBatch() {
+    return json_error("BatchsystemInvalid", "Invalid batchsystem selected, use one of: pbs | slurm | lsf", boost::beast::http::status::bad_request);
+}
+
 
 resp commandUnknown(const std::string& command) {
     return validationError("Unknown command: "+command);

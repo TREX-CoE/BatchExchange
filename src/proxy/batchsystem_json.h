@@ -2,7 +2,6 @@
 #define BOOST_PROXY_BATCHSYSTEM_JSON
 
 #include "batchsystem/batchsystem.h"
-#include "proxy/validation.h"
 
 #include <boost/optional.hpp>
 
