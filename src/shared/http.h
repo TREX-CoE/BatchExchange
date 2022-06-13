@@ -2,12 +2,12 @@
 #define BOOST_SHARED_HTTP
 
 #include <string>
-#include "shared/string_view.h"
+#include <boost/utility/string_view.hpp>
 
 namespace cw {
 namespace http {
 
-bool parse_auth_header(string_view header, std::string& user, std::string& pass);
+bool parse_auth_header(boost::string_view header, std::string& user, std::string& pass);
 
 }
 }

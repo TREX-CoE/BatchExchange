@@ -2,16 +2,16 @@
 #define BOOST_PROXY_SHARED_SALT_HASH
 
 #include "shared/sha512.h"
-#include "shared/string_view.h"
 #include "shared/obfuscator.h"
 
+#include <boost/utility/string_view.hpp>
 #include <string>
 
 namespace cw {
 namespace helper {
 
 template <unsigned int N, unsigned char Key, typename T>
-std::string salt_hash(const cw::helper::obfuscator<N, Key, T>& pepper, string_view salt, string_view input) {
+std::string salt_hash(const cw::helper::obfuscator<N, Key, T>& pepper, boost::string_view salt, boost::string_view input) {
     char buf[N];
     pepper.deobfuscate(buf);
 

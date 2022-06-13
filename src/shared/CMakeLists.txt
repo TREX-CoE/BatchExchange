@@ -19,7 +19,6 @@ set(SHARED_HDR
     sha512.h
     salt_hash.h
     stream_cast.h
-    string_view.h
     splitString.h
     joinString.h
     http.h

@@ -5,7 +5,7 @@
 #include <map>
 #include <set>
 
-#include "shared/string_view.h"
+#include <boost/utility/string_view.hpp>
 #include "shared/http.h"
 
 namespace cw {
@@ -24,9 +24,9 @@ void read(dict& creds, const std::string& s);
 
 void write(const dict& creds, std::string& out);
 
-void set_user(credentials::dict& creds, string_view user, std::set<std::string> scopes, string_view password);
+void set_user(credentials::dict& creds, boost::string_view user, std::set<std::string> scopes, boost::string_view password);
 
-dict::const_iterator check_header(const dict& creds, string_view header);
+dict::const_iterator check_header(const dict& creds, boost::string_view header);
 
 }
 }

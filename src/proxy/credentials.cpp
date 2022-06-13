@@ -60,14 +60,14 @@ void write(const dict& creds, std::string& out) {
     }
 }
 
-void set_user(credentials::dict& creds, string_view user, std::set<std::string> scopes, string_view password) {
+void set_user(credentials::dict& creds, boost::string_view user, std::set<std::string> scopes, boost::string_view password) {
     std::string salt = generate_salt();
     std::string hash = cw::proxy::salt_hash(salt, password);
     creds[std::string(user)] = credentials::user_data{scopes, salt, hash};
 }
 
 
-dict::const_iterator check_header(const dict& creds, string_view header) {
+dict::const_iterator check_header(const dict& creds, boost::string_view header) {
     std::string user, pass;
     if (cw::http::parse_auth_header(header, user, pass)) {
         auto it = creds.find(user);

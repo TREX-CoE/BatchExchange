@@ -2,12 +2,12 @@
 #define BOOST_PROXY_SHA512
 
 #include <string>
-#include "shared/string_view.h"
+#include <boost/utility/string_view.hpp>
 
 namespace cw {
 namespace helper {
 
-std::string sha512_hash(string_view input);
+std::string sha512_hash(boost::string_view input);
 
 }
 }

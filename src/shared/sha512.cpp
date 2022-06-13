@@ -8,7 +8,7 @@
 namespace cw {
 namespace helper {
 
-std::string sha512_hash(string_view input) {
+std::string sha512_hash(boost::string_view input) {
     EVP_MD_CTX * evpCtx = EVP_MD_CTX_new ();
     EVP_DigestInit_ex (evpCtx, EVP_sha512 (), NULL);
     EVP_DigestUpdate(evpCtx, input.data(), input.size());
