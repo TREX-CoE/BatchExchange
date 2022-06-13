@@ -2,12 +2,27 @@
 #define BOOST_PROXY_BATCHSYSTEM_JSON
 
 #include "batchsystem/batchsystem.h"
+#include "proxy/uri.h"
+#include "shared/splitString.h"
 
 #include <boost/optional.hpp>
 
 namespace {
 
 using namespace cw::batch;
+
+const std::string queryComma = ",";
+
+bool queryToBool(const std::string& input, std::string& err) {
+    if (input == "false" || input == "0" || input == "no") {
+        return false;
+    } else if (input == "" || input == "true" || input == "1" || input == "yes") {
+        return true;
+    } else {
+        err =  "not a valid bool";
+        return false;
+    }
+}
 
 std::string getForce(const rapidjson::Document& document, bool& out) {
         if (document.HasMember("force")) {
@@ -83,6 +98,7 @@ std::string convertNodeChange(const std::string& str, NodeChangeState& state) {
 namespace cw_proxy_batch {
 
 using namespace cw::batch;
+using namespace cw::helper::uri;
 
 boost::optional<JobOptions> runJob(const rapidjson::Document& document, std::string& err) {
     JobOptions opts;
@@ -141,12 +157,24 @@ boost::optional<JobOptions> runJob(const rapidjson::Document& document, std::str
 }
 
 
-boost::optional<std::tuple<std::string, bool>> deleteJobById(const rapidjson::Document& document, std::string& err) {
+boost::optional<std::tuple<std::string, bool>> deleteJobById(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, bool> t;
-    err = getJob(document, std::get<0>(t));
-    if (!err.empty()) return {};
-    err = getForce(document, std::get<1>(t));
-    if (!err.empty()) return {};
+
+    if (uri.has_value()) {
+        if (uri.path.size() != 1) { err = "path not including job id"; return {}; }
+        std::get<0>(t) = uri.path[0];
+        if (uri.query.count("force")) {
+            std::get<1>(t) = queryToBool(uri.query.at("force"), err); 
+            if (!err.empty()) return {};
+        } else {
+            std::get<1>(t) = false;
+        }
+    } else {
+        err = getJob(document, std::get<0>(t));
+        if (!err.empty()) return {};
+        err = getForce(document, std::get<1>(t));
+        if (!err.empty()) return {};
+    }
     return {t};
 }
 
@@ -287,9 +315,17 @@ std::vector<std::string> getJobs(const rapidjson::Document& document, std::strin
     return jobs;
 }
 
-std::vector<std::string> getNodes(const rapidjson::Document& document, std::string& err) {
+std::vector<std::string> getNodes(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::vector<std::string> nodes;
-    if (document.HasMember("filterNodes")) {
+    if (uri.has_value()) {
+        if (uri.query.count("filterNodes")) {
+            std::string filter = uri.query.at("filterNodes");
+            cw::helper::splitString(filter, queryComma, [&nodes, &filter](size_t start, size_t end){
+                nodes.push_back(filter.substr(start, end));
+                return true;
+            });
+        }
+    } else if (document.HasMember("filterNodes")) {
             if (document["filterNodes"].IsArray()) {
                     err = "filterNodes is not an array";
                     return nodes;
