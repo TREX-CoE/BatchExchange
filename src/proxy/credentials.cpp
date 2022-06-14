@@ -6,6 +6,8 @@
 #include "shared/randomHex.h"
 
 #include <sstream>
+#include <iostream>
+#include <fstream>
 
 static const std::string delimiter = ":";
 static const std::string scope_delimiter = ",";
@@ -58,6 +60,33 @@ void write(const dict& creds, std::string& out) {
     for (const auto& p : creds) {
         out += p.first + delimiter + cw::helper::joinString(p.second.scopes.begin(), p.second.scopes.end(), scope_delimiter) + delimiter.data() + p.second.salt + delimiter + p.second.hash + "\n";
     }
+}
+
+bool read_file(const std::string& cred_file, cw::helper::credentials::dict& creds) {
+    std::ifstream creds_fs(cred_file);
+    if (!creds_fs.good()) {
+        std::cout << "Could not open '" << cred_file << "' for reading" << std::endl;
+        return false;
+    }
+
+    std::stringstream buffer;
+    buffer << creds_fs.rdbuf();
+
+    read(creds, buffer.str());
+    return true;
+}
+
+bool write_file(const std::string& cred_file, const cw::helper::credentials::dict& creds) {
+    std::ofstream creds_fso(cred_file);
+    if (!creds_fso.good()) {
+        std::cout << "Could not open '" << cred_file << "' for writing" << std::endl;
+        return false;
+    }
+
+    std::string out;
+    write(creds, out);
+    creds_fso << out;
+    return true;
 }
 
 void set_user(credentials::dict& creds, boost::string_view user, std::set<std::string> scopes, boost::string_view password) {

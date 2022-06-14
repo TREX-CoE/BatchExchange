@@ -12,6 +12,8 @@ set( proxy_SRC
     credentials.cpp
     globals.cpp
     uri.cpp
+    cmd_run.cpp
+    cmd_user.cpp
     handler.cpp
 )
 set( proxy_HDR
@@ -23,6 +25,8 @@ set( proxy_HDR
     set_echo.h
     response.h
     uri.h
+    cmd_run.h
+    cmd_user.h
     handler.h
 )
 
