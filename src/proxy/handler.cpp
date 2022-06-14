@@ -469,6 +469,18 @@ void f_getBatchInfo(Session session, CheckAuth check_auth, Send send, const rapi
     });
 }
 
+template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
+void f_detect(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+    if (!check_auth({"detect"})) return;
+
+    auto batch = getBatch(indocument, uri, exec_cb);
+    if (!batch) return send(response::invalidBatch());
+
+    run_async_state<bool>(session->ioc(), [batch, f=batch->detect()](bool& detected){ return f(detected); }, [send](auto ec, auto detected) mutable {
+        return send(response::detectReturn(ec, detected));
+    });
+}
+
 
 struct Handler {
     constexpr static std::chrono::duration<long int> timeout() { return std::chrono::seconds(30); }
@@ -531,6 +543,8 @@ struct Handler {
             return send(response::commandSuccess());
         } else if (command == "setBatchsystem") {
             return send(ws_setBatchsystem(session->selectedSystem, indocument));
+        } else if (command == "detect") {
+            f_detect(session, check_auth, send, indocument, url, exec_callback);
         } else if (command == "getBatchInfo") {
             f_getBatchInfo(session, check_auth, send, indocument, url, exec_callback);
         } else if (command == "getNodes") {

@@ -141,6 +141,27 @@ resp getBatchInfoReturn(std::error_code ec, const cw::batch::BatchInfo& batchinf
     }
 }
 
+
+resp detectReturn(std::error_code ec, bool detected) {
+    if (ec) {
+        return json_error_ec(ec);
+    } else {
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.second = boost::beast::http::status::ok;
+        r.first.SetObject();
+        {
+            rapidjson::Value data;
+            data.SetObject();
+            data.AddMember("detected", detected, allocator);
+            r.first.AddMember("data", data, allocator);
+        }
+        return r;
+    }
+}
+
+
+
 resp runJobReturn(std::error_code ec, const std::string& jobName) {
     if (ec) {
         return json_error_ec(ec);
