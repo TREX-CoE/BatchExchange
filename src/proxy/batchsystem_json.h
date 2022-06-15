@@ -183,26 +183,49 @@ boost::optional<std::tuple<std::string, bool>> deleteJobById(const rapidjson::Do
     return {t};
 }
 
-boost::optional<std::tuple<std::string, bool>> deleteJobByUser(const rapidjson::Document& document, std::string& err) {
+boost::optional<std::tuple<std::string, bool>> deleteJobByUser(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, bool> t;
-    if (!document.HasMember("user")) {
-        err = "user not given";
-        return {};
+
+    if (uri.has_value()) {
+        if (!uri.query.count("user")) {
+            err = "query not including user"; return {};
+        }
+        std::get<0>(t) = uri.query.at("user");
+        if (uri.query.count("force")) {
+            std::get<1>(t) = queryToBool(uri.query.at("force"), err); 
+            if (!err.empty()) return {};
+        } else {
+            std::get<1>(t) = false;
+        }
+    } else {
+        if (!document.HasMember("user")) {
+            err = "user not given";
+            return {};
+        }
+        auto& user = document["user"];
+        if (!user.IsString()) {
+            err = "user is not a string";
+            return {};
+        }
+        err = getForce(document, std::get<1>(t));
+        if (!err.empty()) return {};
     }
-    auto& user = document["user"];
-    if (!user.IsString()) {
-        err = "user is not a string";
-        return {};
-    }
-    err = getForce(document, std::get<1>(t));
-    if (!err.empty()) return {};
     return {t};
 }
 
-boost::optional<std::tuple<std::string, NodeChangeState, bool, std::string, bool>> changeNodeState(const rapidjson::Document& document, std::string& err) {
+boost::optional<std::tuple<std::string, NodeChangeState, bool, std::string, bool>> changeNodeState(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, NodeChangeState, bool, std::string, bool> t;
-    err = getNode(document, std::get<0>(t));
-    if (!err.empty()) return {};
+
+    if (uri.has_value()) {
+        if (uri.path.size() != 1) {
+            err = "node is not given";
+            return {}; 
+        }
+        std::get<0>(t) = uri.path[0];
+    } else {
+        err = getNode(document, std::get<0>(t));
+        if (!err.empty()) return {};
+    }
 
     std::string state;
     err = getState(document, state);
@@ -234,10 +257,19 @@ boost::optional<std::tuple<std::string, NodeChangeState, bool, std::string, bool
     return {t};
 }
 
-boost::optional<std::tuple<std::string, QueueState, bool>> setQueueState(const rapidjson::Document& document, std::string& err) {
+boost::optional<std::tuple<std::string, QueueState, bool>> setQueueState(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, QueueState, bool> t;
-    err = getQueue(document, std::get<0>(t));
-    if (!err.empty()) return {};
+
+    if (uri.has_value()) {
+        if (uri.path.size() != 1) {
+            err = "queue is not given";
+            return {}; 
+        }
+        std::get<0>(t) = uri.path[0];
+    } else {
+        err = getQueue(document, std::get<0>(t));
+        if (!err.empty()) return {};
+    }
 
     std::string state;
     err = getState(document, state);
@@ -251,11 +283,19 @@ boost::optional<std::tuple<std::string, QueueState, bool>> setQueueState(const r
     return {t};
 }
 
-boost::optional<std::tuple<std::string, bool, std::string, bool>> setNodeComment(const rapidjson::Document& document, std::string& err) {
+boost::optional<std::tuple<std::string, bool, std::string, bool>> setNodeComment(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, bool, std::string, bool> t;
 
-    err = getNode(document, std::get<0>(t));
-    if (!err.empty()) return {};
+    if (uri.has_value()) {
+        if (uri.path.size() != 1) {
+            err = "node is not given";
+            return {}; 
+        }
+        std::get<0>(t) = uri.path[0];
+    } else {
+        err = getNode(document, std::get<0>(t));
+        if (!err.empty()) return {};
+    }
 
     err = getForce(document, std::get<1>(t));
     if (!err.empty()) return {};
@@ -284,11 +324,19 @@ boost::optional<std::tuple<std::string, bool, std::string, bool>> setNodeComment
     return {t};
 }
 
-boost::optional<std::tuple<std::string, bool>> holdJob(const rapidjson::Document& document, std::string& err) {
+boost::optional<std::tuple<std::string, bool>> holdJob(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, bool> t;
 
-    err = getJob(document, std::get<0>(t));
-    if (!err.empty()) return {};
+    if (uri.has_value()) {
+        if (uri.path.size() != 1) {
+            err = "job is not given";
+            return {}; 
+        }
+        std::get<0>(t) = uri.path[0];
+    } else {
+        err = getJob(document, std::get<0>(t));
+        if (!err.empty()) return {};
+    }
 
     err = getForce(document, std::get<1>(t));
     if (!err.empty()) return {};
@@ -302,9 +350,15 @@ constexpr auto resumeJob = holdJob;
 constexpr auto rescheduleRunningJobInQueue = holdJob;
 
 
-std::vector<std::string> getJobs(const rapidjson::Document& document, std::string& err) {
+std::vector<std::string> getJobs(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::vector<std::string> jobs;
-    if (document.HasMember("filterJobs")) {
+    if (uri.has_value() && uri.query.count("filterJobs")) {
+        std::string filter = uri.query.at("filterJobs");
+        cw::helper::splitString(filter, queryComma, [&jobs, &filter](size_t start, size_t end){
+            jobs.push_back(filter.substr(start, end));
+            return true;
+        });
+    } else if (document.HasMember("filterJobs")) {
             if (document["filterJobs"].IsArray()) {
                     err = "filterJobs is not an array";
                     return jobs;
@@ -322,14 +376,12 @@ std::vector<std::string> getJobs(const rapidjson::Document& document, std::strin
 
 std::vector<std::string> getNodes(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::vector<std::string> nodes;
-    if (uri.has_value()) {
-        if (uri.query.count("filterNodes")) {
-            std::string filter = uri.query.at("filterNodes");
-            cw::helper::splitString(filter, queryComma, [&nodes, &filter](size_t start, size_t end){
-                nodes.push_back(filter.substr(start, end));
-                return true;
-            });
-        }
+    if (uri.has_value() && uri.query.count("filterNodes")) {
+        std::string filter = uri.query.at("filterNodes");
+        cw::helper::splitString(filter, queryComma, [&nodes, &filter](size_t start, size_t end){
+            nodes.push_back(filter.substr(start, end));
+            return true;
+        });
     } else if (document.HasMember("filterNodes")) {
             if (document["filterNodes"].IsArray()) {
                     err = "filterNodes is not an array";

@@ -48,6 +48,11 @@ bool Uri::parse(Uri& uri, const std::string& input) {
     return false;
 }
 
+Uri& Uri::remove_prefix(size_t len) {
+    path.erase(path.begin(), path.begin() + len);
+    return *this;
+}
+
 }
 }
 }

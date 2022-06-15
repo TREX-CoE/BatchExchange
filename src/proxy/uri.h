@@ -17,6 +17,7 @@ struct Uri {
     std::string fragment;
     bool has_value() const;
     static bool parse(Uri& uri, const std::string& input);
+    Uri& remove_prefix(size_t len);
 };
 
 }

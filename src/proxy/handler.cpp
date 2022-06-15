@@ -245,7 +245,7 @@ void f_jobsDeleteByUser(Session session, CheckAuth check_auth, Send send, const 
     if (!batch->deleteJobByUser(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::deleteJobByUser(indocument, err);
+    auto o = cw_proxy_batch::deleteJobByUser(indocument, uri, err);
     if (!o) return send(response::validationError(err));
 
     auto f = nonstd::apply([batch](auto&&... args){ return batch->deleteJobByUser(args...); }, std::move(*o));
@@ -264,7 +264,7 @@ void f_changeNodeState(Session session, CheckAuth check_auth, Send send, const r
     if (!batch->changeNodeState(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::changeNodeState(indocument, err);
+    auto o = cw_proxy_batch::changeNodeState(indocument, uri, err);
     if (!o) return send(response::validationError(err));
 
     auto f = nonstd::apply([batch](auto&&... args){ return batch->changeNodeState(args...); }, std::move(*o));
@@ -283,7 +283,7 @@ void f_setQueueState(Session session, CheckAuth check_auth, Send send, const rap
     if (!batch->setQueueState(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::setQueueState(indocument, err);
+    auto o = cw_proxy_batch::setQueueState(indocument, uri, err);
     if (!o) return send(response::validationError(err));
 
     auto f = nonstd::apply([batch](auto&&... args){ return batch->setQueueState(args...); }, std::move(*o));
@@ -302,7 +302,7 @@ void f_setNodeComment(Session session, CheckAuth check_auth, Send send, const ra
     if (!batch->setNodeComment(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::setNodeComment(indocument, err);
+    auto o = cw_proxy_batch::setNodeComment(indocument, uri, err);
     if (!o) return send(response::validationError(err));
 
     auto f = nonstd::apply([batch](auto&&... args){ return batch->setNodeComment(args...); }, std::move(*o));
@@ -321,7 +321,7 @@ void f_holdJob(Session session, CheckAuth check_auth, Send send, const rapidjson
     if (!batch->holdJob(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::holdJob(indocument, err);
+    auto o = cw_proxy_batch::holdJob(indocument, uri, err);
     if (!o) return send(response::validationError(err));
 
     auto f = nonstd::apply([batch](auto&&... args){ return batch->holdJob(args...); }, std::move(*o));
@@ -340,7 +340,7 @@ void f_releaseJob(Session session, CheckAuth check_auth, Send send, const rapidj
     if (!batch->releaseJob(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::releaseJob(indocument, err);
+    auto o = cw_proxy_batch::releaseJob(indocument, uri, err);
     if (!o) return send(response::validationError(err));
 
     auto f = nonstd::apply([batch](auto&&... args){ return batch->releaseJob(args...); }, std::move(*o));
@@ -359,7 +359,7 @@ void f_suspendJob(Session session, CheckAuth check_auth, Send send, const rapidj
     if (!batch->suspendJob(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::suspendJob(indocument, err);
+    auto o = cw_proxy_batch::suspendJob(indocument, uri, err);
     if (!o) return send(response::validationError(err));
 
     auto f = nonstd::apply([batch](auto&&... args){ return batch->suspendJob(args...); }, std::move(*o));
@@ -378,7 +378,7 @@ void f_resumeJob(Session session, CheckAuth check_auth, Send send, const rapidjs
     if (!batch->resumeJob(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::resumeJob(indocument, err);
+    auto o = cw_proxy_batch::resumeJob(indocument, uri, err);
     if (!o) return send(response::validationError(err));
 
     auto f = nonstd::apply([batch](auto&&... args){ return batch->resumeJob(args...); }, std::move(*o));
@@ -397,7 +397,7 @@ void f_rescheduleRunningJobInQueue(Session session, CheckAuth check_auth, Send s
     if (!batch->rescheduleRunningJobInQueue(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::rescheduleRunningJobInQueue(indocument, err);
+    auto o = cw_proxy_batch::rescheduleRunningJobInQueue(indocument, uri, err);
     if (!o) return send(response::validationError(err));
 
     auto f = nonstd::apply([batch](auto&&... args){ return batch->rescheduleRunningJobInQueue(args...); }, std::move(*o));
@@ -417,7 +417,7 @@ void f_getJobs(Session session, CheckAuth check_auth, Send send, const rapidjson
     if (!batch->getJobs(supported)) return send(response::commandUnsupported());
 
     std::string err;
-    auto o = cw_proxy_batch::getJobs(indocument, err);
+    auto o = cw_proxy_batch::getJobs(indocument, uri, err);
     if (!err.empty()) return send(response::validationError(err));
 
     run_async_state<std::vector<cw::batch::Job>>(session->ioc(), [batch, f=batch->getJobs(o)](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
@@ -655,21 +655,50 @@ struct Handler {
         if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "openapi.json") {
             api_openapi(res);
             return session->send(std::move(res));
+        } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "state") {
+            f_detect(session, check_auth, send, indocument, url, exec_callback, {});
+        } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "batchinfo") {
+            f_getBatchInfo(session, check_auth, send, indocument, url, exec_callback, {});
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "nodes") {
             f_getNodes(session, check_auth, send, indocument, url, exec_callback, {});
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "queues") {
             f_getQueues(session, check_auth, send, indocument, url, exec_callback, {});
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "jobs") {
             f_getJobs(session, check_auth, send, indocument, url, exec_callback, {});
-        } else if (req.method() == http::verb::post && url.path.size() == 1 && url.path[0] == "jobs") {
-            if (!check_json(indocument)) return;
-            f_jobsSubmit(session, check_auth, send, indocument, url, exec_callback, {});
         } else if (req.method() == http::verb::post && url.path.size() == 1 && url.path[0] == "users") {
             if (!check_json(indocument)) return;
             f_usersAdd(session, check_auth, send, indocument);
-        } else if (req.method() == http::verb::delete_ && url.path.size() == 1 && url.path[0] == "jobs") {
-            url.path.erase(url.path.begin());
-            f_jobsDeleteById(session, check_auth, send, indocument, url, exec_callback, {});
+        } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[1] == "*" && url.path[2] == "submit") {
+            if (!check_json(indocument)) return;
+            f_jobsSubmit(session, check_auth, send, indocument, url, exec_callback, {});
+        } else if (req.method() == http::verb::delete_ && url.path.size() == 2 && url.path[0] == "jobs" && url.path[1] == "*") {
+            f_jobsDeleteByUser(session, check_auth, send, indocument, url, exec_callback, {});
+        } else if (req.method() == http::verb::delete_ && url.path.size() == 2 && url.path[0] == "jobs") {
+            f_jobsDeleteById(session, check_auth, send, indocument, url.remove_prefix(1), exec_callback, {});
+        } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "nodes" && url.path[2] == "state") {
+            if (!check_json(indocument)) return;
+            f_changeNodeState(session, check_auth, send, indocument, url.remove_prefix(1), exec_callback, {});
+        } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "queues" && url.path[2] == "state") {
+            if (!check_json(indocument)) return;
+            f_setQueueState(session, check_auth, send, indocument, url.remove_prefix(1), exec_callback, {});
+        } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "nodes" && url.path[2] == "comment") {
+            if (!check_json(indocument)) return;
+            f_setNodeComment(session, check_auth, send, indocument, url.remove_prefix(1), exec_callback, {});
+        } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "hold") {
+            if (!check_json(indocument)) return;
+            f_holdJob(session, check_auth, send, indocument, url.remove_prefix(1), exec_callback, {});
+        } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "release") {
+            if (!check_json(indocument)) return;
+            f_releaseJob(session, check_auth, send, indocument, url.remove_prefix(1), exec_callback, {});
+        } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "suspend") {
+            if (!check_json(indocument)) return;
+            f_suspendJob(session, check_auth, send, indocument, url.remove_prefix(1), exec_callback, {});
+        } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "resume") {
+            if (!check_json(indocument)) return;
+            f_resumeJob(session, check_auth, send, indocument, url.remove_prefix(1), exec_callback, {});
+        } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "reschedule") {
+            if (!check_json(indocument)) return;
+            f_rescheduleRunningJobInQueue(session, check_auth, send, indocument, url.remove_prefix(1), exec_callback, {});
         } else {
             return send(response::requestUnknown(std::string(req.target()), req.method()));
         }
