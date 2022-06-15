@@ -123,20 +123,22 @@ bool parseSystem(System& system, const std::string& input) {
     return false;
 }
 
-std::shared_ptr<BatchInterface> getBatch(const rapidjson::Document& document, const Uri& uri, cmd_f _func) {
-    System system;
+std::shared_ptr<BatchInterface> getBatch(const rapidjson::Document& document, const Uri& uri, cmd_f _func, boost::optional<System> system) {
     if (uri.has_value()) {
         if (uri.query.count("batchsystem")) {
-            if (!parseSystem(system, document["batchsystem"].GetString())) return nullptr;
-            goto create;
+            System sys;
+            if (!parseSystem(sys, document["batchsystem"].GetString())) system = sys;
         }
     }
-    if (!(document.HasMember("batchsystem") && document["batchsystem"].IsString())) return nullptr;
+    if (document.HasMember("batchsystem") && document["batchsystem"].IsString()) {
+        System sys;
+        parseSystem(sys, document["batchsystem"].GetString());
+        system = sys;
+    }
 
-    if (!parseSystem(system, document["batchsystem"].GetString())) return nullptr;
+    if (!system.has_value()) return nullptr;
 
-    create:
-    return create_batch(system, std::move(_func));
+    return create_batch(system.value(), std::move(_func));
 }
 
 void api_openapi(http::response<http::string_body>& res) {
@@ -196,10 +198,10 @@ auto f_usersAdd(Session session, CheckAuth check_auth, Send send, const rapidjso
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_jobsSubmit(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_jobsSubmit(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"jobs_submit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->runJob(supported)) return send(response::commandUnsupported());
@@ -215,10 +217,10 @@ void f_jobsSubmit(Session session, CheckAuth check_auth, Send send, const rapidj
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_jobsDeleteById(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_jobsDeleteById(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"jobs_delete"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->deleteJobById(supported)) return send(response::commandUnsupported());
@@ -234,10 +236,10 @@ void f_jobsDeleteById(Session session, CheckAuth check_auth, Send send, const ra
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_jobsDeleteByUser(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_jobsDeleteByUser(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"jobs_user_delete"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->deleteJobByUser(supported)) return send(response::commandUnsupported());
@@ -253,10 +255,10 @@ void f_jobsDeleteByUser(Session session, CheckAuth check_auth, Send send, const 
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_changeNodeState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_changeNodeState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"nodes_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->changeNodeState(supported)) return send(response::commandUnsupported());
@@ -272,10 +274,10 @@ void f_changeNodeState(Session session, CheckAuth check_auth, Send send, const r
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_setQueueState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_setQueueState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"queues_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->setQueueState(supported)) return send(response::commandUnsupported());
@@ -291,10 +293,10 @@ void f_setQueueState(Session session, CheckAuth check_auth, Send send, const rap
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_setNodeComment(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_setNodeComment(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"nodes_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->setNodeComment(supported)) return send(response::commandUnsupported());
@@ -310,10 +312,10 @@ void f_setNodeComment(Session session, CheckAuth check_auth, Send send, const ra
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_holdJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_holdJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"jobs_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->holdJob(supported)) return send(response::commandUnsupported());
@@ -329,10 +331,10 @@ void f_holdJob(Session session, CheckAuth check_auth, Send send, const rapidjson
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_releaseJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_releaseJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"jobs_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->releaseJob(supported)) return send(response::commandUnsupported());
@@ -348,10 +350,10 @@ void f_releaseJob(Session session, CheckAuth check_auth, Send send, const rapidj
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_suspendJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_suspendJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"jobs_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->suspendJob(supported)) return send(response::commandUnsupported());
@@ -367,10 +369,10 @@ void f_suspendJob(Session session, CheckAuth check_auth, Send send, const rapidj
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_resumeJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_resumeJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"jobs_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->resumeJob(supported)) return send(response::commandUnsupported());
@@ -386,10 +388,10 @@ void f_resumeJob(Session session, CheckAuth check_auth, Send send, const rapidjs
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_rescheduleRunningJobInQueue(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_rescheduleRunningJobInQueue(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"jobs_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->rescheduleRunningJobInQueue(supported)) return send(response::commandUnsupported());
@@ -406,10 +408,10 @@ void f_rescheduleRunningJobInQueue(Session session, CheckAuth check_auth, Send s
 
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_getJobs(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_getJobs(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"jobs_info"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->getJobs(supported)) return send(response::commandUnsupported());
@@ -424,10 +426,10 @@ void f_getJobs(Session session, CheckAuth check_auth, Send send, const rapidjson
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_getQueues(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_getQueues(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"queues_info"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->getQueues(supported)) return send(response::commandUnsupported());
@@ -438,10 +440,10 @@ void f_getQueues(Session session, CheckAuth check_auth, Send send, const rapidjs
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_getNodes(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_getNodes(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"nodes_info"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->getNodes(supported)) return send(response::commandUnsupported());
@@ -456,10 +458,10 @@ void f_getNodes(Session session, CheckAuth check_auth, Send send, const rapidjso
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_getBatchInfo(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_getBatchInfo(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"batch_info"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->getBatchInfo(supported)) return send(response::commandUnsupported());
@@ -470,10 +472,10 @@ void f_getBatchInfo(Session session, CheckAuth check_auth, Send send, const rapi
 }
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
-void f_detect(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb) {
+void f_detect(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
     if (!check_auth({"detect"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb);
+    auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
 
     run_async_state<bool>(session->ioc(), [batch, f=batch->detect()](bool& detected){ return f(detected); }, [send](auto ec, auto detected) mutable {
@@ -544,39 +546,39 @@ struct Handler {
         } else if (command == "setBatchsystem") {
             return send(ws_setBatchsystem(session->selectedSystem, indocument));
         } else if (command == "detect") {
-            f_detect(session, check_auth, send, indocument, url, exec_callback);
+            f_detect(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "getBatchInfo") {
-            f_getBatchInfo(session, check_auth, send, indocument, url, exec_callback);
+            f_getBatchInfo(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "getNodes") {
-            f_getNodes(session, check_auth, send, indocument, url, exec_callback);
+            f_getNodes(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "getQueues") {
-            f_getQueues(session, check_auth, send, indocument, url, exec_callback);
+            f_getQueues(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "getJobs") {
-            f_getJobs(session, check_auth, send, indocument, url, exec_callback);
+            f_getJobs(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "addUser") {
             f_usersAdd(session, check_auth, send, indocument);
         } else if (command == "jobsSubmit") {
-            f_jobsSubmit(session, check_auth, send, indocument, url, exec_callback);
+            f_jobsSubmit(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "jobsDeleteById") {
-            f_jobsDeleteById(session, check_auth, send, indocument, url, exec_callback);
+            f_jobsDeleteById(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "jobsDeleteByUser") {
-            f_jobsDeleteByUser(session, check_auth, send, indocument, url, exec_callback);
+            f_jobsDeleteByUser(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "changeNodeState") {
-            f_changeNodeState(session, check_auth, send, indocument, url, exec_callback);
+            f_changeNodeState(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "setQueueState") {
-            f_setQueueState(session, check_auth, send, indocument, url, exec_callback);
+            f_setQueueState(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "setNodeComment") {
-            f_setNodeComment(session, check_auth, send, indocument, url, exec_callback);
+            f_setNodeComment(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "holdJob") {
-            f_holdJob(session, check_auth, send, indocument, url, exec_callback);
+            f_holdJob(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "releaseJob") {
-            f_releaseJob(session, check_auth, send, indocument, url, exec_callback);
+            f_releaseJob(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "suspendJob") {
-            f_suspendJob(session, check_auth, send, indocument, url, exec_callback);
+            f_suspendJob(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "resumeJob") {
-            f_resumeJob(session, check_auth, send, indocument, url, exec_callback);
+            f_resumeJob(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "rescheduleRunningJobInQueue") {
-            f_rescheduleRunningJobInQueue(session, check_auth, send, indocument, url, exec_callback);
+            f_rescheduleRunningJobInQueue(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else {
             send(response::commandUnknown(command));
         }
@@ -654,20 +656,20 @@ struct Handler {
             api_openapi(res);
             return session->send(std::move(res));
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "nodes") {
-            f_getNodes(session, check_auth, send, indocument, url, exec_callback);
+            f_getNodes(session, check_auth, send, indocument, url, exec_callback, {});
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "queues") {
-            f_getQueues(session, check_auth, send, indocument, url, exec_callback);
+            f_getQueues(session, check_auth, send, indocument, url, exec_callback, {});
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "jobs") {
-            f_getJobs(session, check_auth, send, indocument, url, exec_callback);
+            f_getJobs(session, check_auth, send, indocument, url, exec_callback, {});
         } else if (req.method() == http::verb::post && url.path.size() == 1 && url.path[0] == "jobs") {
             if (!check_json(indocument)) return;
-            f_jobsSubmit(session, check_auth, send, indocument, url, exec_callback);
+            f_jobsSubmit(session, check_auth, send, indocument, url, exec_callback, {});
         } else if (req.method() == http::verb::post && url.path.size() == 1 && url.path[0] == "users") {
             if (!check_json(indocument)) return;
             f_usersAdd(session, check_auth, send, indocument);
         } else if (req.method() == http::verb::delete_ && url.path.size() == 1 && url.path[0] == "jobs") {
             url.path.erase(url.path.begin());
-            f_jobsDeleteById(session, check_auth, send, indocument, url, exec_callback);
+            f_jobsDeleteById(session, check_auth, send, indocument, url, exec_callback, {});
         } else {
             return send(response::requestUnknown(std::string(req.target()), req.method()));
         }
