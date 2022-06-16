@@ -145,6 +145,19 @@ boost::optional<JobOptions> runJob(const rapidjson::Document& document, std::str
             }
             opts.numberNodesMax = static_cast<uint32_t>(nnodes);
     }
+    if (document.HasMember("tasks")) {
+            auto& tasks = document["tasks"];
+            if (!tasks.IsInt()) {
+                err = "tasks is not an int";
+                return {};
+            }
+            int nnodes = tasks.GetInt();
+            if (nnodes < 1) {
+                err = "tasks has to be atleast 1";
+                return {};
+            }
+            opts.numberTasks = static_cast<uint32_t>(nnodes);
+    }
     if (document.HasMember("gpus")) {
             auto& nodes = document["gpus"];
             if (!nodes.IsInt()) {

@@ -179,10 +179,89 @@
           }
         }
       }
+    },
+    "/jobs/*/submit": {
+      "post": {
+        "description": "Get jobs",
+        "security": [
+          {
+            "oauth2": [
+              "jobs_submit"
+            ]
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobOptions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Jobs information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "job": {
+                          "type": "string",
+                          "description": "Id of submitted job"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}": {
+      "delete": {
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/Force"
+          }
+        ],
+        "description": "Delete job by id",
+        "security": [
+          {
+            "oauth2": [
+              "jobs_delete"
+            ]
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted successfully"
+          }
+        }
+      }
     }
   },
   "components": {
     "parameters": {
+      "JobId": {
+        "name": "job_id",
+        "in": "path",
+        "required": true,
+        "description": "Id of job",
+        "schema": {
+          "type": "integer"
+        }
+      },
       "Force": {
         "name": "force",
         "description": "Force command",
@@ -507,6 +586,26 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "JobOptions": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "integer"
+          },
+          "nodesMax": {
+            "type": "integer"
+          },
+          "tasks": {
+            "type": "integer"
+          },
+          "gpus": {
+            "type": "integer"
           }
         }
       }
