@@ -1,38 +1,175 @@
 {
-    "openapi": "3.0.3",
-    "info": {
-      "title": "TREX API",
-      "description": "TREX API",
-      "version": "0.1.0",
-      "contact": {
-        "name": "Megware",
-        "url": "megware.com",
-        "email": "info@megware.com"
-      },
-      "license": {
-        "name": "TODO"
+  "openapi": "3.0.3",
+  "info": {
+    "title": "TREX API",
+    "description": "TREX API",
+    "version": "0.1.0",
+    "contact": {
+      "name": "Megware",
+      "url": "megware.com",
+      "email": "info@megware.com"
+    },
+    "license": {
+      "name": "TODO"
+    }
+  },
+  "servers": [
+    {
+      "url": "/v1",
+      "description": "batch server"
+    }
+  ],
+  "paths": {
+    "/state": {
+      "get": {
+        "description": "Get batchsystem state",
+        "security": [
+          {
+            "oauth2": [
+              "batch_detect"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batchsystem state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "detected": {
+                          "type": "boolean",
+                          "description": "Whether batchsystem is available"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
-    "servers": [
-      {
-        "url": "/v1",
-        "description": "batch server"
+    "/batchinfo": {
+      "get": {
+        "description": "Get batchsystem information",
+        "security": [
+          {
+            "oauth2": [
+              "batch_info"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batchsystem information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Batchinfo"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
-    ],
-    "paths": {
-      "/info": {
-        "get": {
-          "description": "Get trex info",
-          "responses": {
-            "200": {
-              "description": "Trex info",
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "type": "object",
-                    "properties": {
-                      "version": {
-                        "type": "string"
+    },
+    "/queues": {
+      "get": {
+        "description": "Get queues",
+        "security": [
+          {
+            "oauth2": [
+              "queues_info"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queues information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Queue"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes": {
+      "get": {
+        "description": "Get nodes",
+        "security": [
+          {
+            "oauth2": [
+              "nodes_info"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nodes information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Node"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs": {
+      "get": {
+        "description": "Get jobs",
+        "security": [
+          {
+            "oauth2": [
+              "jobs_info"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Jobs information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
                       }
                     }
                   }
@@ -43,4 +180,351 @@
         }
       }
     }
+  },
+  "components": {
+    "parameters": {
+      "Force": {
+        "name": "force",
+        "description": "Force command",
+        "in": "query",
+        "schema": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "schemas": {
+      "Batchinfo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the batchsystem"
+          },
+          "version": {
+            "type": "string",
+            "description": "Version of the batchsystem"
+          },
+          "info": {
+            "type": "object",
+            "description": "Additional batchsystem metadata",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "key",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Node": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "nameFull": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "various",
+              "online",
+              "offline",
+              "disabled",
+              "powersave",
+              "reserved",
+              "maintainence",
+              "failed"
+            ]
+          },
+          "rawState": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "cpus": {
+            "type": "integer"
+          },
+          "cpusReserved": {
+            "type": "integer"
+          },
+          "cpusUsed": {
+            "type": "integer"
+          },
+          "cpusOfJobs": {
+            "type": "object",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "cpus",
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "idCompact": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "integer"
+          },
+          "group": {
+            "type": "string"
+          },
+          "groupId": {
+            "type": "integer"
+          },
+          "queue": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "execHost": {
+            "type": "string"
+          },
+          "submitHost": {
+            "type": "string"
+          },
+          "server": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "running",
+              "queued",
+              "requeued",
+              "terminating",
+              "finished",
+              "cancelled",
+              "failed",
+              "moved",
+              "suspend",
+              "zombie"
+            ]
+          },
+          "rawState": {
+            "type": "string"
+          },
+          "workdir": {
+            "type": "string"
+          },
+          "exitCode": {
+            "type": "integer"
+          },
+          "exitSignal": {
+            "type": "integer"
+          },
+          "submitArgs": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "user": {
+                "type": "string"
+              },
+              "admin": {
+                "type": "string"
+              },
+              "system": {
+                "type": "string"
+              }
+            }
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "submit": {
+                "type": "integer"
+              },
+              "start": {
+                "type": "integer"
+              },
+              "end": {
+                "type": "integer"
+              },
+              "queue": {
+                "type": "integer"
+              }
+            }
+          },
+          "used": {
+            "type": "object",
+            "properties": {
+              "cpusPerNode": {
+                "type": "integer"
+              },
+              "cpus": {
+                "type": "integer"
+              },
+              "nodes": {
+                "type": "integer"
+              },
+              "wallTime": {
+                "type": "integer"
+              },
+              "cpuTime": {
+                "type": "integer"
+              },
+              "mem": {
+                "type": "integer"
+              },
+              "vmem": {
+                "type": "integer"
+              }
+            }
+          },
+          "requested": {
+            "type": "object",
+            "properties": {
+              "other": {
+                "type": "integer"
+              },
+              "nice": {
+                "type": "integer"
+              },
+              "cpus": {
+                "type": "integer"
+              },
+              "nodes": {
+                "type": "integer"
+              },
+              "wallTime": {
+                "type": "integer"
+              },
+              "general": {
+                "type": "object",
+                "additionalProperties": {
+                  "x-additionalPropertiesName": "resource",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "cpusFromNode": {
+            "type": "object",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "node",
+              "type": "integer"
+            }
+          },
+          "variableList": {
+            "type": "object",
+            "description": "Environment variables",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "key",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Queue": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "open",
+              "closed",
+              "inactive",
+              "draining"
+            ]
+          },
+          "rawState": {
+            "type": "string"
+          },
+          "jobs": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "pending": {
+                "type": "integer"
+              },
+              "running": {
+                "type": "integer"
+              },
+              "suspended": {
+                "type": "integer"
+              }
+            }
+          },
+          "cpus": {
+            "type": "integer"
+          },
+          "nodesTotal": {
+            "type": "integer"
+          },
+          "nodesMin": {
+            "type": "integer"
+          },
+          "nodesMax": {
+            "type": "integer"
+          },
+          "wallTimeMax": {
+            "type": "integer"
+          },
+          "memPerCpuMax": {
+            "type": "integer"
+          },
+          "modifyTime": {
+            "type": "integer"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "x-tokenInfoFunc": "cw_rest_server.mod_oauth.get_tokeninfo",
+        "flows": {
+          "implicit": {
+            "authorizationUrl": "/oauth/authorize",
+            "scopes": {
+              "batch_info": "a",
+              "batch_detect": "a"
+            }
+          }
+        }
+      }
+    }
   }
+}
