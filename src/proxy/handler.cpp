@@ -183,7 +183,7 @@ void write_creds_async(boost::asio::io_context& ioc_, const cw::helper::credenti
 }
 
 template <typename Session, typename CheckAuth, typename Send>
-auto f_usersAdd(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument) {
+void f_usersAdd(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument) {
     if (!check_auth({"users_add"})) return;
 
     std::string err;
@@ -193,7 +193,25 @@ auto f_usersAdd(Session session, CheckAuth check_auth, Send send, const rapidjso
     auto creds = cw::globals::creds();
     nonstd::apply([&creds](auto&&... args){cw::helper::credentials::set_user(creds, args...);}, std::move(*o));
     write_creds_async(session->ioc(), creds, [send](auto ec) mutable {
-        return send(response::addUserReturn(ec));
+        return send(response::writingCredentialsReturn(ec));
+    });
+}
+
+template <typename Session, typename CheckAuth, typename Send>
+void f_usersDelete(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri) {
+    if (!check_auth({"users_delete"})) return;
+
+    std::string err;
+    auto username = cw_proxy_batch::usersDelete(indocument, uri, err);
+    if (!err.empty()) return send(response::validationError(err));
+
+    auto creds = cw::globals::creds();
+    auto it = creds.find(username);
+    if (it == creds.end()) return send(response::notfoundError("user " + username + " not found"));
+    creds.erase(it);
+
+    write_creds_async(session->ioc(), creds, [send](auto ec) mutable {
+        return send(response::writingCredentialsReturn(ec));
     });
 }
 
@@ -473,7 +491,7 @@ void f_getBatchInfo(Session session, CheckAuth check_auth, Send send, const rapi
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
 void f_detect(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
-    if (!check_auth({"detect"})) return;
+    if (!check_auth({"batch_detect"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
@@ -555,8 +573,10 @@ struct Handler {
             f_getQueues(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "getJobs") {
             f_getJobs(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
-        } else if (command == "addUser") {
+        } else if (command == "usersAdd") {
             f_usersAdd(session, check_auth, send, indocument);
+        } else if (command == "usersDelete") {
+            f_usersDelete(session, check_auth, send, indocument, url);
         } else if (command == "jobsSubmit") {
             f_jobsSubmit(session, check_auth, send, indocument, url, exec_callback, session->selectedSystem);
         } else if (command == "jobsDeleteById") {
@@ -668,6 +688,8 @@ struct Handler {
         } else if (req.method() == http::verb::post && url.path.size() == 1 && url.path[0] == "users") {
             if (!check_json(indocument)) return;
             f_usersAdd(session, check_auth, send, indocument);
+        } else if (req.method() == http::verb::delete_ && url.path.size() == 2 && url.path[0] == "users") {
+            f_usersDelete(session, check_auth, send, indocument, url);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[1] == "*" && url.path[2] == "submit") {
             if (!check_json(indocument)) return;
             f_jobsSubmit(session, check_auth, send, indocument, url, exec_callback, {});

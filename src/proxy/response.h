@@ -62,6 +62,11 @@ resp validationError(const std::string& msg) {
     return json_error("ValidationError", msg, boost::beast::http::status::bad_request);
 }
 
+resp notfoundError(const std::string& msg) {
+    return json_error("NotFound", msg, boost::beast::http::status::not_found);
+}
+
+
 resp invalidBatch() {
     return json_error("BatchsystemInvalid", "Invalid batchsystem selected, use one of: pbs | slurm | lsf", boost::beast::http::status::bad_request);
 }
@@ -180,10 +185,9 @@ resp runJobReturn(std::error_code ec, const std::string& jobName) {
     }
 }
 
-resp addUserReturn(std::error_code ec) {
+resp writingCredentialsReturn(std::error_code ec) {
     return commandReturn(ec, "Writing credentials failed", boost::beast::http::status::created);
 }
-
 
 }
 }

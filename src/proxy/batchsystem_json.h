@@ -444,6 +444,24 @@ boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> use
     return {t};
 }
 
+std::string usersDelete(const rapidjson::Document& document, const Uri& uri, std::string& err) {
+    if (uri.has_value() && uri.path.size() == 1) {
+        return uri.path[0];
+    } else {
+        if (!document.HasMember("user")) {
+            err = "user not given";
+            return "";
+        }
+        auto& user = document["user"];
+        if (!user.IsString()) {
+            err = "user is not a string";
+            return "";
+        }
+        return user.GetString();
+    }
+}
+
+
 }
 
 
