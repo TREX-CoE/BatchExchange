@@ -2,7 +2,7 @@
 
 #include "proxy/credentials.h"
 #include "proxy/globals.h"
-#include "proxy/handler.h"
+#include "proxy/server_wrap.h"
 
 #include <iostream>
 #include <thread>

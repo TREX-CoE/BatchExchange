@@ -190,6 +190,7 @@ private:
     void
     run(http::request<Body, http::basic_fields<Allocator>> req)
     {
+        Handler::websocket_session::init(derived().shared_from_this());
         // Accept the WebSocket upgrade request
         do_accept(std::move(req));
     }
