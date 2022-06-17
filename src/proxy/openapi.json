@@ -22,6 +22,9 @@
   "paths": {
     "/state": {
       "get": {
+        "tags": [
+          "batch"
+        ],
         "description": "Get batchsystem state",
         "security": [
           {
@@ -57,6 +60,9 @@
     },
     "/batchinfo": {
       "get": {
+        "tags": [
+          "batch"
+        ],
         "description": "Get batchsystem information",
         "security": [
           {
@@ -86,6 +92,9 @@
     },
     "/queues": {
       "get": {
+        "tags": [
+          "queues"
+        ],
         "description": "Get queues",
         "security": [
           {
@@ -118,6 +127,9 @@
     },
     "/nodes": {
       "get": {
+        "tags": [
+          "nodes"
+        ],
         "description": "Get nodes",
         "security": [
           {
@@ -150,6 +162,9 @@
     },
     "/jobs": {
       "get": {
+        "tags": [
+          "jobs"
+        ],
         "description": "Get jobs",
         "security": [
           {
@@ -182,6 +197,9 @@
     },
     "/jobs/*/submit": {
       "post": {
+        "tags": [
+          "jobs"
+        ],
         "description": "Get jobs",
         "security": [
           {
@@ -227,6 +245,9 @@
     },
     "/jobs/{job_id}": {
       "delete": {
+        "tags": [
+          "jobs"
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/JobId"
@@ -249,6 +270,501 @@
           }
         }
       }
+    },
+    "/jobs/*": {
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchUser"
+          }
+        ],
+        "description": "Delete job by user",
+        "security": [
+          {
+            "oauth2": [
+              "jobs_user_delete"
+            ]
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted successfully"
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/hold": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "description": "Hold job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_hold"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Holded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/release": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "description": "Release job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_release"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Released successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/suspend": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "description": "Suspend job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_suspend"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suspended successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/resume": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "description": "Resume job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_resume"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resumed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/reschedule": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "description": "Reschedule job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_reschedule"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rescheduled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes/{node_id}/comment": {
+      "post": {
+        "tags": [
+          "nodes"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/NodeId"
+          }
+        ],
+        "description": "Change node comment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "comment"
+                ],
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "append": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "nodes_comment_edit"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes/{node_id}/state": {
+      "post": {
+        "tags": [
+          "nodes"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/NodeId"
+          }
+        ],
+        "description": "Change node state",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "resume",
+                      "drain",
+                      "undrain"
+                    ]
+                  },
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "append": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "nodes_state_edit"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queues/{queue_id}/state": {
+      "post": {
+        "tags": [
+          "queues"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/QueueId"
+          }
+        ],
+        "description": "Change queue state",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "closed",
+                      "inactive",
+                      "draining"
+                    ]
+                  },
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "queues_state_edit"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "description": "Add user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "users_add"
+            ]
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Added successfully"
+          }
+        }
+      }
+    },
+    "/users/{user_name}": {
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/User"
+          }
+        ],
+        "description": "Delete user",
+        "security": [
+          {
+            "oauth2": [
+              "users_delete"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted successfully"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -259,7 +775,34 @@
         "required": true,
         "description": "Id of job",
         "schema": {
-          "type": "integer"
+          "type": "string"
+        }
+      },
+      "QueueId": {
+        "name": "queue_id",
+        "in": "path",
+        "required": true,
+        "description": "Id of queue",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "NodeId": {
+        "name": "node_id",
+        "in": "path",
+        "required": true,
+        "description": "Id of node",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "User": {
+        "name": "user_name",
+        "in": "path",
+        "required": true,
+        "description": "Username",
+        "schema": {
+          "type": "string"
         }
       },
       "Force": {
@@ -270,9 +813,31 @@
           "type": "boolean",
           "default": false
         }
+      },
+      "BatchUser": {
+        "name": "user",
+        "description": "Batchsystem username",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "schemas": {
+      "CommandReturn": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
       "Batchinfo": {
         "type": "object",
         "properties": {
@@ -294,8 +859,32 @@
           }
         }
       },
+      "User": {
+        "type": "object",
+        "required": [
+          "user",
+          "password"
+        ],
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "Node": {
         "type": "object",
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -346,6 +935,9 @@
       },
       "Job": {
         "type": "object",
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -523,6 +1115,9 @@
       },
       "Queue": {
         "type": "object",
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string"

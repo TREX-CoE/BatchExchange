@@ -185,8 +185,8 @@ resp runJobReturn(std::error_code ec, const std::string& jobName) {
     }
 }
 
-resp writingCredentialsReturn(std::error_code ec) {
-    return commandReturn(ec, "Writing credentials failed", boost::beast::http::status::created);
+resp writingCredentialsReturn(std::error_code ec, boost::beast::http::status status=boost::beast::http::status::created) {
+    return commandReturn(ec, "Writing credentials failed", status);
 }
 
 }

@@ -193,7 +193,7 @@ void f_usersAdd(Session session, CheckAuth check_auth, Send send, const rapidjso
     auto creds = cw::globals::creds();
     nonstd::apply([&creds](auto&&... args){cw::helper::credentials::set_user(creds, args...);}, std::move(*o));
     write_creds_async(session->ioc(), creds, [send](auto ec) mutable {
-        return send(response::writingCredentialsReturn(ec));
+        return send(response::writingCredentialsReturn(ec, boost::beast::http::status::created));
     });
 }
 
@@ -211,7 +211,7 @@ void f_usersDelete(Session session, CheckAuth check_auth, Send send, const rapid
     creds.erase(it);
 
     write_creds_async(session->ioc(), creds, [send](auto ec) mutable {
-        return send(response::writingCredentialsReturn(ec));
+        return send(response::writingCredentialsReturn(ec, boost::beast::http::status::ok));
     });
 }
 
@@ -274,7 +274,7 @@ void f_jobsDeleteByUser(Session session, CheckAuth check_auth, Send send, const 
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
 void f_changeNodeState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
-    if (!check_auth({"nodes_edit"})) return;
+    if (!check_auth({"nodes_state_edit"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
@@ -293,7 +293,7 @@ void f_changeNodeState(Session session, CheckAuth check_auth, Send send, const r
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
 void f_setQueueState(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
-    if (!check_auth({"queues_edit"})) return;
+    if (!check_auth({"queues_state_edit"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
@@ -331,7 +331,7 @@ void f_setNodeComment(Session session, CheckAuth check_auth, Send send, const ra
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
 void f_holdJob(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
-    if (!check_auth({"jobs_edit"})) return;
+    if (!check_auth({"jobs_hold"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
