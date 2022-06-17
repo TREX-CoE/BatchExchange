@@ -312,7 +312,7 @@ void f_setQueueState(Session session, CheckAuth check_auth, Send send, const rap
 
 template <typename Session, typename CheckAuth, typename Send, typename ExecCb>
 void f_setNodeComment(Session session, CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system) {
-    if (!check_auth({"nodes_edit"})) return;
+    if (!check_auth({"nodes_comment_edit"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
