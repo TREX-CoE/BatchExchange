@@ -21,22 +21,22 @@ struct Handler {
         std::function<void(std::string)> send_;
 
         template <class Session>
-        static void init(std::shared_ptr<Session> session) {
-            session->send_ = [session](std::string s){
+        static void init(Session& self) {
+            self.send_ = [session=self.shared_from_this()](std::string s){
                 session->send(s);
             };
         } 
     };
 
     template <class Session>
-    static void handle_socket(std::shared_ptr<Session> session, std::string input) {
-        cw::proxy::handler::ws(session->send_, session->ioc(), input, session->scopes, session->selectedSystem);
+    static void handle_socket(Session& self, std::string input) {
+        cw::proxy::handler::ws(self.send_, self.ioc(), input, self.scopes, self.selectedSystem);
     }
 
     template<class Session>
     static void
-    handle_request(std::shared_ptr<Session> session, http::request<http::string_body>&& req) {
-        cw::proxy::handler::rest([session](http::response<http::string_body> r){ session->send(std::move(r)); }, session->ioc(), std::move(req));
+    handle_request(Session& self, http::request<http::string_body>&& req) {
+        cw::proxy::handler::rest([session=self.shared_from_this()](http::response<http::string_body> r){ session->send(std::move(r)); }, self.ioc(), std::move(req));
     }
 };
 

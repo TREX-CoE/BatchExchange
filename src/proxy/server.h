@@ -141,7 +141,7 @@ private:
             return fail(ec, "read");
 
         // Handle message
-        Handler::handle_socket(derived().shared_from_this(), beast::buffers_to_string(buffer_.data()));
+        Handler::handle_socket(derived(), beast::buffers_to_string(buffer_.data()));
 
 
         // Clear the buffer
@@ -190,7 +190,7 @@ private:
     void
     run(http::request<Body, http::basic_fields<Allocator>> req)
     {
-        Handler::websocket_session::init(derived().shared_from_this());
+        Handler::websocket_session::init(derived());
         // Accept the WebSocket upgrade request
         do_accept(std::move(req));
     }
@@ -477,7 +477,7 @@ protected:
         }
 
         // Send the response
-        Handler::handle_request(derived().shared_from_this(), parser_->release());
+        Handler::handle_request(derived(), parser_->release());
 
         // If we aren't at the queue limit, try to pipeline another request
         if(! queue_.is_full())
