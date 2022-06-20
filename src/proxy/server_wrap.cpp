@@ -17,6 +17,7 @@ struct Handler {
 
     struct websocket_session {
         std::set<std::string> scopes;
+        std::string user;
         boost::optional<cw::batch::System> selectedSystem;
         std::function<void(std::string)> send_;
 
@@ -30,7 +31,7 @@ struct Handler {
 
     template <class Session>
     static void handle_socket(Session& self, std::string input) {
-        cw::proxy::handler::ws(self.send_, self.ioc(), input, self.scopes, self.selectedSystem);
+        cw::proxy::handler::ws(self.send_, self.ioc(), input, self.scopes, self.user, self.selectedSystem);
     }
 
     template<class Session>

@@ -146,10 +146,12 @@ void api_openapi(http::response<http::string_body>& res) {
     res.prepare_payload();
 }
 
-response::resp ws_login(std::set<std::string>& scopes, const rapidjson::Document& indocument) {
+response::resp ws_login(std::set<std::string>& scopes, std::string& user, const rapidjson::Document& indocument) {
     if (!(indocument.HasMember("user") && indocument["user"].IsString())) return response::validationError("user invalid");
     if (!(indocument.HasMember("password") && indocument["password"].IsString())) return response::validationError("password invalid");
-    if (cw::globals::creds_get(indocument["user"].GetString(), indocument["password"].GetString(), scopes)) {
+    std::string username = indocument["user"].GetString();
+    if (cw::globals::creds_get(username, indocument["password"].GetString(), scopes)) {
+        user = username; 
         return response::commandSuccess();
     } else {
         return response::invalid_login();
@@ -189,6 +191,8 @@ void f_usersAdd(CheckAuth check_auth, Send send, const rapidjson::Document& indo
     if (!o) return send(response::validationError(err));
 
     auto creds = cw::globals::creds();
+    const std::string& username = std::get<0>(*o);
+    if (creds.find(username) != creds.end()) return send(response::json_error("Conflict", "User already exists", http::status::conflict));
     nonstd::apply([&creds](auto&&... args){cw::helper::credentials::set_user(creds, args...);}, std::move(*o));
     write_creds_async(ioc, creds, [send](auto ec) mutable {
         return send(response::writingCredentialsReturn(ec, boost::beast::http::status::created));
@@ -196,7 +200,7 @@ void f_usersAdd(CheckAuth check_auth, Send send, const rapidjson::Document& indo
 }
 
 template <typename CheckAuth, typename Send>
-void f_usersDelete(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, boost::asio::io_context& ioc) {
+void f_usersDelete(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, boost::asio::io_context& ioc, std::string* user, std::set<std::string>* scopes) {
     if (!check_auth({"users_delete"})) return;
 
     std::string err;
@@ -207,6 +211,11 @@ void f_usersDelete(CheckAuth check_auth, Send send, const rapidjson::Document& i
     auto it = creds.find(username);
     if (it == creds.end()) return send(response::notfoundError("user " + username + " not found"));
     creds.erase(it);
+    if (user != nullptr && username == *user) {
+        // deleting current user
+        *user = "";
+        if (scopes != nullptr) scopes->clear();
+    }
 
     write_creds_async(ioc, creds, [send](auto ec) mutable {
         return send(response::writingCredentialsReturn(ec, boost::beast::http::status::ok));
@@ -507,7 +516,7 @@ namespace handler {
 namespace beast = boost::beast;                 // from <boost/beast.hpp>
 namespace http = beast::http;                   // from <boost/beast/http.hpp>
 
-void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, std::string input, std::set<std::string>& scopes, boost::optional<System>& selectedSystem) {
+void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, std::string input, std::set<std::string>& scopes, std::string& user, boost::optional<System>& selectedSystem) {
     cw::helper::uri::Uri url;
 
     rapidjson::Document indocument;
@@ -551,9 +560,10 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
     auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd); };
 
     if (command == "login") {
-        return send(ws_login(scopes, indocument));
+        return send(ws_login(scopes, user, indocument));
     } else if (command == "logout") {
         scopes.clear();
+        user = "";
         return send(response::commandSuccess());
     } else if (command == "setBatchsystem") {
         return send(ws_setBatchsystem(selectedSystem, indocument));
@@ -570,7 +580,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
     } else if (command == "usersAdd") {
         f_usersAdd(check_auth, send, indocument, ioc);
     } else if (command == "usersDelete") {
-        f_usersDelete(check_auth, send, indocument, url, ioc);
+        f_usersDelete(check_auth, send, indocument, url, ioc, &user, &scopes);
     } else if (command == "jobsSubmit") {
         f_jobsSubmit(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
     } else if (command == "jobsDeleteById") {
@@ -672,7 +682,7 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
         if (!check_json(indocument)) return;
         f_usersAdd(check_auth, send, indocument, ioc);
     } else if (req.method() == http::verb::delete_ && url.path.size() == 2 && url.path[0] == "users") {
-        f_usersDelete(check_auth, send, indocument, url, ioc);
+        f_usersDelete(check_auth, send, indocument, url, ioc, nullptr, nullptr);
     } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[1] == "*" && url.path[2] == "submit") {
         if (!check_json(indocument)) return;
         f_jobsSubmit(check_auth, send, indocument, url, exec_callback, {}, ioc);
