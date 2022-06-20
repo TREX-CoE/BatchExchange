@@ -742,6 +742,45 @@
       }
     },
     "/users/{user_name}": {
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/User"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        },
+        "description": "Patch user",
+        "security": [
+          {
+            "oauth2": [
+              "users_edit"
+            ]
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Patched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "users"
