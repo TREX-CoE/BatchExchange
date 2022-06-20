@@ -654,11 +654,6 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
 
     cw::helper::uri::Uri url;
     if (!cw::helper::uri::Uri::parse(url, std::string(req.target()))) return send(response::json_error("InvalidURI", "Error parsing URI", http::status::bad_request));
-    std::cout << (url.has_value() ? "t" : "f") << std::endl;
-    for (const auto& i : url.path) { std::cout << "p " << i << std::endl; }
-    for (const auto& p : url.query) { std::cout << "q " << p.first << " " << p.second << std::endl; }
-    std::cout << url.fragment << std::endl;
-
 
     if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "openapi.json") {
         api_openapi(res);

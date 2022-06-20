@@ -3,11 +3,7 @@
  * @brief Proxy
  *
  * ./src/proxy/proxy --cred ../data/creds run --cert ../data/server.crt --priv ../data/server.key --dh ../data/dh2048.pem --port 2000 --host 0.0.0.0
- * wscat -n -c "wss://127.0.0.1:2000/"
- * curl --insecure -u "admin:admin" https://127.0.0.1:2000/nodes
- * curl --insecure -u "admin:admin" https://127.0.0.1:2000/users -H "Content-Type: application/json" -d '{"user": "e", "password": "a", "scopes": ["aa"]}'
- * 
- ***********************************************/
+ **/
 
 #include <signal.h>
 #include <unistd.h>
