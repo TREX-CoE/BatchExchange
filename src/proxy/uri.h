@@ -10,8 +10,6 @@ namespace helper {
 namespace uri {
 
 struct Uri {
-    std::string scheme;
-    std::string domain;
     std::vector<std::string> path;
     std::map<std::string, std::string> query;
     std::string fragment;

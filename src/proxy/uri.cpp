@@ -5,7 +5,7 @@
 
 namespace {
 
-const std::regex r_uri{R"(^(([^:\/?#]+):)?(//([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?)", std::regex::extended};
+const std::regex r_uri{R"(^/([^?#]*)(\?([^#]*))?(#(.*))?)", std::regex::extended};
 
 const std::string queryDel = "&";
 const std::string pathDel = "/";
@@ -15,22 +15,20 @@ namespace cw {
 namespace helper {
 namespace uri {
 
-bool Uri::has_value() const { return !scheme.empty(); }
+bool Uri::has_value() const { return !path.empty() || !query.empty() || !fragment.empty(); }
 
 bool Uri::parse(Uri& uri, const std::string& input) {
     std::smatch res;
 
     if (std::regex_match(input, res, r_uri)) {
-        uri.scheme = res[2];
-        uri.domain = res[4];
-        std::string path = res[5];
+        std::string path = res[1];
         if (path.rfind("/", 0) == 0) path.erase(0, 1);
         cw::helper::splitString(path, pathDel, [&uri, &path](size_t start, size_t end){
             uri.path.push_back(path.substr(start, end));
             return true;
         });
 
-        std::string query = res[7];
+        std::string query = res[3];
         cw::helper::splitString(query, queryDel, [&uri, &query](size_t start, size_t end){
             std::string s = query.substr(start, end);
             size_t delpos = s.find("=");
@@ -42,7 +40,7 @@ bool Uri::parse(Uri& uri, const std::string& input) {
             return true;
         });
 
-        uri.fragment = res[9];
+        uri.fragment = res[5];
         return true;
     }
     return false;

@@ -123,14 +123,16 @@ std::shared_ptr<BatchInterface> getBatch(const rapidjson::Document& document, co
     if (uri.has_value()) {
         if (uri.query.count("batchsystem")) {
             System sys;
-            if (!parseSystem(sys, document["batchsystem"].GetString())) system = sys;
+            if (parseSystem(sys, uri.query.at("batchsystem"))) system = sys;
         }
     }
-    if (document.HasMember("batchsystem") && document["batchsystem"].IsString()) {
+
+    if (document.IsObject() && document.HasMember("batchsystem") && document["batchsystem"].IsString()) {
         System sys;
         parseSystem(sys, document["batchsystem"].GetString());
         system = sys;
     }
+    
 
     if (!system.has_value()) return nullptr;
 
@@ -461,7 +463,6 @@ void f_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document& indo
     if (!batch) return send(response::invalidBatch());
 
     if (!batch->getNodes(supported)) return send(response::commandUnsupported());
-
     std::string err;
     auto o = cw_proxy_batch::getNodes(indocument, uri, err);
     if (!err.empty()) return send(response::validationError(err));
@@ -653,6 +654,11 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
 
     cw::helper::uri::Uri url;
     if (!cw::helper::uri::Uri::parse(url, std::string(req.target()))) return send(response::json_error("InvalidURI", "Error parsing URI", http::status::bad_request));
+    std::cout << (url.has_value() ? "t" : "f") << std::endl;
+    for (const auto& i : url.path) { std::cout << "p " << i << std::endl; }
+    for (const auto& p : url.query) { std::cout << "q " << p.first << " " << p.second << std::endl; }
+    std::cout << url.fragment << std::endl;
+
 
     if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "openapi.json") {
         api_openapi(res);

@@ -30,7 +30,7 @@ bool queryToBool(const std::string& input, std::string& err) {
 }
 
 std::string getForce(const rapidjson::Document& document, bool& out) {
-        if (document.HasMember("force")) {
+        if (document.IsObject() && document.HasMember("force")) {
                 if (!document["force"].IsBool()) return "force is not a bool";
                 out = document["force"].GetBool();
         }
@@ -107,6 +107,11 @@ using namespace cw::helper::uri;
 
 boost::optional<JobOptions> runJob(const rapidjson::Document& document, std::string& err) {
     JobOptions opts;
+    if (!document.IsObject()) {
+        err = "body is not a json object";
+        return {};
+    }
+
     if (!document.HasMember("path")) {
         err = "path not given";
         return {};
@@ -177,6 +182,7 @@ boost::optional<JobOptions> runJob(const rapidjson::Document& document, std::str
 
 boost::optional<std::tuple<std::string, bool>> deleteJobById(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, bool> t;
+    std::get<1>(t) = false;
 
     if (uri.has_value()) {
         if (uri.path.size() != 1) { err = "path not including job id"; return {}; }
@@ -188,6 +194,10 @@ boost::optional<std::tuple<std::string, bool>> deleteJobById(const rapidjson::Do
             std::get<1>(t) = false;
         }
     } else {
+        if (!document.IsObject()) {
+            err = "body is not a json object";
+            return {};
+        }
         err = getJob(document, std::get<0>(t));
         if (!err.empty()) return {};
         err = getForce(document, std::get<1>(t));
@@ -198,6 +208,7 @@ boost::optional<std::tuple<std::string, bool>> deleteJobById(const rapidjson::Do
 
 boost::optional<std::tuple<std::string, bool>> deleteJobByUser(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, bool> t;
+    std::get<1>(t) = false;
 
     if (uri.has_value()) {
         if (!uri.query.count("user")) {
@@ -211,6 +222,10 @@ boost::optional<std::tuple<std::string, bool>> deleteJobByUser(const rapidjson::
             std::get<1>(t) = false;
         }
     } else {
+        if (!document.IsObject()) {
+            err = "body is not a json object";
+            return {};
+        }
         if (!document.HasMember("user")) {
             err = "user not given";
             return {};
@@ -228,6 +243,7 @@ boost::optional<std::tuple<std::string, bool>> deleteJobByUser(const rapidjson::
 
 boost::optional<std::tuple<std::string, NodeChangeState, bool, std::string, bool>> changeNodeState(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, NodeChangeState, bool, std::string, bool> t;
+    std::get<2>(t) = false;
 
     if (uri.has_value()) {
         if (uri.path.size() != 1) {
@@ -235,9 +251,14 @@ boost::optional<std::tuple<std::string, NodeChangeState, bool, std::string, bool
             return {}; 
         }
         std::get<0>(t) = uri.path[0];
-    } else {
+    } else if (document.IsObject()) {
         err = getNode(document, std::get<0>(t));
         if (!err.empty()) return {};
+    }
+
+    if (!document.IsObject()) {
+        err = "body is not a json object";
+        return {};
     }
 
     std::string state;
@@ -272,6 +293,7 @@ boost::optional<std::tuple<std::string, NodeChangeState, bool, std::string, bool
 
 boost::optional<std::tuple<std::string, QueueState, bool>> setQueueState(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, QueueState, bool> t;
+    std::get<2>(t) = false;
 
     if (uri.has_value()) {
         if (uri.path.size() != 1) {
@@ -279,9 +301,14 @@ boost::optional<std::tuple<std::string, QueueState, bool>> setQueueState(const r
             return {}; 
         }
         std::get<0>(t) = uri.path[0];
-    } else {
+    } else if (document.IsObject()) {
         err = getQueue(document, std::get<0>(t));
         if (!err.empty()) return {};
+    }
+
+    if (!document.IsObject()) {
+        err = "body is not a json object";
+        return {};
     }
 
     std::string state;
@@ -298,6 +325,7 @@ boost::optional<std::tuple<std::string, QueueState, bool>> setQueueState(const r
 
 boost::optional<std::tuple<std::string, bool, std::string, bool>> setNodeComment(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, bool, std::string, bool> t;
+    std::get<1>(t) = false;
 
     if (uri.has_value()) {
         if (uri.path.size() != 1) {
@@ -305,9 +333,14 @@ boost::optional<std::tuple<std::string, bool, std::string, bool>> setNodeComment
             return {}; 
         }
         std::get<0>(t) = uri.path[0];
-    } else {
+    } else if (document.IsObject()) {
         err = getNode(document, std::get<0>(t));
         if (!err.empty()) return {};
+    }
+
+    if (!document.IsObject()) {
+        err = "body is not a json object";
+        return {};
     }
 
     err = getForce(document, std::get<1>(t));
@@ -339,6 +372,7 @@ boost::optional<std::tuple<std::string, bool, std::string, bool>> setNodeComment
 
 boost::optional<std::tuple<std::string, bool>> holdJob(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     std::tuple<std::string, bool> t;
+    std::get<1>(t) = false;
 
     if (uri.has_value()) {
         if (uri.path.size() != 1) {
@@ -346,9 +380,12 @@ boost::optional<std::tuple<std::string, bool>> holdJob(const rapidjson::Document
             return {}; 
         }
         std::get<0>(t) = uri.path[0];
-    } else {
+    } else if (document.IsObject()) {
         err = getJob(document, std::get<0>(t));
         if (!err.empty()) return {};
+    } else {
+        err = "body is not a json object";
+        return {};
     }
 
     err = getForce(document, std::get<1>(t));
@@ -371,7 +408,7 @@ std::vector<std::string> getJobs(const rapidjson::Document& document, const Uri&
             jobs.push_back(filter.substr(start, end));
             return true;
         });
-    } else if (document.HasMember("filterJobs")) {
+    } else if (document.IsObject() && document.HasMember("filterJobs")) {
             if (document["filterJobs"].IsArray()) {
                     err = "filterJobs is not an array";
                     return jobs;
@@ -395,7 +432,7 @@ std::vector<std::string> getNodes(const rapidjson::Document& document, const Uri
             nodes.push_back(filter.substr(start, end));
             return true;
         });
-    } else if (document.HasMember("filterNodes")) {
+    } else if (document.IsObject() && document.HasMember("filterNodes")) {
             if (document["filterNodes"].IsArray()) {
                     err = "filterNodes is not an array";
                     return nodes;
@@ -415,6 +452,10 @@ boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> use
     std::tuple<std::string, std::set<std::string>, std::string> t;
 
     if (username.empty()) {
+        if (!document.IsObject()) {
+            err = "body is not a json object";
+            return {};
+        }
         if (!document.HasMember("user")) {
             err = "user not given";
             return {};
@@ -427,6 +468,11 @@ boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> use
         username = user.GetString();
     }
     std::get<0>(t) = std::move(username);
+
+    if (!document.IsObject()) {
+        err = "body is not a json object";
+        return {};
+    }
 
     if (!document.HasMember("password")) {
         err = "password not given";
@@ -460,7 +506,7 @@ boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> use
 std::string usersDelete(const rapidjson::Document& document, const Uri& uri, std::string& err) {
     if (uri.has_value() && uri.path.size() == 1) {
         return uri.path[0];
-    } else {
+    } else if (document.IsObject()) {
         if (!document.HasMember("user")) {
             err = "user not given";
             return "";
@@ -471,6 +517,9 @@ std::string usersDelete(const rapidjson::Document& document, const Uri& uri, std
             return "";
         }
         return user.GetString();
+    } else {
+        err = "body is not a json object";
+        return "";
     }
 }
 
