@@ -12,17 +12,14 @@
 static const std::string delimiter = ":";
 static const std::string scope_delimiter = ",";
 
-namespace {
-
-std::string generate_salt() {
-    return cw::helper::random_hex(16);
-}
-
-}
-
 namespace cw {
 namespace helper {
 namespace credentials {
+
+void set_password(user_data& user, boost::string_view password) {
+    user.salt = cw::helper::random_hex(16);
+    user.hash = cw::proxy::salt_hash(user.salt, password);
+}
 
 void read(dict& creds, const std::string& s) {
     std::stringstream in(s);
@@ -90,9 +87,14 @@ bool write_file(const std::string& cred_file, const cw::helper::credentials::dic
 }
 
 void set_user(credentials::dict& creds, boost::string_view user, std::set<std::string> scopes, boost::string_view password) {
-    std::string salt = generate_salt();
-    std::string hash = cw::proxy::salt_hash(salt, password);
-    creds[std::string(user)] = credentials::user_data{scopes, salt, hash};
+    if (scopes.count("")) {
+        // remove marker for not specified and simply add empty set
+        scopes = {};
+    }
+    user_data data;
+    set_password(data, password);
+    data.scopes = scopes;
+    creds[std::string(user)] = std::move(data);
 }
 
 

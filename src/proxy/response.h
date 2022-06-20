@@ -2,6 +2,7 @@
 #define BOOST_PROXY_RESPONSE
 
 #include <boost/beast/http.hpp>
+#include <boost/optional.hpp>
 
 #define RAPIDJSON_HAS_STDSTRING 1
 #include <rapidjson/document.h>
@@ -185,8 +186,27 @@ resp runJobReturn(std::error_code ec, const std::string& jobName) {
     }
 }
 
-resp writingCredentialsReturn(std::error_code ec, boost::beast::http::status status=boost::beast::http::status::created) {
-    return commandReturn(ec, "Writing credentials failed", status);
+resp writingCredentialsReturn(std::error_code ec, boost::optional<std::pair<std::string, std::set<std::string>>> data, boost::beast::http::status status=boost::beast::http::status::created) {
+    if (data.has_value()) {
+        if (ec) return commandReturn(ec, "Writing credentials failed", status);
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.second = status;
+        r.first.SetObject();
+        r.first.AddMember("username", data->first, allocator);
+        {
+            rapidjson::Value scopesarr;
+            scopesarr.SetArray();
+            for (const auto& scope : data->second) {
+                    rapidjson::Value val(scope.c_str(), allocator);
+                    scopesarr.PushBack(val, allocator);
+            }
+            r.first.AddMember("scopes", scopesarr, allocator);
+        }
+        return r;
+    } else {
+        return commandReturn(ec, "Writing credentials failed", status);
+    }
 }
 
 }

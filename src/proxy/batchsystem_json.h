@@ -448,7 +448,7 @@ std::vector<std::string> getNodes(const rapidjson::Document& document, const Uri
     return nodes;
 }
 
-boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> usersAdd(const rapidjson::Document& document, std::string username, std::string& err) {
+boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> usersAdd(const rapidjson::Document& document, std::string username, bool isPatch, std::string& err) {
     std::tuple<std::string, std::set<std::string>, std::string> t;
 
     if (username.empty()) {
@@ -474,16 +474,19 @@ boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> use
         return {};
     }
 
-    if (!document.HasMember("password")) {
+    if (document.HasMember("password")) {
+        auto& password = document["password"];
+        if (!password.IsString()) {
+            err = "password is not a string";
+            return {};
+        }
+        std::get<2>(t) = password.GetString();
+    } else if (!isPatch) {
         err = "password not given";
         return {};
+    } else {
+        std::get<2>(t) = "";
     }
-    auto& password = document["password"];
-    if (!password.IsString()) {
-        err = "password is not a string";
-        return {};
-    }
-    std::get<2>(t) = password.GetString();
 
     if (document.HasMember("scopes")) {
         auto& scopes = document["scopes"];
@@ -496,8 +499,15 @@ boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> use
                 err = "scopes array item is not an string";
                 return {};
             }
-            std::get<1>(t).insert(v.GetString());
+            std::string scope = v.GetString();
+            if (!v.IsString()) {
+                err = "Empty string is not a valid scope";
+                return {};
+            }
+            std::get<1>(t).insert(std::move(scope));
         }
+    } else {
+        std::get<1>(t).insert(""); // sentinel to mark no scopes given
     }
 
     return {t};

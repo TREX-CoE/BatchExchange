@@ -18,6 +18,8 @@ struct user_data {
     std::string hash;
 };
 
+void set_password(user_data& user, boost::string_view password);
+
 using dict = std::map<std::string, user_data>;
 
 void read(dict& creds, const std::string& s);
