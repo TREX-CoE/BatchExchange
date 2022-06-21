@@ -183,11 +183,11 @@ void write_creds_async(boost::asio::io_context& ioc_, const cw::helper::credenti
 }
 
 template <typename CheckAuth, typename Send>
-void f_usersEdit(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, boost::asio::io_context& ioc, std::string* user, std::set<std::string>* current_scopes) {
+void f_usersEdit(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, boost::asio::io_context& ioc, std::string* user, std::set<std::string>* current_scopes) {
     if (!check_auth({"users_edit"})) return;
 
     std::string err;
-    auto o = cw_proxy_batch::usersAdd(indocument, "", true, err);
+    auto o = cw_proxy_batch::usersAdd(indocument, uri, true, err);
     if (!o) return send(response::validationError(err));
 
     std::string username = std::get<0>(*o);
@@ -219,11 +219,11 @@ void f_usersEdit(CheckAuth check_auth, Send send, const rapidjson::Document& ind
 }
 
 template <typename CheckAuth, typename Send>
-void f_usersAdd(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, boost::asio::io_context& ioc) {
+void f_usersAdd(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, boost::asio::io_context& ioc) {
     if (!check_auth({"users_add"})) return;
 
     std::string err;
-    auto o = cw_proxy_batch::usersAdd(indocument, "", false, err);
+    auto o = cw_proxy_batch::usersAdd(indocument, uri, false, err);
     if (!o) return send(response::validationError(err));
 
     auto creds = cw::globals::creds();
@@ -620,9 +620,9 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
     } else if (command == "getJobs") {
         f_getJobs(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
     } else if (command == "usersAdd") {
-        f_usersAdd(check_auth, send, indocument, ioc);
+        f_usersAdd(check_auth, send, indocument, url, ioc);
     } else if (command == "usersEdit") {
-        f_usersEdit(check_auth, send, indocument, ioc, &user, &scopes);
+        f_usersEdit(check_auth, send, indocument, url, ioc, &user, &scopes);
     } else if (command == "usersDelete") {
         f_usersDelete(check_auth, send, indocument, url, ioc, &user, &scopes);
     } else if (command == "jobsSubmit") {
@@ -724,12 +724,12 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
         f_getJobs(check_auth, send, indocument, url, exec_callback, {}, ioc);
     } else if (req.method() == http::verb::post && url.path.size() == 1 && url.path[0] == "users") {
         if (!check_json(indocument)) return;
-        f_usersAdd(check_auth, send, indocument, ioc);
+        f_usersAdd(check_auth, send, indocument, url.remove_prefix(1), ioc);
     } else if (req.method() == http::verb::patch && url.path.size() == 1 && url.path[0] == "users") {
         if (!check_json(indocument)) return;
-        f_usersEdit(check_auth, send, indocument, ioc, nullptr, nullptr);
+        f_usersEdit(check_auth, send, indocument, url.remove_prefix(1), ioc, nullptr, nullptr);
     } else if (req.method() == http::verb::delete_ && url.path.size() == 2 && url.path[0] == "users") {
-        f_usersDelete(check_auth, send, indocument, url, ioc, nullptr, nullptr);
+        f_usersDelete(check_auth, send, indocument, url.remove_prefix(1), ioc, nullptr, nullptr);
     } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[1] == "*" && url.path[2] == "submit") {
         if (!check_json(indocument)) return;
         f_jobsSubmit(check_auth, send, indocument, url, exec_callback, {}, ioc);

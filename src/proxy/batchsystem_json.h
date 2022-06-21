@@ -448,10 +448,11 @@ std::vector<std::string> getNodes(const rapidjson::Document& document, const Uri
     return nodes;
 }
 
-boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> usersAdd(const rapidjson::Document& document, std::string username, bool isPatch, std::string& err) {
+boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> usersAdd(const rapidjson::Document& document, const Uri& uri, bool isPatch, std::string& err) {
     std::tuple<std::string, std::set<std::string>, std::string> t;
-
-    if (username.empty()) {
+    if (uri.has_value() && uri.path.size() == 1) {
+        std::get<0>(t) = uri.path[0];
+    } else {
         if (!document.IsObject()) {
             err = "body is not a json object";
             return {};
@@ -465,16 +466,10 @@ boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> use
             err = "user is not a string";
             return {};
         }
-        username = user.GetString();
-    }
-    std::get<0>(t) = std::move(username);
-
-    if (!document.IsObject()) {
-        err = "body is not a json object";
-        return {};
+        std::get<0>(t) = user.GetString();
     }
 
-    if (document.HasMember("password")) {
+    if (document.IsObject() && document.HasMember("password")) {
         auto& password = document["password"];
         if (!password.IsString()) {
             err = "password is not a string";
@@ -488,7 +483,7 @@ boost::optional<std::tuple<std::string, std::set<std::string>, std::string>> use
         std::get<2>(t) = "";
     }
 
-    if (document.HasMember("scopes")) {
+    if (document.IsObject() && document.HasMember("scopes")) {
         auto& scopes = document["scopes"];
         if (!scopes.IsArray()) {
             err = "scopes is not an array";
