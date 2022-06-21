@@ -10,6 +10,7 @@
 #include <rapidjson/writer.h>
 
 #include <string>
+#include <iostream>
 
 #include "batchsystem/json.h"
 
@@ -149,7 +150,7 @@ resp getBatchInfoReturn(std::error_code ec, const cw::batch::BatchInfo& batchinf
 
 
 resp detectReturn(std::error_code ec, bool detected) {
-    if (ec) {
+    if (ec && ec.value() != 2) { // ignore notfound error as that simply means batch not detected
         return json_error_ec(ec);
     } else {
         resp r;
