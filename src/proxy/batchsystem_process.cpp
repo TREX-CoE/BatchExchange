@@ -37,11 +37,11 @@ void runCommand(boost::asio::io_context& ioc_, cw::batch::Result& result, const 
     if ((cmd.opts & cw::batch::cmdopt::capture_stdout_stderr) == cw::batch::cmdopt::capture_stdout_stderr) {
         process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > *(process->pipe_out), bp::std_err > *(process->pipe_err), ioc_, bp::on_exit=cb);
     } else if (cmd.opts & cw::batch::cmdopt::capture_stdout) {
-        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > *(process->pipe_out), ioc_, bp::on_exit=cb);
+        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > *(process->pipe_out), bp::std_err > bp::null, ioc_, bp::on_exit=cb);
     } else if (cmd.opts & cw::batch::cmdopt::capture_stderr) {
-        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_err > *(process->pipe_err), ioc_, bp::on_exit=cb);
+        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_err > *(process->pipe_err), bp::std_out > bp::null, ioc_, bp::on_exit=cb);
     } else {
-        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), ioc_, bp::on_exit=cb);
+        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > bp::null, bp::std_err > bp::null, ioc_, bp::on_exit=cb);
     }
 }
 
