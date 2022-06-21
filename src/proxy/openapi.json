@@ -1247,13 +1247,29 @@
     "securitySchemes": {
       "oauth2": {
         "type": "oauth2",
-        "x-tokenInfoFunc": "cw_rest_server.mod_oauth.get_tokeninfo",
         "flows": {
           "implicit": {
-            "authorizationUrl": "/oauth/authorize",
+            "authorizationUrl": "/",
             "scopes": {
-              "batch_info": "a",
-              "batch_detect": "a"
+              "users_edit": "Edit existing system user",
+              "users_add": "Add new system user",
+              "users_delete": "Delete system user",
+              "jobs_submit": "Submit a batchsystem job",
+              "jobs_delete": "Delete a batchsystem job by id",
+              "jobs_user_delete": "Delete bathsystem jobs by user",
+              "nodes_state_edit": "Edit node state",
+              "queues_state_edit": "Edit queue state",
+              "nodes_comment_edit": "Edit node comment",
+              "jobs_hold": "Hold job",
+              "jobs_release": "Release job",
+              "jobs_suspend": "Suspend job",
+              "jobs_resume": "Resume job",
+              "jobs_reschedule": "Reschedule job in queue",
+              "jobs_info": "Get job infos",
+              "queues_info": "Get queue infos",
+              "nodes_info": "Get node infos",
+              "batch_info": "Get batchsystem infos",
+              "batch_detect": "Detect batchsystem support"
             }
           }
         }

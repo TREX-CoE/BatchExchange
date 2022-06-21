@@ -399,7 +399,7 @@ void f_holdJob(CheckAuth check_auth, Send send, const rapidjson::Document& indoc
 
 template <typename CheckAuth, typename Send, typename ExecCb>
 void f_releaseJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
-    if (!check_auth({"jobs_edit"})) return;
+    if (!check_auth({"jobs_release"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
@@ -418,7 +418,7 @@ void f_releaseJob(CheckAuth check_auth, Send send, const rapidjson::Document& in
 
 template <typename CheckAuth, typename Send, typename ExecCb>
 void f_suspendJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
-    if (!check_auth({"jobs_edit"})) return;
+    if (!check_auth({"jobs_suspend"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
@@ -437,7 +437,7 @@ void f_suspendJob(CheckAuth check_auth, Send send, const rapidjson::Document& in
 
 template <typename CheckAuth, typename Send, typename ExecCb>
 void f_resumeJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
-    if (!check_auth({"jobs_edit"})) return;
+    if (!check_auth({"jobs_resume"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
@@ -456,7 +456,7 @@ void f_resumeJob(CheckAuth check_auth, Send send, const rapidjson::Document& ind
 
 template <typename CheckAuth, typename Send, typename ExecCb>
 void f_rescheduleRunningJobInQueue(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
-    if (!check_auth({"jobs_edit"})) return;
+    if (!check_auth({"jobs_reschedule"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
     if (!batch) return send(response::invalidBatch());
