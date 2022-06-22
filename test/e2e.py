@@ -1,3 +1,4 @@
+from math import radians
 import subprocess
 import ssl
 import websocket # pip install websocket-client
@@ -77,19 +78,31 @@ class TestWebsocket(unittest.TestCase):
         self.assertTrue(len(data["data"].get("scopes", [])) > 0)
 
     def test_03_getNodes(self):
-        data = self.comm({"command": "getNodes", "batchsystem": "pbs"})
+        data = self.comm({"command": "getNodes", "batchsystem": "pbs", "filterNodes": ["ubuntu"]})
         self.assertTrue("data" in data)
         self.assertTrue(len(data["data"]) > 0)
         self.assertTrue(len(data["data"][0].get("name", "")) > 0)
         
-    def test_04_remove_unknown_user(self):
+    def test_04_getJobs(self):
+        data = self.comm({"command": "getJobs", "batchsystem": "pbs", "filterJobs": []})
+        self.assertTrue("data" in data)
+        self.assertTrue(len(data["data"]) > 0)
+        self.assertTrue(len(data["data"][0].get("id", "")) > 0)
+
+    def test_05_getQueues(self):
+        data = self.comm({"command": "getQueues", "batchsystem": "pbs"})
+        self.assertTrue("data" in data)
+        self.assertTrue(len(data["data"]) > 0)
+        self.assertTrue(len(data["data"][0].get("name", "")) > 0)
+
+    def test_06_remove_unknown_user(self):
         self.assertEqual(self.comm({"command": "usersDelete", "user": "notthere"}), {"error": {"type": "NotFound", "message": "user notthere not found", "code": 404}})
 
-    def test_05_detect(self):
+    def test_07_detect(self):
         self.assertEqual(self.comm({"command": "detect", "batchsystem": "pbs"}), {'data': {'detected': True}})
 
 
-    def test_06_logout(self):
+    def test_08_logout(self):
         self.assertEqual(self.comm({"command": "logout"}), {"success": True})
 
 
