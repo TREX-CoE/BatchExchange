@@ -152,7 +152,7 @@ response::resp ws_login(std::set<std::string>& scopes, std::string& user, const 
     std::string username = indocument["user"].GetString();
     if (cw::globals::creds_get(username, indocument["password"].GetString(), scopes)) {
         user = username; 
-        return response::commandSuccess();
+        return response::valid_login(username, scopes);
     } else {
         return response::invalid_login();
     }

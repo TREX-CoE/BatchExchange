@@ -56,6 +56,8 @@ resp invalid_login() {
     return json_error("Invalid login", "Could not authenticate user for login", boost::beast::http::status::unauthorized);
 }
 
+
+
 resp requestUnknown(const std::string& uri, boost::beast::http::verb method) {
     return json_error("BadRequest", "Unknown request: "+std::string(boost::beast::http::to_string(method))+" "+uri, boost::beast::http::status::bad_request);
 }
@@ -185,6 +187,32 @@ resp runJobReturn(std::error_code ec, const std::string& jobName) {
         }
         return r;
     }
+}
+
+resp valid_login(const std::string& username, const std::set<std::string>& scopes) {
+    resp r;
+    rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+    r.second = boost::beast::http::status::ok;
+    r.first.SetObject();
+    {
+        rapidjson::Value data;
+        data.SetObject();
+        data.AddMember("username", username, allocator);
+
+        {
+            rapidjson::Value scopesarr;
+            scopesarr.SetArray();
+            for (const auto& scope : scopes) {
+                    rapidjson::Value val(scope.c_str(), allocator);
+                    scopesarr.PushBack(val, allocator);
+            }
+            data.AddMember("scopes", scopesarr, allocator);
+        }
+
+        r.first.AddMember("data", data, allocator);
+    }
+
+    return r;
 }
 
 resp writingCredentialsReturn(std::error_code ec, boost::optional<std::pair<std::string, std::set<std::string>>> data, boost::beast::http::status status=boost::beast::http::status::created) {
