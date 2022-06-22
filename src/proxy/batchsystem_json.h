@@ -433,7 +433,7 @@ std::vector<std::string> getNodes(const rapidjson::Document& document, const Uri
             return true;
         });
     } else if (document.IsObject() && document.HasMember("filterNodes")) {
-            if (document["filterNodes"].IsArray()) {
+            if (!document["filterNodes"].IsArray()) {
                     err = "filterNodes is not an array";
                     return nodes;
             }
