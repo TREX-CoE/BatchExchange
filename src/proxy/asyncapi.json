@@ -1,0 +1,748 @@
+{
+    "asyncapi": "2.4.0",
+    "info": {
+      "title": "TREX",
+      "version": "1.0.0",
+      "description": "Generic batchsystem websocket interface"
+    },
+    "channels": {
+      "/": {
+        "publish": {
+          "operationId": "sendMessage",
+          "message": {
+            "oneOf": [
+              {
+                "$ref": "#/components/messages/login"
+              },
+              {
+                "$ref": "#/components/messages/logout"
+              },
+              {
+                "$ref": "#/components/messages/getNodes"
+              },
+              {
+                "$ref": "#/components/messages/getQueues"
+              },
+              {
+                "$ref": "#/components/messages/getJobs"
+              }
+            ]
+          }
+        },
+        "subscribe": {
+          "operationId": "processMessage",
+          "message": {
+            "oneOf": [
+              {
+                "$ref": "#/components/messages/invalidLogin"
+              },
+              {
+                "$ref": "#/components/messages/commandSuccess"
+              },
+              {
+                "$ref": "#/components/messages/getNodesData"
+              },
+              {
+                "$ref": "#/components/messages/getQueuesData"
+              },
+              {
+                "$ref": "#/components/messages/getJobsData"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "components": {
+      "messages": {
+        "login": {
+          "summary": "Login with user",
+          "payload": {
+            "allOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "const": "login"
+                  }
+                }
+              },
+              {
+                "$ref": "#/components/schemas/User"
+              }
+            ]
+          },
+          "x-response": {
+            "oneOf": [
+              "#/components/messages/invalidLogin",
+              "#/components/messages/validLogin"
+            ]
+          }
+        },
+        "validLogin": {
+          "summary": "Login succeeded",
+          "payload": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/UserAdded"
+              }
+            }
+          }
+        },
+        "invalidLogin": {
+          "summary": "Login failed",
+          "payload": {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "integer",
+                    "const": 401
+                  },
+                  "message": {
+                    "type": "string",
+                    "const": "Could not authenticate user for login"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "Invalid login"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "logout": {
+          "summary": "Logout",
+          "payload": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "logout"
+              }
+            }
+          },
+          "x-response": "#/components/messages/commandSuccess"
+        },
+        "getNodes": {
+          "summary": "Get node informations",
+          "payload": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "getNodes"
+              },
+              "filterNodes": {
+                "description": "Nodes to filter",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "x-response": "#/components/messages/getNodesData"
+        },
+        "getNodesData": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Node"
+                }
+              }
+            }
+          }
+        },
+        "getQueues": {
+          "summary": "Get queue informations",
+          "payload": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "getQueues"
+              }
+            }
+          },
+          "x-response": "#/components/messages/getQueuesData"
+        },
+        "getQueuesData": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Queue"
+                }
+              }
+            }
+          }
+        },
+        "getJobs": {
+          "summary": "Get job informations",
+          "payload": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "getJobs"
+              },
+              "filterJobs": {
+                "description": "Job ids to filter",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "x-response": "#/components/messages/getJobsData"
+        },
+        "getJobsData": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          }
+        },
+        "commandSuccess": {
+          "summary": "Command succeeded",
+          "payload": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "schemas": {
+        "CommandReturn": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "Batchinfo": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Name of the batchsystem"
+            },
+            "version": {
+              "type": "string",
+              "description": "Version of the batchsystem"
+            },
+            "info": {
+              "type": "object",
+              "description": "Additional batchsystem metadata",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "key",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "User": {
+          "type": "object",
+          "required": [
+            "user",
+            "password"
+          ],
+          "properties": {
+            "user": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "UserAdded": {
+          "type": "object",
+          "properties": {
+            "user": {
+              "type": "string"
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "Node": {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "description": "Shortened (hostname only) node name",
+              "type": "string"
+            },
+            "nameFull": {
+              "description": "Full node name",
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "unknown",
+                "various",
+                "online",
+                "offline",
+                "disabled",
+                "powersave",
+                "reserved",
+                "maintainence",
+                "failed"
+              ],
+              "description": "Node status:\n * `unknown` - Unknown / unhandled or invalid node state\n * `various` - Node/Nodes/Nodegroup have different states\n * `online` - Node is online and ready to run jobs\n * `offline` - Node is offline\n * `disabled` - Node is disabled from scheduling jobs on\n * `powersave` - Node is in powersave mode\n * `reserved` - Node is reserved\n * `maintainence` - Node is disabled for maintainence\n * `failed` - Node is a failed / error state\n"
+            },
+            "rawState": {
+              "description": "Raw node state (unmodified)",
+              "type": "string"
+            },
+            "comment": {
+              "description": "User settable comment for node",
+              "type": "string"
+            },
+            "reason": {
+              "description": "Reason why node is in state (set by user/batchsystem)",
+              "type": "string"
+            },
+            "cpus": {
+              "description": "Number of cpus available",
+              "type": "integer"
+            },
+            "cpusReserved": {
+              "description": "Number of cpus reserved",
+              "type": "integer"
+            },
+            "cpusUsed": {
+              "description": "Number of cpus used",
+              "type": "integer"
+            },
+            "cpusOfJobs": {
+              "description": "Mapping for jobs on node with the number of cpus allocated by each one",
+              "type": "object",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "cpus",
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "Job": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "description": "Job Id used by batchsystem",
+              "type": "string"
+            },
+            "idCompact": {
+              "description": "Shortened Job Id",
+              "type": "string"
+            },
+            "name": {
+              "description": "Name of job",
+              "type": "string"
+            },
+            "owner": {
+              "description": "Owner of job",
+              "type": "string"
+            },
+            "user": {
+              "description": "Username of user that triggered job",
+              "type": "string"
+            },
+            "userId": {
+              "description": "User Id of user that triggered job",
+              "type": "integer"
+            },
+            "group": {
+              "description": "Groupname of user that triggered job",
+              "type": "string"
+            },
+            "groupId": {
+              "description": "Group Id of user that triggered job",
+              "type": "integer"
+            },
+            "queue": {
+              "description": "Name of queue job is currently in",
+              "type": "string"
+            },
+            "priority": {
+              "description": "Priority of job",
+              "type": "integer"
+            },
+            "execHost": {
+              "description": "Hostname where job is executed",
+              "type": "string"
+            },
+            "submitHost": {
+              "description": "Hostname where job has been submitted from",
+              "type": "string"
+            },
+            "server": {
+              "description": "Server managing job",
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "unknown",
+                "running",
+                "queued",
+                "requeued",
+                "terminating",
+                "finished",
+                "cancelled",
+                "failed",
+                "moved",
+                "suspend",
+                "zombie"
+              ],
+              "description": "Job status:\n * `unknown` - Unknown / unhandled or invalid job state\n * `running` - Job is currently running\n * `queued` - Job is scheduled for running\n * `requeued` - Job is scheduled after being run already\n * `terminating` - Job is currently terminating\n * `finished` - Job already finished\n * `cancelled` - Job has been cancelled\n * `failed` - Job failed to run\n * `moved` - Job is been moved to another node\n * `suspend` - Job has been paused from running\n * `zombie` - Job failed in a possibly unstoppable zombie state\n"
+            },
+            "rawState": {
+              "description": "Raw job state (unmodified)",
+              "type": "string"
+            },
+            "workdir": {
+              "description": "Workdirectory used for executing job",
+              "type": "string"
+            },
+            "exitCode": {
+              "description": "Exitcode of job if finished",
+              "type": "integer"
+            },
+            "exitSignal": {
+              "description": "Signal Id of job if finished",
+              "type": "integer"
+            },
+            "submitArgs": {
+              "description": "Arguments passed while submitting job",
+              "type": "string"
+            },
+            "comment": {
+              "description": "Comments of job",
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "description": "Reason why job is in its current state",
+                  "type": "string"
+                },
+                "user": {
+                  "description": "User set comment for job",
+                  "type": "string"
+                },
+                "admin": {
+                  "description": "Admin set comment for job",
+                  "type": "string"
+                },
+                "system": {
+                  "description": "System set comment for job",
+                  "type": "string"
+                }
+              }
+            },
+            "time": {
+              "description": "Times of job",
+              "type": "object",
+              "properties": {
+                "submit": {
+                  "description": "Time the job has been submitted",
+                  "type": "integer"
+                },
+                "start": {
+                  "description": "Time the job was started",
+                  "type": "integer"
+                },
+                "end": {
+                  "description": "Time the job finished",
+                  "type": "integer"
+                },
+                "queue": {
+                  "description": "Time the job has been queued for execution",
+                  "type": "integer"
+                }
+              }
+            },
+            "used": {
+              "description": "Used resources",
+              "type": "object",
+              "properties": {
+                "cpusPerNode": {
+                  "description": "Number of cpus used per node",
+                  "type": "integer"
+                },
+                "cpus": {
+                  "description": "Number of cpus allocated for job",
+                  "type": "integer"
+                },
+                "nodes": {
+                  "description": "Number of nodes allocated for job",
+                  "type": "integer"
+                },
+                "wallTime": {
+                  "description": "Walltime used by job in seconds",
+                  "type": "integer"
+                },
+                "cpuTime": {
+                  "description": "Cputime used by job in seconds",
+                  "type": "integer"
+                },
+                "mem": {
+                  "description": "Memory used by job in bytes",
+                  "type": "integer"
+                },
+                "vmem": {
+                  "description": "Virtual memory used by job in bytes",
+                  "type": "integer"
+                }
+              }
+            },
+            "requested": {
+              "description": "Requested resources",
+              "type": "object",
+              "properties": {
+                "other": {
+                  "description": "Other / custom required string field",
+                  "type": "string"
+                },
+                "nice": {
+                  "description": "Nice level requested by job",
+                  "type": "integer"
+                },
+                "cpus": {
+                  "description": "Number of cpus requested",
+                  "type": "integer"
+                },
+                "nodes": {
+                  "description": "Number of nodes requested",
+                  "type": "integer"
+                },
+                "wallTime": {
+                  "description": "Walltime requested by job in seconds",
+                  "type": "integer"
+                },
+                "general": {
+                  "description": "General key-value pairs for requested custom resources",
+                  "type": "object",
+                  "additionalProperties": {
+                    "x-additionalPropertiesName": "resource",
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "cpusFromNode": {
+              "description": "Mapping of nodenames and number of cpus from each node used by the job",
+              "type": "object",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "node",
+                "type": "integer"
+              }
+            },
+            "variableList": {
+              "description": "Environment variables used for job execution",
+              "type": "object",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "key",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "ChangeQueueState": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed",
+            "inactive",
+            "draining"
+          ],
+          "description": "Queue status:\n * `open` - Open queue, jobs can be scheduled and run\n * `closed` - Closed queue, jobs can neither be scheduled nor run\n * `inactive` - Queue is inactive, jobs can be scheduled but will not run (yet)\n * `draining` - Queue currently draining, jobs cannot be scheduled but existing still run\n"
+        },
+        "Queue": {
+          "description": "Queue information",
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "description": "Name of queue",
+              "type": "string"
+            },
+            "priority": {
+              "description": "Priority order",
+              "type": "integer"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "unknown",
+                "open",
+                "closed",
+                "inactive",
+                "draining"
+              ],
+              "description": "Queue status:\n * `unknown` - Unknown / unhandled or invalid queue state\n * `open` - Open queue, jobs can be scheduled and run\n * `closed` - Closed queue, jobs can neither be scheduled nor run\n * `inactive` - Queue is inactive, jobs can be scheduled but will not run (yet)\n * `draining` - Queue currently draining, jobs cannot be scheduled but existing still run\n"
+            },
+            "rawState": {
+              "description": "Raw / unparsed state description of queue",
+              "type": "string"
+            },
+            "jobs": {
+              "description": "Information about number of jobs in queue",
+              "type": "object",
+              "properties": {
+                "total": {
+                  "description": "Total number of jobs",
+                  "type": "integer"
+                },
+                "pending": {
+                  "description": "Pending jobs",
+                  "type": "integer"
+                },
+                "running": {
+                  "description": "Running jobs",
+                  "type": "integer"
+                },
+                "suspended": {
+                  "description": "Suspended jobs",
+                  "type": "integer"
+                }
+              }
+            },
+            "cpus": {
+              "description": "Number of cpus in queue",
+              "type": "integer"
+            },
+            "nodesTotal": {
+              "description": "Total nodes in queue",
+              "type": "integer"
+            },
+            "nodesMin": {
+              "description": "Minimum nodes per job",
+              "type": "integer"
+            },
+            "nodesMax": {
+              "description": "Maximum nodes per job",
+              "type": "integer"
+            },
+            "wallTimeMax": {
+              "description": "Maximum wallTime per job",
+              "type": "integer"
+            },
+            "memPerCpuMax": {
+              "description": "Maximum memory per cpu per job in bytes",
+              "type": "integer"
+            },
+            "modifyTime": {
+              "description": "Last time the queue was modified",
+              "type": "integer"
+            },
+            "nodes": {
+              "description": "All nodes by name in queue",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "JobOptions": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "description": "Path to job script to execute",
+              "type": "string"
+            },
+            "nodes": {
+              "description": "Number of nodes requested",
+              "type": "integer"
+            },
+            "nodesMax": {
+              "description": "Maximum number of nodes requested",
+              "type": "integer"
+            },
+            "tasks": {
+              "description": "Number of tasks requested",
+              "type": "integer"
+            },
+            "gpus": {
+              "description": "Number of gpus requested",
+              "type": "integer"
+            }
+          }
+        },
+        "JobSubmit": {
+          "type": "object",
+          "properties": {
+            "job": {
+              "type": "string",
+              "description": "Id of submitted job"
+            }
+          }
+        },
+        "Detected": {
+          "type": "object",
+          "properties": {
+            "detected": {
+              "type": "boolean",
+              "description": "Whether batchsystem is available"
+            }
+          }
+        },
+        "ChangeNodeState": {
+          "type": "string",
+          "enum": [
+            "resume",
+            "drain",
+            "undrain"
+          ],
+          "description": "Change status:\n * `resume` - Remove Offline state\n * `drain` - Mark node to disable jobs being scheduled on\n * `undrain` - Mark node to allow jobs being scheduled on\n"
+        }
+      }
+    }
+  }

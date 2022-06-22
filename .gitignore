@@ -1,4 +1,5 @@
 src/proxy/openapi_json.cpp
+src/proxy/asyncapi_json.cpp
 
 # exclude editor and build stuff
 .vscode/

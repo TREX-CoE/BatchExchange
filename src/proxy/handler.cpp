@@ -1,5 +1,6 @@
 #include "proxy/handler.h"
 
+#include "proxy/asyncapi_json.h"
 #include "proxy/openapi_json.h"
 #include "proxy/credentials.h"
 #include "proxy/batchsystem_json.h"
@@ -139,10 +140,10 @@ std::shared_ptr<BatchInterface> getBatch(const rapidjson::Document& document, co
     return create_batch(system.value(), std::move(_func));
 }
 
-void api_openapi(http::response<http::string_body>& res) {
+void res_add_json_string(http::response<http::string_body>& res, std::string s) {
     res.result(http::status::ok);
     res.set(http::field::content_type, "application/json");
-    res.body() = cw::openapi::openapi_json;
+    res.body() = std::move(s);
     res.prepare_payload();
 }
 
@@ -601,7 +602,11 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
 
     auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd); };
 
-    if (command == "login") {
+    if (command == "asyncapi.json") {
+        return send_(cw::asyncapi::asyncapi_json);
+    } else if (command == "openapi.json") {
+        return send_(cw::openapi::openapi_json);
+    }  else if (command == "login") {
         return send(ws_login(scopes, user, indocument));
     } else if (command == "logout") {
         scopes.clear();
@@ -709,8 +714,11 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
     cw::helper::uri::Uri url;
     if (!cw::helper::uri::Uri::parse(url, std::string(req.target()))) return send(response::json_error("InvalidURI", "Error parsing URI", http::status::bad_request));
 
-    if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "openapi.json") {
-        api_openapi(res);
+    if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "asyncapi.json") {
+        res_add_json_string(res, cw::asyncapi::asyncapi_json);
+        return send_(std::move(res));
+    } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "openapi.json") {
+        res_add_json_string(res, cw::openapi::openapi_json);
         return send_(std::move(res));
     } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "state") {
         f_detect(check_auth, send, indocument, url, exec_callback, {}, ioc);
