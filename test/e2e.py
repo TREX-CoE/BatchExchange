@@ -68,23 +68,28 @@ class TestWebsocket(unittest.TestCase):
         comm = create_comm()
         cls.comm = lambda self, d: comm(d)
 
-    def test_01_login(self):
-        self.assertEqual(self.comm({"command": "login", "user": "admin", "password": "admin"}), {"success": True})
+    def test_01_invalid_login(self):
+        self.assertEqual(self.comm({"command": "login", "user": "notthere", "password": "admin"}), {"error":{"type":"Invalid login","message":"Could not authenticate user for login","code":401}})
 
-    def test_02_getNodes(self):
+    def test_02_valid_login(self):
+        data = self.comm({"command": "login", "user": "admin", "password": "admin"})
+        self.assertTrue("data" in data)
+        self.assertTrue(len(data["data"].get("scopes", [])) > 0)
+
+    def test_03_getNodes(self):
         data = self.comm({"command": "getNodes", "batchsystem": "pbs"})
         self.assertTrue("data" in data)
         self.assertTrue(len(data["data"]) > 0)
         self.assertTrue(len(data["data"][0].get("name", "")) > 0)
         
-    def test_03_remove_unknown_user(self):
+    def test_04_remove_unknown_user(self):
         self.assertEqual(self.comm({"command": "usersDelete", "user": "notthere"}), {"error": {"type": "NotFound", "message": "user notthere not found", "code": 404}})
 
-    def test_04_detect(self):
+    def test_05_detect(self):
         self.assertEqual(self.comm({"command": "detect", "batchsystem": "pbs"}), {'data': {'detected': True}})
 
 
-    def test_05_logout(self):
+    def test_06_logout(self):
         self.assertEqual(self.comm({"command": "logout"}), {"success": True})
 
 
