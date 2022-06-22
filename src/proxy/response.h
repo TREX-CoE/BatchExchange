@@ -197,7 +197,7 @@ resp valid_login(const std::string& username, const std::set<std::string>& scope
     {
         rapidjson::Value data;
         data.SetObject();
-        data.AddMember("username", username, allocator);
+        data.AddMember("user", username, allocator);
 
         {
             rapidjson::Value scopesarr;

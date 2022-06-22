@@ -15,7 +15,7 @@
   },
   "servers": [
     {
-      "url": "/v1",
+      "url": "/",
       "description": "batch server"
     }
   ],
@@ -42,13 +42,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "detected": {
-                          "type": "boolean",
-                          "description": "Whether batchsystem is available"
-                        }
-                      }
+                      "$ref": "#/components/schemas/Detected"
                     }
                   }
                 }
@@ -227,13 +221,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "job": {
-                          "type": "string",
-                          "description": "Id of submitted job"
-                        }
-                      }
+                      "$ref": "#/components/schemas/JobSubmit"
                     }
                   }
                 }
@@ -609,13 +597,7 @@
                 ],
                 "properties": {
                   "state": {
-                    "type": "string",
-                    "enum": [
-                      "resume",
-                      "drain",
-                      "undrain"
-                    ],
-                    "description": "Change status:\n * `resume` - Remove Offline state\n * `drain` - Mark node to disable jobs being scheduled on\n * `undrain` - Mark node to allow jobs being scheduled on\n"
+                    "$ref": "#/components/schemas/ChangeNodeState"
                   },
                   "force": {
                     "type": "boolean",
@@ -675,13 +657,7 @@
                 ],
                 "properties": {
                   "state": {
-                    "type": "string",
-                    "enum": [
-                      "open",
-                      "closed",
-                      "inactive",
-                      "draining"
-                    ]
+                    "$ref": "#/components/schemas/ChangeQueueState"
                   },
                   "force": {
                     "type": "boolean",
@@ -737,7 +713,14 @@
         ],
         "responses": {
           "201": {
-            "description": "Added successfully"
+            "description": "Added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdded"
+                }
+              }
+            }
           }
         }
       }
@@ -910,6 +893,20 @@
             "type": "string"
           },
           "password": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UserAdded": {
+        "type": "object",
+        "properties": {
+          "user": {
             "type": "string"
           },
           "scopes": {
@@ -1208,6 +1205,16 @@
           }
         }
       },
+      "ChangeQueueState": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed",
+          "inactive",
+          "draining"
+        ],
+        "description": "Queue status:\n * `open` - Open queue, jobs can be scheduled and run\n * `closed` - Closed queue, jobs can neither be scheduled nor run\n * `inactive` - Queue is inactive, jobs can be scheduled but will not run (yet)\n * `draining` - Queue currently draining, jobs cannot be scheduled but existing still run\n"
+      },
       "Queue": {
         "description": "Queue information",
         "type": "object",
@@ -1321,6 +1328,33 @@
             "type": "integer"
           }
         }
+      },
+      "JobSubmit": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "description": "Id of submitted job"
+          }
+        }
+      },
+      "Detected": {
+        "type": "object",
+        "properties": {
+          "detected": {
+            "type": "boolean",
+            "description": "Whether batchsystem is available"
+          }
+        }
+      },
+      "ChangeNodeState": {
+        "type": "string",
+        "enum": [
+          "resume",
+          "drain",
+          "undrain"
+        ],
+        "description": "Change status:\n * `resume` - Remove Offline state\n * `drain` - Mark node to disable jobs being scheduled on\n * `undrain` - Mark node to allow jobs being scheduled on\n"
       }
     },
     "securitySchemes": {
