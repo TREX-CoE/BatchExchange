@@ -409,7 +409,7 @@ std::vector<std::string> getJobs(const rapidjson::Document& document, const Uri&
             return true;
         });
     } else if (document.IsObject() && document.HasMember("filterJobs")) {
-            if (document["filterJobs"].IsArray()) {
+            if (!document["filterJobs"].IsArray()) {
                     err = "filterJobs is not an array";
                     return jobs;
             }
