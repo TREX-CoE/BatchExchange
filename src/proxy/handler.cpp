@@ -322,7 +322,7 @@ void f_jobsDeleteByUser(CheckAuth check_auth, Send send, const rapidjson::Docume
 }
 
 template <typename CheckAuth, typename Send, typename ExecCb>
-void f_changeNodeState(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+void f_setNodeState(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"nodes_state_edit"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
@@ -637,8 +637,8 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         f_jobsDeleteById(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
     } else if (command == "jobsDeleteByUser") {
         f_jobsDeleteByUser(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
-    } else if (command == "changeNodeState") {
-        f_changeNodeState(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+    } else if (command == "setNodeState") {
+        f_setNodeState(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
     } else if (command == "setQueueState") {
         f_setQueueState(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
     } else if (command == "setNodeComment") {
@@ -750,7 +750,7 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
         f_jobsDeleteById(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
     } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "nodes" && url.path[2] == "state") {
         if (!check_json(indocument)) return;
-        f_changeNodeState(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+        f_setNodeState(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
     } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "queues" && url.path[2] == "state") {
         if (!check_json(indocument)) return;
         f_setQueueState(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
