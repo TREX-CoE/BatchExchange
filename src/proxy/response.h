@@ -98,10 +98,16 @@ resp info() {
     resp r;
     rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
     r.first.SetObject();
-    // use StringRef as strings have safe lifetime (const char literals)
-    r.first.AddMember("hash", rapidjson::Value().SetString(rapidjson::StringRef(cw::build::git_hash)), allocator);
-    r.first.AddMember("branch", rapidjson::Value().SetString(rapidjson::StringRef(cw::build::git_branch)), allocator);
-    r.first.AddMember("revision", cw::build::git_revision, allocator);
+    {
+        rapidjson::Value data;
+        data.SetObject();
+
+        // use StringRef as strings have safe lifetime (const char literals)
+        data.AddMember("hash", rapidjson::Value().SetString(rapidjson::StringRef(cw::build::git_hash)), allocator);
+        data.AddMember("branch", rapidjson::Value().SetString(rapidjson::StringRef(cw::build::git_branch)), allocator);
+        data.AddMember("revision", cw::build::git_revision, allocator);
+        r.first.AddMember("data", data, allocator);
+    }
     r.second = boost::beast::http::status::ok;
     return r;
 }

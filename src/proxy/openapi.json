@@ -352,8 +352,15 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "Deleted successfully"
+          "200": {
+            "description": "Deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
           }
         }
       }
@@ -380,8 +387,15 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "Deleted successfully"
+          "200": {
+            "description": "Deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
           }
         }
       }
@@ -884,7 +898,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/User"
+                  "$ref": "#/components/schemas/UserAdded"
                 }
               }
             }
@@ -910,7 +924,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Deleted successfully"
+            "description": "Deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
           }
         }
       }
