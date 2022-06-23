@@ -10,7 +10,8 @@
       "email": "info@megware.com"
     },
     "license": {
-      "name": "TODO"
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
     }
   },
   "servers": [
@@ -20,6 +21,71 @@
     }
   ],
   "paths": {
+    "/openapi.json": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "description": "Get this REST API documentation",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/asyncapi.json": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "description": "Get websocket API documentation",
+        "responses": {
+          "200": {
+            "description": "AsyncAPI JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/info": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "description": "Get build information",
+        "responses": {
+          "200": {
+            "description": "TREX tool info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Info"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/state": {
       "get": {
         "tags": [
@@ -1335,6 +1401,23 @@
           "job": {
             "type": "string",
             "description": "Id of submitted job"
+          }
+        }
+      },
+      "Info": {
+        "type": "object",
+        "properties": {
+          "hash": {
+            "type": "string",
+            "description": "Git hash"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Git branch"
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Git revision count"
           }
         }
       },

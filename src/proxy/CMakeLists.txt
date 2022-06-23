@@ -8,8 +8,7 @@ find_package( OpenSSL REQUIRED )
 set( proxy_SRC
     batchsystem_process.cpp
     main.cpp
-    asyncapi_json.cpp
-    openapi_json.cpp
+    build_data.cpp
     credentials.cpp
     globals.cpp
     uri.cpp
@@ -20,8 +19,7 @@ set( proxy_SRC
 )
 set( proxy_HDR
     batchsystem_process.h
-    asyncapi_json.h
-    openapi_json.h
+    build_data.h
     credentials.h
     globals.h
     salt_hash.h
@@ -57,10 +55,8 @@ target_link_libraries(proxy OpenSSL::SSL)
 target_link_libraries(proxy OpenSSL::Crypto)
 
 file(READ "openapi.json" OPENAPI)
-configure_file(openapi_json.cpp.in "${CMAKE_CURRENT_SOURCE_DIR}/openapi_json.cpp" @ONLY)
-
 file(READ "asyncapi.json" ASYNCAPI)
-configure_file(asyncapi_json.cpp.in "${CMAKE_CURRENT_SOURCE_DIR}/asyncapi_json.cpp" @ONLY)
+configure_file(build_data.cpp.in "${CMAKE_CURRENT_SOURCE_DIR}/build_data.cpp" @ONLY)
 
 set(PEPPER 2VtWe3CVzV)
 set(PEPPER_XOR 0x55)

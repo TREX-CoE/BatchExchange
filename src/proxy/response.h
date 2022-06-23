@@ -13,6 +13,7 @@
 #include <iostream>
 
 #include "batchsystem/json.h"
+#include "proxy/build_data.h"
 
 namespace cw {
 namespace proxy {
@@ -89,6 +90,18 @@ resp commandSuccess() {
     rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
     r.first.SetObject();
     r.first.AddMember("success", true, allocator);
+    r.second = boost::beast::http::status::ok;
+    return r;
+}
+
+resp info() {
+    resp r;
+    rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+    r.first.SetObject();
+    // use StringRef as strings have safe lifetime (const char literals)
+    r.first.AddMember("hash", rapidjson::Value().SetString(rapidjson::StringRef(cw::build::git_hash)), allocator);
+    r.first.AddMember("branch", rapidjson::Value().SetString(rapidjson::StringRef(cw::build::git_branch)), allocator);
+    r.first.AddMember("revision", cw::build::git_revision, allocator);
     r.second = boost::beast::http::status::ok;
     return r;
 }

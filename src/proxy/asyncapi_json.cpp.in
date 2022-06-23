@@ -1,7 +1,0 @@
-#include "proxy/asyncapi_json.h"
-
-namespace cw {
-namespace asyncapi {
-    const char* asyncapi_json = R"EOF(@ASYNCAPI@)EOF";
-}
-}

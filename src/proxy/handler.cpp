@@ -1,7 +1,6 @@
 #include "proxy/handler.h"
 
-#include "proxy/asyncapi_json.h"
-#include "proxy/openapi_json.h"
+#include "proxy/build_data.h"
 #include "proxy/credentials.h"
 #include "proxy/batchsystem_json.h"
 #include "proxy/batchsystem_process.h"
@@ -603,10 +602,12 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
     auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd); };
 
     if (command == "asyncapi.json") {
-        return send_(cw::asyncapi::asyncapi_json);
+        return send_(cw::build::asyncapi_json);
     } else if (command == "openapi.json") {
-        return send_(cw::openapi::openapi_json);
-    }  else if (command == "login") {
+        return send_(cw::build::openapi_json);
+    } else if (command == "info") {
+        return send(response::info());
+    } else if (command == "login") {
         return send(ws_login(scopes, user, indocument));
     } else if (command == "logout") {
         scopes.clear();
@@ -715,11 +716,13 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
     if (!cw::helper::uri::Uri::parse(url, std::string(req.target()))) return send(response::json_error("InvalidURI", "Error parsing URI", http::status::bad_request));
 
     if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "asyncapi.json") {
-        res_add_json_string(res, cw::asyncapi::asyncapi_json);
+        res_add_json_string(res, cw::build::asyncapi_json);
         return send_(std::move(res));
     } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "openapi.json") {
-        res_add_json_string(res, cw::openapi::openapi_json);
+        res_add_json_string(res, cw::build::openapi_json);
         return send_(std::move(res));
+    } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "info") {
+        return send(response::info());
     } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "state") {
         f_detect(check_auth, send, indocument, url, exec_callback, {}, ioc);
     } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "batchinfo") {
