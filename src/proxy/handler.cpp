@@ -113,7 +113,7 @@ bool parseSystem(System& system, const std::string& input) {
         system = System::Slurm;
         return true;
     } else if (input == "lsf") {
-        system = System::Slurm;
+        system = System::Lsf;
         return true;
     }
     return false;

@@ -92,6 +92,11 @@
           "batch"
         ],
         "description": "Get batchsystem state",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
         "security": [
           {
             "oauth2": [
@@ -124,6 +129,11 @@
           "batch"
         ],
         "description": "Get batchsystem information",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
         "security": [
           {
             "oauth2": [
@@ -156,6 +166,11 @@
           "queues"
         ],
         "description": "Get queues",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
         "security": [
           {
             "oauth2": [
@@ -191,6 +206,11 @@
           "nodes"
         ],
         "description": "Get nodes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
         "security": [
           {
             "oauth2": [
@@ -226,6 +246,11 @@
           "jobs"
         ],
         "description": "Get jobs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
         "security": [
           {
             "oauth2": [
@@ -261,6 +286,11 @@
           "jobs"
         ],
         "description": "Get jobs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
         "security": [
           {
             "oauth2": [
@@ -308,6 +338,9 @@
           },
           {
             "$ref": "#/components/parameters/Force"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Delete job by id",
@@ -333,6 +366,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/BatchUser"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Delete job by user",
@@ -358,6 +394,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Hold job",
@@ -405,6 +444,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Release job",
@@ -452,6 +494,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Suspend job",
@@ -499,6 +544,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Resume job",
@@ -546,6 +594,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Reschedule job",
@@ -593,6 +644,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/NodeId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Change node comment",
@@ -650,6 +704,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/NodeId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Change node state",
@@ -710,6 +767,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/QueueId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
           }
         ],
         "description": "Change queue state",
@@ -911,9 +971,27 @@
         "schema": {
           "type": "string"
         }
+      },
+      "BatchSystem": {
+        "name": "batchsystem",
+        "description": "Batchsystem to use",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/BatchSystem"
+        }
       }
     },
     "schemas": {
+      "BatchSystem": {
+        "type": "string",
+        "enum": [
+          "pbs",
+          "lsf",
+          "slurm"
+        ],
+        "description": "Node status:\n * `pbs` - Pbs / PbsPro / Torque\n * `lsf` - IBM LSF\n * `slurm` - Slurm\n"
+      },
       "CommandReturn": {
         "type": "object",
         "properties": {
