@@ -651,7 +651,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         f_suspendJob(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
     } else if (command == "resumeJob") {
         f_resumeJob(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
-    } else if (command == "rescheduleRunningJobInQueue") {
+    } else if (command == "rescheduleJob") {
         f_rescheduleRunningJobInQueue(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
     } else {
         send(response::commandUnknown(command));
