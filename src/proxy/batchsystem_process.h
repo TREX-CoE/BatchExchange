@@ -9,7 +9,12 @@ namespace cw {
 namespace proxy {
 namespace batch {
 
-void runCommand(boost::asio::io_context& ioc_, cw::batch::Result& result, const cw::batch::Cmd& cmd);
+enum cmd_status {
+    cmd_status_running = -1,
+    cmd_status_spawn_failed = -2,
+};
+
+void runCommand(boost::asio::io_context& ioc_, cw::batch::Result& result, const cw::batch::Cmd& cmd, unsigned int timeout = 0);
 
 }
 }

@@ -58,6 +58,8 @@ using namespace cw::proxy;
 using namespace cw::batch;
 using namespace cw::helper::uri;
 
+constexpr unsigned int timeout_cmd = 15000;
+
 std::string jsonToString(const rapidjson::Document& document) {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -84,6 +86,9 @@ void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF
         } catch (const boost::process::process_error& e) {
             callbackF(e.code());
             return;
+        } catch (const std::runtime_error& e) {
+            callbackF(boost::system::error_code(boost::asio::error::operation_aborted));
+            return;
         }
         ioc_.post(handler);
     }));
@@ -99,6 +104,9 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
             }
         } catch (const boost::process::process_error& e) {
             callbackF(e.code(), std::move(state));
+            return;
+        } catch (const std::runtime_error& e) {
+            callbackF(boost::system::error_code(boost::asio::error::operation_aborted), std::move(state));
             return;
         }
         ioc_.post(handler);
@@ -599,7 +607,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         return true;
     };
 
-    auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd); };
+    auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd, timeout_cmd); };
 
     if (command == "asyncapi.json") {
         return send_(cw::build::asyncapi_json);
@@ -698,7 +706,7 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
         return true;
     };
 
-    auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd); };
+    auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd, timeout_cmd); };
 
     auto send_info = [send_, res](auto ec, auto container) mutable {
         to_response(res, response::containerReturn(ec, container));
