@@ -8,6 +8,7 @@
 #include "proxy/uri.h"
 #include "proxy/response.h"
 #include "proxy/y_combinator.h"
+#include "proxy/error.h"
 
 #define RAPIDJSON_HAS_STDSTRING 1
 #include <rapidjson/document.h>
@@ -56,6 +57,7 @@ namespace {
 
 using namespace cw::proxy;
 using namespace cw::batch;
+using namespace cw::error;
 using namespace cw::helper::uri;
 
 constexpr unsigned int timeout_cmd = 15000;
@@ -84,10 +86,13 @@ void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF
                 return;
             }
         } catch (const boost::process::process_error& e) {
-            callbackF(e.code());
+            callbackF(error_wrapper(error_type::exc_process_error, e.what(), e.code()));
             return;
         } catch (const std::runtime_error& e) {
-            callbackF(boost::system::error_code(boost::asio::error::operation_aborted));
+            callbackF(error_wrapper(error_type::exc_runtime_error, e.what()));
+            return;
+        } catch (const std::exception& e) {
+            callbackF(error_wrapper(error_type::exc_exception, e.what()));
             return;
         }
         ioc_.post(handler);
@@ -103,10 +108,13 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
                 return;
             }
         } catch (const boost::process::process_error& e) {
-            callbackF(e.code(), std::move(state));
+            callbackF(error_wrapper(error_type::process_error, e.what(), e.code()));
             return;
         } catch (const std::runtime_error& e) {
-            callbackF(boost::system::error_code(boost::asio::error::operation_aborted), std::move(state));
+            callbackF(error_wrapper(error_type::runtime_error, e.what()));
+            return;
+        } catch (const std::exception& e) {
+            callbackF(error_wrapper(error_type::exception, e.what()));
             return;
         }
         ioc_.post(handler);

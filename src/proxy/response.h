@@ -14,10 +14,13 @@
 
 #include "batchsystem/json.h"
 #include "proxy/build_data.h"
+#include "proxy/error.h"
 
 namespace cw {
 namespace proxy {
 namespace response {
+
+using namespace cw::error;
 
 using resp = std::pair<rapidjson::Document, boost::beast::http::status>;
 
@@ -35,6 +38,10 @@ resp json_error(const std::string& type, const std::string& message, boost::beas
     }
     r.second = status;
     return r;
+}
+
+resp json_error(const error_wrapper& e, boost::beast::http::status status) {
+    return json_error();
 }
 
 resp bad_request() {
@@ -112,9 +119,9 @@ resp info() {
     return r;
 }
 
-resp commandReturn(std::error_code ec, const std::string& failType = "Running command failed", boost::beast::http::status statusFail=boost::beast::http::status::ok) {
-    if (ec) {
-        return json_error_ec(ec, failType);
+resp commandReturn(error_wrapper e, const std::string& failType = "Running command failed", boost::beast::http::status statusFail=boost::beast::http::status::ok) {
+    if (e) {
+        return json_error(e, failType);
     } else {
         resp r;
         rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
