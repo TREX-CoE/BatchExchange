@@ -52,16 +52,25 @@ def create_comm():
 
     return comm
 
-def test_rest():
-    req("/nodes?batchsystem=pbs")
-    req("/nodes?batchsystem=slurm")
-    req("/users", {"user": "e", "password": "a", "scopes": ["aa"]})
-
 class TestRest(unittest.TestCase):
-    def test_remove_unknown_user(self):
+    def test_remove_add_unknown_user(self):
         self.assertEqual(req("/users/notthere", method="DELETE"), ({"error": {"type": "NotFound", "message": "user notthere not found", "code": 404}}, 404))
+        self.assertEqual(req("/users", {"user": "notthere", "password": "notthere", "scopes": ["a"]}), ({'scopes': ["a"], 'username': 'notthere'}, 201))
+        self.assertEqual(req("/users/notthere", method="DELETE"), ({'data': {'success': True}}, 200))
 
+    def test_nodes_pbs(self):
+        data, status = req("/nodes?batchsystem=pbs")
+        self.assertEqual(status, 200)
+        self.assertTrue("data" in data)
+        self.assertTrue(len(data["data"]) > 0)
+        self.assertTrue(len(data["data"][0].get("name", "")) > 0)
 
+    def test_nodes_slurm(self):
+        data, status = req("/nodes?batchsystem=slurm")
+        self.assertEqual(status, 200)
+        self.assertTrue("data" in data)
+        self.assertTrue(len(data["data"]) > 0)
+        self.assertTrue(len(data["data"][0].get("name", "")) > 0)
 
 class TestWebsocket(unittest.TestCase):
     @classmethod
