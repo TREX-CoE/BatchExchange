@@ -22,16 +22,12 @@ struct Handler {
         std::function<void(std::string)> send_;
 
         template <class Session>
-        static void init(Session& self) {
-            self.send_ = [session=self.shared_from_this()](std::string s){
-                session->send(s);
-            };
-        } 
+        static void init(Session& self) { (void)self; } // NOTE: storing std::function for send would cause leak for some reason
     };
 
     template <class Session>
     static void handle_socket(Session& self, std::string input) {
-        cw::proxy::handler::ws(self.send_, self.ioc(), input, self.scopes, self.user, self.selectedSystem);
+        cw::proxy::handler::ws([session=self.shared_from_this()](std::string s){session->send(s);}, self.ioc(), input, self.scopes, self.user, self.selectedSystem);
     }
 
     template<class Session>
