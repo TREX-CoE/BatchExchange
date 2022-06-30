@@ -11,10 +11,12 @@
 
 #include <string>
 #include <iostream>
+#include <system_error>
 
 #include "batchsystem/json.h"
 #include "proxy/build_data.h"
 #include "proxy/error.h"
+#include "proxy/error_wrapper.h"
 
 namespace cw {
 namespace proxy {
@@ -40,8 +42,8 @@ resp json_error(const std::string& type, const std::string& message, boost::beas
     return r;
 }
 
-resp json_error(const error_wrapper& e, boost::beast::http::status status) {
-    return json_error();
+resp json_error(const error_wrapper& e, boost::beast::http::status status = boost::beast::http::status::internal_server_error) {
+    return json_error(e.msg(), "TEST", status);
 }
 
 resp bad_request() {
@@ -119,9 +121,10 @@ resp info() {
     return r;
 }
 
-resp commandReturn(error_wrapper e, const std::string& failType = "Running command failed", boost::beast::http::status statusFail=boost::beast::http::status::ok) {
+resp commandReturn(const error_wrapper& e, const std::string& failType = "Running command failed", boost::beast::http::status statusFail=boost::beast::http::status::ok) {
     if (e) {
-        return json_error(e, failType);
+        (void)failType;
+        return json_error(e); // failType
     } else {
         resp r;
         rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
@@ -138,9 +141,9 @@ resp commandReturn(error_wrapper e, const std::string& failType = "Running comma
 }
 
 template <typename T>
-resp containerReturn(std::error_code ec, const std::vector<T>& entry) {
-    if (ec) {
-        return json_error_ec(ec);
+resp containerReturn(const error_wrapper& e, const std::vector<T>& entry) {
+    if (e) {
+        return json_error(e);
     } else {
         resp r;
         rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
@@ -148,9 +151,9 @@ resp containerReturn(std::error_code ec, const std::vector<T>& entry) {
 
         rapidjson::Value entryArr;
         entryArr.SetArray();
-        for (const auto& e : entry) {
+        for (const auto& v : entry) {
             rapidjson::Document subdocument(&r.first.GetAllocator());
-            cw::batch::json::serialize(e, subdocument);
+            cw::batch::json::serialize(v, subdocument);
             entryArr.PushBack(subdocument, allocator);
         }
         r.first.AddMember("data", entryArr, allocator);
@@ -159,9 +162,9 @@ resp containerReturn(std::error_code ec, const std::vector<T>& entry) {
     }
 }
 
-resp getBatchInfoReturn(std::error_code ec, const cw::batch::BatchInfo& batchinfo) {
-    if (ec) {
-        return json_error_ec(ec);
+resp getBatchInfoReturn(const error_wrapper& e, const cw::batch::BatchInfo& batchinfo) {
+    if (e) {
+        return json_error(e);
     } else {
         resp r;
         rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
@@ -177,9 +180,9 @@ resp getBatchInfoReturn(std::error_code ec, const cw::batch::BatchInfo& batchinf
 }
 
 
-resp detectReturn(std::error_code ec, bool detected) {
-    if (ec && ec.value() != 2) { // ignore notfound error as that simply means batch not detected
-        return json_error_ec(ec);
+resp detectReturn(const error_wrapper& e, bool detected) {
+    if (e && e.ec() == std::error_code(error_type::command_not_found)) { // ignore notfound error as that simply means batch not detected
+        return json_error(e);
     } else {
         resp r;
         rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
@@ -197,9 +200,9 @@ resp detectReturn(std::error_code ec, bool detected) {
 
 
 
-resp runJobReturn(std::error_code ec, const std::string& jobName) {
-    if (ec) {
-        return json_error_ec(ec);
+resp runJobReturn(const error_wrapper& e, const std::string& jobName) {
+    if (e) {
+        return json_error(e);
     } else {
         resp r;
         rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
@@ -241,9 +244,9 @@ resp valid_login(const std::string& username, const std::set<std::string>& scope
     return r;
 }
 
-resp writingCredentialsReturn(std::error_code ec, boost::optional<std::pair<std::string, std::set<std::string>>> data, boost::beast::http::status status=boost::beast::http::status::created) {
+resp writingCredentialsReturn(const error_wrapper& e, boost::optional<std::pair<std::string, std::set<std::string>>> data, boost::beast::http::status status=boost::beast::http::status::created) {
     if (data.has_value()) {
-        if (ec) return commandReturn(ec, "Writing credentials failed", status);
+        if (e) return commandReturn(e, "Writing credentials failed", status);
         resp r;
         rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
         r.second = status;
@@ -260,7 +263,7 @@ resp writingCredentialsReturn(std::error_code ec, boost::optional<std::pair<std:
         }
         return r;
     } else {
-        return commandReturn(ec, "Writing credentials failed", status);
+        return commandReturn(e, "Writing credentials failed", status);
     }
 }
 

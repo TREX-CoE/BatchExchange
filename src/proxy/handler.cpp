@@ -9,6 +9,7 @@
 #include "proxy/response.h"
 #include "proxy/y_combinator.h"
 #include "proxy/error.h"
+#include "proxy/error_wrapper.h"
 
 #define RAPIDJSON_HAS_STDSTRING 1
 #include <rapidjson/document.h>
@@ -82,17 +83,17 @@ void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF
     ioc_.post(cw::helper::y_combinator_shared([asyncF, callbackF, &ioc_](auto handler) mutable {
         try {
             if (asyncF()) {
-                callbackF(boost::system::error_code());
+                callbackF(error_wrapper());
                 return;
             }
         } catch (const boost::process::process_error& e) {
-            callbackF(error_wrapper(error_type::exc_process_error, e.what(), e.code()));
+            callbackF(error_wrapper(error_type::exc_process_error).with_msg(e.what()).with_base(e.code()));
             return;
         } catch (const std::runtime_error& e) {
-            callbackF(error_wrapper(error_type::exc_runtime_error, e.what()));
+            callbackF(error_wrapper(error_type::exc_runtime_error).with_msg(e.what()));
             return;
         } catch (const std::exception& e) {
-            callbackF(error_wrapper(error_type::exc_exception, e.what()));
+            callbackF(error_wrapper(error_type::exc_exception).with_msg(e.what()));
             return;
         }
         ioc_.post(handler);
@@ -104,17 +105,17 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
     ioc_.post(cw::helper::y_combinator_shared([state=T(), asyncF, callbackF, &ioc_](auto handler) mutable {
         try {
             if (asyncF(state)) {
-                callbackF(boost::system::error_code(), std::move(state));
+                callbackF(error_wrapper(), std::move(state));
                 return;
             }
         } catch (const boost::process::process_error& e) {
-            callbackF(error_wrapper(error_type::process_error, e.what(), e.code()));
+            callbackF(error_wrapper(error_type::exc_process_error).with_msg(e.what()).with_base(e.code()), std::move(state));
             return;
         } catch (const std::runtime_error& e) {
-            callbackF(error_wrapper(error_type::runtime_error, e.what()));
+            callbackF(error_wrapper(error_type::exc_runtime_error).with_msg(e.what()), std::move(state));
             return;
         } catch (const std::exception& e) {
-            callbackF(error_wrapper(error_type::exception, e.what()));
+            callbackF(error_wrapper(error_type::exc_exception).with_msg(e.what()), std::move(state));
             return;
         }
         ioc_.post(handler);
@@ -190,11 +191,13 @@ void write_creds_async(boost::asio::io_context& ioc_, const cw::helper::credenti
     cw::helper::credentials::write(creds, *s);
     boost::asio::async_write(*stream, boost::asio::buffer(*s), boost::asio::transfer_all(), [stream, s, creds, callbackF](beast::error_code ec, size_t len) mutable {
         (void)len;
-        if (!ec) {
+        if (ec) {
+            callbackF(error_wrapper(error_type::writing_credentials_error).with_base(ec));
+        } else {
             // store new credentials in global after successfull write
             cw::globals::creds(creds);
+            callbackF(error_wrapper());
         }
-        callbackF(ec);
     });
 }
 

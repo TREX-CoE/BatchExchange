@@ -15,6 +15,7 @@ enum class error_type {
     exc_exception,
     exc_process_error,
     command_error,
+    command_not_found,
     invalid_password,
     conflict,
     conflict_user,
@@ -24,28 +25,22 @@ enum class error_type {
     not_found,
     command_unsupported,
     batchsystem_invalid,
-}
-
-struct error_wrapper {
-    error_type type;
-    std::string what;
-    std::error_code code;
-    int statuscode;
-    error_wrapper(error_type type_, std::string what_, std::error_code code_=boost::system::error_code(), int status_code_=0): type(type_), what(what_), code(code_), statuscode(status_code_) {}
-    error_wrapper(): error_wrapper(error_type::no_error, "") {}
-    operator bool() const {
-        return type == error_type::no_error;
-    }
-    int status_code() const {
-        if (statuscode != 0) return statuscode;
-        switch (type) {
-            case error_type::not_found: return 404;
-            default: return 500;
-        }
-    }
+    error_code,
+    writing_credentials_error,
+    other,
 };
 
+const std::error_category& trex_category() noexcept;
+
+std::error_code make_error_code(error_type e);
+
 }
+}
+
+namespace std
+{
+  template <>
+  struct is_error_code_enum<cw::error::error_type> : true_type {};
 }
 
 #endif /* BOOST_PROXY_ERROR */
