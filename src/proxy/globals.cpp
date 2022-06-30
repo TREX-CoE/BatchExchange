@@ -1,5 +1,6 @@
 #include "proxy/globals.h"
 #include "proxy/salt_hash.h"
+#include "proxy/error.h"
 
 #include <mutex>
 
@@ -26,21 +27,22 @@ cw::helper::credentials::dict creds() {
     return creds_;
 }
 
-bool creds_get(const std::string& user, const std::string& pass, std::set<std::string>& scopes) {
+std::error_code creds_get(const std::string& user, const std::string& pass, std::set<std::string>& scopes) {
     std::lock_guard<std::mutex> guard(m_creds_);
     auto it = creds_.find(user);
     if (it != creds_.end()) {
         const auto hash = cw::proxy::salt_hash(it->second.salt, pass);
         if (hash == it->second.hash) {
             scopes = it->second.scopes;
-            return true;
+            return {};
         }
+        return cw::error::error_type::login_password_mismatch;
     }
-    return false;
+    return cw::error::error_type::login_user_not_found;
 }
 
 
-bool creds_check(const std::string& user, const std::string& pass, const std::set<std::string>& scopes) {
+std::error_code creds_check(const std::string& user, const std::string& pass, const std::set<std::string>& scopes) {
     std::lock_guard<std::mutex> guard(m_creds_);
     auto it = creds_.find(user);
     if (it != creds_.end()) {
@@ -50,14 +52,15 @@ bool creds_check(const std::string& user, const std::string& pass, const std::se
                 for (const auto& s : scopes) {
                     if (it->second.scopes.find(s) == it->second.scopes.end()) {
                         // user does not have requested scope
-                        return false;
+                        return cw::error::error_type::login_scope_missing;
                     }
                 }
             }
-            return true;
+            return {};
         }
+        return cw::error::error_type::login_password_mismatch;
     }
-    return false;
+    return cw::error::error_type::login_user_not_found;
 }
 
 void creds(cw::helper::credentials::dict _creds) {

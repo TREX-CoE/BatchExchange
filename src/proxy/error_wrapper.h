@@ -20,10 +20,11 @@ public:
     error_wrapper& with_status(int statuscode_) { _statuscode = statuscode_; return *this; }
     error_wrapper& with_base(std::error_code base_) { _base = base_; return *this; }
     operator bool() const { return !!_code; }
-    int statuscode() const { return _statuscode; }
     std::error_code ec() const { return _code; }
     std::error_code base_ec() const { return _base; }
-    const std::string& msg() const { return _msg; }
+    const std::string& msg() const & { return _msg; }
+    std::string msg() && { return std::move(_msg); }
+    int statuscode() const { return _statuscode; }
 };
 
 }

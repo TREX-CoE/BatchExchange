@@ -89,6 +89,9 @@ void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF
         } catch (const boost::process::process_error& e) {
             callbackF(error_wrapper(error_type::exc_process_error).with_msg(e.what()).with_base(e.code()));
             return;
+        } catch (const CommandFailed& e) {
+            callbackF(error_wrapper(error_type::command_error).with_msg(e.what()));
+            return;
         } catch (const std::runtime_error& e) {
             callbackF(error_wrapper(error_type::exc_runtime_error).with_msg(e.what()));
             return;
@@ -110,6 +113,9 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
             }
         } catch (const boost::process::process_error& e) {
             callbackF(error_wrapper(error_type::exc_process_error).with_msg(e.what()).with_base(e.code()), std::move(state));
+            return;
+        } catch (const CommandFailed& e) {
+            callbackF(error_wrapper(error_type::command_error).with_msg(e.what()), std::move(state));
             return;
         } catch (const std::runtime_error& e) {
             callbackF(error_wrapper(error_type::exc_runtime_error).with_msg(e.what()), std::move(state));
@@ -164,22 +170,23 @@ void res_add_json_string(http::response<http::string_body>& res, std::string s) 
 }
 
 response::resp ws_login(std::set<std::string>& scopes, std::string& user, const rapidjson::Document& indocument) {
-    if (!(indocument.HasMember("user") && indocument["user"].IsString())) return response::validationError("user invalid");
-    if (!(indocument.HasMember("password") && indocument["password"].IsString())) return response::validationError("password invalid");
+    if (!(indocument.HasMember("user") && indocument["user"].IsString())) return response::json_error(error_wrapper(error_type::user_invalid));
+    if (!(indocument.HasMember("password") && indocument["password"].IsString())) return response::json_error(error_wrapper(error_type::password_invalid));
     std::string username = indocument["user"].GetString();
-    if (cw::globals::creds_get(username, indocument["password"].GetString(), scopes)) {
+    auto ec = cw::globals::creds_get(username, indocument["password"].GetString(), scopes);
+    if (ec) {
+        return response::json_error(error_wrapper(ec).with_msg(username));
+    } else {
         user = username; 
         return response::valid_login(username, scopes);
-    } else {
-        return response::invalid_login();
     }
 }
 
 response::resp ws_setBatchsystem(boost::optional<System>& system, const rapidjson::Document& indocument) {
-    if (!indocument.HasMember("batchsystem")) return response::validationError("batchsystem not given");
+    if (!indocument.HasMember("batchsystem")) return response::json_error(error_wrapper(error_type::batchsystem_not_given));
     if (!indocument["batchsystem"].IsString()) return response::validationError("batchsystem is not a string");
     System s;
-    if (!parseSystem(s, indocument["batchsystem"].GetString())) return response::validationError("batchsystem is not a valid choice");
+    if (!parseSystem(s, indocument["batchsystem"].GetString())) return response::json_error(error_wrapper(error_type::batchsystem_unknown));
     system = s;
     return response::commandSuccess();
 }
@@ -215,7 +222,7 @@ void f_usersEdit(CheckAuth check_auth, Send send, const rapidjson::Document& ind
 
     auto creds = cw::globals::creds();
     auto it = creds.find(username);
-    if (it != creds.end()) return send(response::notfoundError("user " + username + " not found"));
+    if (it != creds.end()) return send(response::json_error(error_wrapper(error_type::user_not_found)));
 
     if (!password.empty()) {
         // create new password
@@ -247,12 +254,12 @@ void f_usersAdd(CheckAuth check_auth, Send send, const rapidjson::Document& indo
 
     auto creds = cw::globals::creds();
     std::string username = std::get<0>(*o);
-    if (creds.find(username) != creds.end()) return send(response::json_error("Conflict", "User already exists", http::status::conflict));
+    if (creds.find(username) != creds.end()) return send(response::json_error(error_wrapper(error_type::conflict_user)));
 
     std::set<std::string> scopes = std::get<1>(*o);
 
     const std::string& password = std::get<2>(*o);
-    if (password.empty()) return send(response::json_error("InvalidPassword", "Empty password not allowed", http::status::bad_request));
+    if (password.empty()) return send(response::json_error(error_wrapper(error_type::invalid_password_empty)));
 
     nonstd::apply([&creds](auto&&... args){cw::helper::credentials::set_user(creds, args...);}, std::move(*o));
     write_creds_async(ioc, creds, [send, user=std::move(username), s=std::move(scopes)](auto ec) mutable {
@@ -288,9 +295,9 @@ void f_jobsSubmit(CheckAuth check_auth, Send send, const rapidjson::Document& in
     if (!check_auth({"jobs_submit"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->runJob(supported)) return send(response::commandUnsupported());
+    if (!batch->runJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::runJob(indocument, err);
@@ -307,9 +314,9 @@ void f_jobsDeleteById(CheckAuth check_auth, Send send, const rapidjson::Document
     if (!check_auth({"jobs_delete"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->deleteJobById(supported)) return send(response::commandUnsupported());
+    if (!batch->deleteJobById(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::deleteJobById(indocument, uri, err);
@@ -326,9 +333,9 @@ void f_jobsDeleteByUser(CheckAuth check_auth, Send send, const rapidjson::Docume
     if (!check_auth({"jobs_user_delete"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->deleteJobByUser(supported)) return send(response::commandUnsupported());
+    if (!batch->deleteJobByUser(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::deleteJobByUser(indocument, uri, err);
@@ -345,9 +352,9 @@ void f_setNodeState(CheckAuth check_auth, Send send, const rapidjson::Document& 
     if (!check_auth({"nodes_state_edit"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->changeNodeState(supported)) return send(response::commandUnsupported());
+    if (!batch->changeNodeState(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::changeNodeState(indocument, uri, err);
@@ -364,9 +371,9 @@ void f_setQueueState(CheckAuth check_auth, Send send, const rapidjson::Document&
     if (!check_auth({"queues_state_edit"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->setQueueState(supported)) return send(response::commandUnsupported());
+    if (!batch->setQueueState(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::setQueueState(indocument, uri, err);
@@ -383,9 +390,9 @@ void f_setNodeComment(CheckAuth check_auth, Send send, const rapidjson::Document
     if (!check_auth({"nodes_comment_edit"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->setNodeComment(supported)) return send(response::commandUnsupported());
+    if (!batch->setNodeComment(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::setNodeComment(indocument, uri, err);
@@ -402,9 +409,9 @@ void f_holdJob(CheckAuth check_auth, Send send, const rapidjson::Document& indoc
     if (!check_auth({"jobs_hold"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->holdJob(supported)) return send(response::commandUnsupported());
+    if (!batch->holdJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::holdJob(indocument, uri, err);
@@ -421,9 +428,9 @@ void f_releaseJob(CheckAuth check_auth, Send send, const rapidjson::Document& in
     if (!check_auth({"jobs_release"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->releaseJob(supported)) return send(response::commandUnsupported());
+    if (!batch->releaseJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::releaseJob(indocument, uri, err);
@@ -440,9 +447,9 @@ void f_suspendJob(CheckAuth check_auth, Send send, const rapidjson::Document& in
     if (!check_auth({"jobs_suspend"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->suspendJob(supported)) return send(response::commandUnsupported());
+    if (!batch->suspendJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::suspendJob(indocument, uri, err);
@@ -459,9 +466,9 @@ void f_resumeJob(CheckAuth check_auth, Send send, const rapidjson::Document& ind
     if (!check_auth({"jobs_resume"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->resumeJob(supported)) return send(response::commandUnsupported());
+    if (!batch->resumeJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::resumeJob(indocument, uri, err);
@@ -478,9 +485,9 @@ void f_rescheduleRunningJobInQueue(CheckAuth check_auth, Send send, const rapidj
     if (!check_auth({"jobs_reschedule"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->rescheduleRunningJobInQueue(supported)) return send(response::commandUnsupported());
+    if (!batch->rescheduleRunningJobInQueue(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::rescheduleRunningJobInQueue(indocument, uri, err);
@@ -498,9 +505,9 @@ void f_getJobs(CheckAuth check_auth, Send send, const rapidjson::Document& indoc
     if (!check_auth({"jobs_info"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->getJobs(supported)) return send(response::commandUnsupported());
+    if (!batch->getJobs(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     std::string err;
     auto o = cw_proxy_batch::getJobs(indocument, uri, err);
@@ -516,9 +523,9 @@ void f_getQueues(CheckAuth check_auth, Send send, const rapidjson::Document& ind
     if (!check_auth({"queues_info"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->getQueues(supported)) return send(response::commandUnsupported());
+    if (!batch->getQueues(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     run_async_state<std::vector<cw::batch::Queue>>(ioc, [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
         return send(response::containerReturn(ec, container));
@@ -530,9 +537,9 @@ void f_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document& indo
     if (!check_auth({"nodes_info"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->getNodes(supported)) return send(response::commandUnsupported());
+    if (!batch->getNodes(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
     std::string err;
     auto o = cw_proxy_batch::getNodes(indocument, uri, err);
     if (!err.empty()) return send(response::validationError(err));
@@ -547,9 +554,9 @@ void f_getBatchInfo(CheckAuth check_auth, Send send, const rapidjson::Document& 
     if (!check_auth({"batch_info"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    if (!batch->getBatchInfo(supported)) return send(response::commandUnsupported());
+    if (!batch->getBatchInfo(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
     run_async_state<BatchInfo>(ioc, [batch, f=batch->getBatchInfo()](BatchInfo& state){ return f(state); }, [send](auto ec, auto batchinfo) mutable {
         return send(response::getBatchInfoReturn(ec, batchinfo));
@@ -561,7 +568,7 @@ void f_detect(CheckAuth check_auth, Send send, const rapidjson::Document& indocu
     if (!check_auth({"batch_detect"})) return;
 
     auto batch = getBatch(indocument, uri, exec_cb, system);
-    if (!batch) return send(response::invalidBatch());
+    if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     run_async_state<bool>(ioc, [batch, f=batch->detect()](bool& detected){ return f(detected); }, [send](auto ec, auto detected) mutable {
         return send(response::detectReturn(ec, detected));
@@ -602,7 +609,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         send_(jsonToString(r.first));
     };
     
-    if (!indocument.HasMember("command")) return send(response::json_error("CommandError", "command not given", http::status::bad_request)); 
+    if (!indocument.HasMember("command")) return send(response::json_error(error_wrapper(error_type::socket_command_not_given))); 
     if (!indocument["command"].IsString()) return send(response::json_error("CommandError", "command is not a string", http::status::bad_request));
     std::string command = indocument["command"].GetString();
 
@@ -611,7 +618,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
     {
         for (const auto& scope : scopes_) {
             if (!scopes.count(scope)) {
-                send(response::invalid_auth(scope));
+                send(response::json_error(error_wrapper(error_type::login_scope_missing).with_msg(scope)));
                 return false;
             }
         }
@@ -674,7 +681,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         } else if (command == "rescheduleJob") {
             f_rescheduleRunningJobInQueue(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
         } else {
-            send(response::commandUnknown(command));
+            send(response::json_error(error_wrapper(error_type::socket_command_unknown).with_msg(command)));
         }
     } catch (const std::exception& e) {
         send(response::json_error_exc(e));
@@ -693,11 +700,14 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
     {
         std::string user, pass;
         if (cw::http::parse_auth_header(req[http::field::authorization], user, pass)) {
-            if (cw::globals::creds_check(user, pass, scopes)) {
+            auto ec = cw::globals::creds_check(user, pass, scopes);
+            if (!ec) {
                 return true;
             }
+            to_response(res, response::json_error(error_wrapper(ec)));
+        } else {
+            to_response(res, response::json_error(error_wrapper(error_type::login_auth_header_invalid)));
         }
-        to_response(res, response::invalid_auth());
         send_(std::move(res));
         return false;
     };
@@ -736,7 +746,8 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
     rapidjson::Document indocument;
 
     cw::helper::uri::Uri url;
-    if (!cw::helper::uri::Uri::parse(url, std::string(req.target()))) return send(response::json_error("InvalidURI", "Error parsing URI", http::status::bad_request));
+    std::string target = std::string(req.target());
+    if (!cw::helper::uri::Uri::parse(url, target)) return send(response::json_error(error_wrapper(error_type::invalid_uri).with_msg(std::move(target))));
 
     try {
         if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "asyncapi.json") {

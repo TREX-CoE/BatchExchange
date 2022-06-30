@@ -18,6 +18,37 @@
 #include "proxy/error.h"
 #include "proxy/error_wrapper.h"
 
+namespace {
+
+using namespace cw::error;
+
+int to_statuscode(const std::error_code& e) {
+    if (e.category() == trex_category()) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch-enum"
+        switch (static_cast<error_type>(e.value())) {
+            case error_type::bad_request: return 400;
+            case error_type::socket_command_not_given: return 400;
+            case error_type::invalid_password_empty: return 400;
+            case error_type::invalid_uri: return 400;
+            case error_type::batchsystem_not_given: return 400;
+            case error_type::batchsystem_unknown: return 400;
+            case error_type::user_invalid: return 400;
+            case error_type::login_user_not_found: return 401;
+            case error_type::login_password_mismatch: return 401;
+            case error_type::login_auth_header_invalid: return 401;
+            case error_type::login_scope_missing: return 401;
+            case error_type::conflict_user: return 409;
+            case error_type::user_not_found: return 404;
+            default: return -1;
+        }
+#pragma GCC diagnostic pop
+    }
+    return -1;
+}
+
+}
+
 namespace cw {
 namespace proxy {
 namespace response {
@@ -42,12 +73,32 @@ resp json_error(const std::string& type, const std::string& message, boost::beas
     return r;
 }
 
-resp json_error(const error_wrapper& e, boost::beast::http::status status = boost::beast::http::status::internal_server_error) {
-    return json_error(e.msg(), "TEST", status);
-}
-
-resp bad_request() {
-    return json_error("Bad request", "Unsupported API call", boost::beast::http::status::bad_request);
+resp json_error(error_wrapper e) {
+    resp r;
+    int status = e.statuscode() == -1 ? to_statuscode(e.ec()) : e.statuscode();
+    if (status == -1) status = 500;
+    rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+    r.first.SetObject();
+    {
+        rapidjson::Value error;
+        error.SetObject();
+        error.AddMember("type", e.ec().message(), allocator);
+        if (!e.msg().empty()) error.AddMember("message", std::move(e).msg(), allocator);
+        error.AddMember("code", e.ec().value(), allocator);
+        error.AddMember("category", std::string(e.ec().category().name()), allocator);
+        error.AddMember("status_code", status, allocator);
+        if (e.base_ec()) {
+            rapidjson::Value cause;
+            cause.SetObject();
+            cause.AddMember("type", e.ec().message(), allocator);
+            cause.AddMember("code", e.ec().value(), allocator);
+            cause.AddMember("category", std::string(e.ec().category().name()), allocator);
+            error.AddMember("cause", cause, allocator);
+        }
+        r.first.AddMember("error", error, allocator);
+    }
+    r.second = boost::beast::http::status(status);
+    return r;
 }
 
 resp json_error_ec(std::error_code ec, const std::string& type = "Running command failed") {
@@ -57,16 +108,6 @@ resp json_error_ec(std::error_code ec, const std::string& type = "Running comman
 resp json_error_exc(const std::exception& e, const std::string& type = "Exception thrown") {
     return json_error(type, e.what(), boost::beast::http::status::internal_server_error);
 }
-
-resp invalid_auth(const std::string& scope="") {
-    return json_error("Invalid credentials or scope", "Could not authenticate user or user does not have requested scope(s)" + (scope.empty() ? "" : (": " + scope)), boost::beast::http::status::unauthorized);
-}
-
-resp invalid_login() {
-    return json_error("Invalid login", "Could not authenticate user for login", boost::beast::http::status::unauthorized);
-}
-
-
 
 resp requestUnknown(const std::string& uri, boost::beast::http::verb method) {
     return json_error("BadRequest", "Unknown request: "+std::string(boost::beast::http::to_string(method))+" "+uri, boost::beast::http::status::bad_request);
@@ -78,20 +119,6 @@ resp validationError(const std::string& msg) {
 
 resp notfoundError(const std::string& msg) {
     return json_error("NotFound", msg, boost::beast::http::status::not_found);
-}
-
-
-resp invalidBatch() {
-    return json_error("BatchsystemInvalid", "Invalid batchsystem selected, use one of: pbs | slurm | lsf", boost::beast::http::status::bad_request);
-}
-
-
-resp commandUnknown(const std::string& command) {
-    return validationError("Unknown command: "+command);
-}
-
-resp commandUnsupported() {
-    return json_error("CommandUnsupported", "Command not supported by batchsystem", boost::beast::http::status::bad_request);
 }
 
 resp commandSuccess() {
@@ -121,10 +148,9 @@ resp info() {
     return r;
 }
 
-resp commandReturn(const error_wrapper& e, const std::string& failType = "Running command failed", boost::beast::http::status statusFail=boost::beast::http::status::ok) {
+resp commandReturn(error_wrapper e, const std::string& failType = "Running command failed", boost::beast::http::status statusFail=boost::beast::http::status::ok) {
     if (e) {
-        (void)failType;
-        return json_error(e); // failType
+        return json_error(e.with_msg(failType).with_status(static_cast<int>(statusFail)));
     } else {
         resp r;
         rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
@@ -181,7 +207,7 @@ resp getBatchInfoReturn(const error_wrapper& e, const cw::batch::BatchInfo& batc
 
 
 resp detectReturn(const error_wrapper& e, bool detected) {
-    if (e && e.ec() == std::error_code(error_type::command_not_found)) { // ignore notfound error as that simply means batch not detected
+    if (e.ec() != std::error_code(error_type::command_not_found)) { // ignore notfound error as that simply means batch not detected
         return json_error(e);
     } else {
         resp r;
