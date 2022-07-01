@@ -10,7 +10,8 @@ namespace cw {
 namespace error {
 
 enum class error_type {
-    exc_process_error = 1,
+    unhandled_exception = 1,
+    boost_process_error,
     command_error,
     command_not_found,
     invalid_password_empty,

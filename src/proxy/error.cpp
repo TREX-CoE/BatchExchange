@@ -10,7 +10,8 @@ using namespace cw::error;
 
 const char* to_cstr(error_type type) {
     switch (type) {
-        case error_type::exc_process_error: return "error";
+        case error_type::unhandled_exception: return "unhandled / unknown error";
+        case error_type::boost_process_error: return "boost_process_error";
         case error_type::command_error: return "error";
         case error_type::command_unsupported: return "command not supported by batchsystem";
         case error_type::command_not_found: return "error";

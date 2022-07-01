@@ -87,7 +87,7 @@ void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF
                 return;
             }
         } catch (const boost::process::process_error& e) {
-            callbackF(error_wrapper(error_type::exc_process_error).with_msg(e.what()).with_base(e.code()));
+            callbackF(error_wrapper(error_type::boost_process_error).with_msg(e.what()).with_base(e.code()));
             return;
         } catch (const std::system_error& e) {
             callbackF(error_wrapper(e.code()).with_msg(e.what()));
@@ -106,7 +106,7 @@ void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF cal
                 return;
             }
         } catch (const boost::process::process_error& e) {
-            callbackF(error_wrapper(error_type::exc_process_error).with_msg(e.what()).with_base(e.code()), std::move(state));
+            callbackF(error_wrapper(error_type::boost_process_error).with_msg(e.what()).with_base(e.code()), std::move(state));
             return;
         } catch (const std::system_error& e) {
             callbackF(error_wrapper(e.code()).with_msg(e.what()), std::move(state));
@@ -676,8 +676,10 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         } else {
             send(response::json_error(error_wrapper(error_type::socket_command_unknown).with_msg(command)));
         }
+    } catch (const std::system_error& e) {
+        send(response::json_error(error_wrapper(e.code()).with_msg(e.what())));
     } catch (const std::exception& e) {
-        send(response::json_error_exc(e));
+        send(response::json_error(error_wrapper(error_type::unhandled_exception).with_msg(e.what())));
     }
 }
 
@@ -803,8 +805,10 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
         } else {
             send(response::json_error(error_wrapper(error_type::request_unknown).with_msg(std::string(boost::beast::http::to_string(req.method())) + " " + std::string(req.target()))));
         }
+    } catch (const std::system_error& e) {
+        send(response::json_error(error_wrapper(e.code()).with_msg(e.what())));
     } catch (const std::exception& e) {
-        send(response::json_error_exc(e));
+        send(response::json_error(error_wrapper(error_type::unhandled_exception).with_msg(e.what())));
     }
 }
 

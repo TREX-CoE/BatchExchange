@@ -57,22 +57,6 @@ using namespace cw::error;
 
 using resp = std::pair<rapidjson::Document, boost::beast::http::status>;
 
-resp json_error(const std::string& type, const std::string& message, boost::beast::http::status status) {
-    resp r;
-    rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
-    r.first.SetObject();
-    {
-        rapidjson::Value error;
-        error.SetObject();
-        error.AddMember("type", type, allocator);
-        error.AddMember("message", message, allocator);
-        error.AddMember("code", static_cast<int>(status), allocator);
-        r.first.AddMember("error", error, allocator);
-    }
-    r.second = status;
-    return r;
-}
-
 resp json_error(error_wrapper e) {
     resp r;
     int status = e.statuscode() == -1 ? to_statuscode(e.ec()) : e.statuscode();
@@ -99,22 +83,6 @@ resp json_error(error_wrapper e) {
     }
     r.second = boost::beast::http::status(status);
     return r;
-}
-
-resp json_error_exc(const std::exception& e, const std::string& type = "Exception thrown") {
-    return json_error(type, e.what(), boost::beast::http::status::internal_server_error);
-}
-
-resp requestUnknown(const std::string& uri, boost::beast::http::verb method) {
-    return json_error("BadRequest", "Unknown request: "+std::string(boost::beast::http::to_string(method))+" "+uri, boost::beast::http::status::bad_request);
-}
-
-resp validationError(const std::string& msg) {
-    return json_error("ValidationError", msg, boost::beast::http::status::bad_request);
-}
-
-resp notfoundError(const std::string& msg) {
-    return json_error("NotFound", msg, boost::beast::http::status::not_found);
 }
 
 resp commandSuccess() {
