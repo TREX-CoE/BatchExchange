@@ -27,13 +27,13 @@ int to_statuscode(const std::error_code& e) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch-enum"
         switch (static_cast<error_type>(e.value())) {
-            case error_type::bad_request: return 400;
-            case error_type::socket_command_not_given: return 400;
+            case error_type::socket_command_missing: return 400;
             case error_type::invalid_password_empty: return 400;
             case error_type::invalid_uri: return 400;
-            case error_type::batchsystem_not_given: return 400;
+            case error_type::batchsystem_missing: return 400;
             case error_type::batchsystem_unknown: return 400;
-            case error_type::user_invalid: return 400;
+            case error_type::user_missing: return 400;
+            case error_type::user_not_string: return 400;
             case error_type::login_user_not_found: return 401;
             case error_type::login_password_mismatch: return 401;
             case error_type::login_auth_header_invalid: return 401;
@@ -99,10 +99,6 @@ resp json_error(error_wrapper e) {
     }
     r.second = boost::beast::http::status(status);
     return r;
-}
-
-resp json_error_ec(std::error_code ec, const std::string& type = "Running command failed") {
-    return json_error(type, ec.message(), boost::beast::http::status::internal_server_error);
 }
 
 resp json_error_exc(const std::exception& e, const std::string& type = "Exception thrown") {
