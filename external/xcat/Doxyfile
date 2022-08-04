@@ -1,0 +1,84 @@
+# Doxyfile 1.8.11
+
+# General
+DOXYFILE_ENCODING      = UTF-8
+
+# Project
+PROJECT_NAME           = "Xcat"
+PROJECT_NUMBER         = "1.0.0"
+
+PROJECT_BRIEF          = "Xcat interface"
+
+OUTPUT_DIRECTORY       = docs/
+OUTPUT_LANGUAGE        = English
+
+# Files
+INPUT                  = src/
+RECURSIVE              = YES
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_LOCAL_CLASSES  = YES
+EXTRACT_LOCAL_METHODS  = NO
+HIDE_UNDOC_MEMBERS     = YES
+SEARCH_INCLUDES        = NO
+
+# Syntax
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = NO
+TAB_SIZE               = 4
+
+BRIEF_MEMBER_DESC      = YES
+REPEAT_BRIEF           = YES
+
+AUTOLINK_SUPPORT       = YES
+INTERNAL_DOCS          = YES
+
+# Mainpage
+USE_MDFILE_AS_MAINPAGE = README.md
+
+GENERATE_LATEX         = NO
+GENERATE_MAN           = NO
+
+# HTML
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_FILE_EXTENSION    = .html
+
+# Graphs
+HAVE_DOT               = NO
+DOT_NUM_THREADS        = 4
+UML_LOOK               = YES
+HIDE_UNDOC_RELATIONS   = YES
+CLASS_DIAGRAMS         = NO
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = NO
+GROUP_GRAPHS           = NO
+INCLUDE_GRAPH          = NO
+INCLUDED_BY_GRAPH      = NO
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+GRAPHICAL_HIERARCHY    = NO
+DIRECTORY_GRAPH        = NO
+INTERACTIVE_SVG        = YES
+DOT_TRANSPARENT        = YES
+GENERATE_LEGEND        = YES
+DOT_CLEANUP            = YES
+
+# C++ options
+BUILTIN_STL_SUPPORT    = YES
+FILE_PATTERNS          = *.cpp *.h *.hpp *.cc *.cxx
+
+# Logging
+WARN_FORMAT            = "$file:$line: $text"
+WARN_IF_DOC_ERROR      = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_AS_ERROR          = NO
+
+# Other options
+GENERATE_TESTLIST      = YES
+GENERATE_TODOLIST      = YES
+GENERATE_BUGLIST       = YES
+GENERATE_DEPRECATEDLIST= YES
+SOURCE_BROWSER         = NO # do not include code
+VERBATIM_HEADERS       = NO # do not include header code

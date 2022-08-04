@@ -1,18 +1,10 @@
 set(SHARED_SRC
-    CXCat.cpp
-    httpSession.cpp
-    restClient.cpp
     utils.cpp
     sha512.cpp
     http.cpp
 )
 
 set(SHARED_HDR
-    CXCat.h
-    curlHelper.h
-    httpSession.h
-    restClient.h
-    sessionTokenTypes.h
     utils.h
     obfuscator.h
     base64.h

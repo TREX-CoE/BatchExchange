@@ -326,61 +326,6 @@ std::string utils::join_vector_to_string(const std::vector<std::string> &vec, co
     return ret;
 }
 
-/**
- * @brief Check json output for errors
- *
- * @param o output
- * @return 0 No errors
- * @return 1 Errors found
- */
-int utils::check_errors(const std::string &o) {
-    if (!o.length())
-        return 0;
-
-    rapidjson::Document d;
-    if (d.Parse(o.c_str()).HasParseError()) {
-        std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
-        return 1;
-    }
-
-    if (!d.IsObject())
-        return 0;
-
-    std::string key = "";
-    if (d.HasMember("errors"))
-        key = "errors";
-    else if (d.HasMember("error"))
-        key = "error";
-
-    const char *errorKey = key.c_str();
-    const char *errorCodeKey = "errorcode";
-    int errorCode = 0;
-    if (d.HasMember(errorCodeKey)) {
-        if (d[errorCodeKey].IsString())
-            errorCode = std::stoi(d[errorCodeKey].GetString());
-        else if (d[errorCodeKey].IsInt())
-            errorCode = d[errorCodeKey].GetInt();
-    }
-
-    if (errorCode != 0)
-        std::cerr << "Error Code " << errorCode << " - ";
-
-    if (key.length()) {
-        if (d[errorKey].IsString()) {
-            std::string err = d[errorKey].GetString();
-            if (err.length()) {
-                std::cerr << err << std::endl;
-                return 1;
-            }
-        } else if (d[errorKey].IsArray()) {
-            auto err = d[errorKey].GetArray();
-            for (rapidjson::SizeType i = 0; i < err.Size(); i++)
-                if (err[i].IsString())
-                    std::cerr << err[i].GetString() << std::endl;
-        }
-    }
-    return 0;
-}
 
 void utils::rapidjson_doc_to_str(rapidjson::Document &d, std::string &output) {
     rapidjson::StringBuffer buffer;
