@@ -6,7 +6,11 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
+#include "internal/joinString.h"
+
 namespace {
+
+using namespace xcat;
 
 /**
  * @brief Check json output for errors
@@ -113,8 +117,10 @@ public:
                     return false;
                 } else if (resp.status_code==200) {
 					state=State::Done;
+                    // TODO utils::check_errors(output)
                     token=resp.body;
                 } else {
+                    state=State::Done;
                     throw std::system_error(error::login_failed);
 				}
 			}
@@ -130,6 +136,7 @@ public:
 class GetNodes {
 private:
     http_f& func;
+    std::string cred_header;
     ApiCallResponse resp;
     enum class State {
         Start,
@@ -138,12 +145,12 @@ private:
     };
     State state;
 public:
-    GetNodes(http_f& func_): func(func_) {}
+    GetNodes(http_f& func_, std::string cred_header_): func(func_), cred_header(cred_header_) {}
 
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::GET, "xcatws/nodes", {}});
+                func(resp, {HttpMethod::GET, "xcatws/nodes", {cred_header}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -154,6 +161,7 @@ public:
 					state=State::Done;
                     output=resp.body;
                 } else {
+                    state=State::Done;
                     throw std::system_error(error::get_nodes_failed);
 				}
 			}
@@ -165,6 +173,93 @@ public:
         }
     }
 };
+
+class GetOsImages {
+private:
+    http_f& func;
+    std::string cred_header;
+    std::string uri;
+    ApiCallResponse resp;
+    enum class State {
+        Start,
+        Waiting,
+        Done,
+    };
+    State state;
+public:
+    GetOsImages(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri(filter_.empty() ? "xcatws/osimages/ALLRESOURCES" : (std::string("xcatws/osimages/") + internal::joinString(filter_.begin(), filter_.end(), ","))) {}
+
+    bool operator()(std::string& output) {
+        switch (state) {
+			case State::Start: {
+                func(resp, {HttpMethod::GET, uri, {cred_header}});
+				state = State::Waiting;
+			}
+			// fall through
+			case State::Waiting: {
+                if (resp.status_code == 0) {
+                    return false;
+                } else if (resp.status_code==200) {
+					state=State::Done;
+                    // TODO utils::check_errors(output)
+                    output=resp.body;
+                } else {
+                    state=State::Done;
+                    throw std::system_error(error::get_os_images_failed);
+				}
+			}
+            // fall through
+			case State::Done: {
+                return true;
+			}
+			default: assert(false && "invalid state");
+        }
+    }
+};
+
+class GetBootState {
+private:
+    http_f& func;
+    std::string cred_header;
+    std::string uri;
+    ApiCallResponse resp;
+    enum class State {
+        Start,
+        Waiting,
+        Done,
+    };
+    State state;
+public:
+    GetBootState(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri(filter_.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter_.begin(), filter_.end(), ",") + "/bootstate")) {}
+
+    bool operator()(std::string& output) {
+        switch (state) {
+			case State::Start: {
+                func(resp, {HttpMethod::GET, uri, {cred_header}});
+				state = State::Waiting;
+			}
+			// fall through
+			case State::Waiting: {
+                if (resp.status_code == 0) {
+                    return false;
+                } else if (resp.status_code==200) {
+					state=State::Done;
+                    // TODO utils::check_errors(output)
+                    output=resp.body;
+                } else {
+                    state=State::Done;
+                    throw std::system_error(error::get_os_images_failed);
+				}
+			}
+            // fall through
+			case State::Done: {
+                return true;
+			}
+			default: assert(false && "invalid state");
+        }
+    }
+};
+
 
 }
 
@@ -185,111 +280,32 @@ void Xcat::set_token(std::string token) {
 std::function<bool(std::string&)> Xcat::login(std::string username, std::string password) { return Login(_func, username, password); }
 std::function<bool(std::string&)> Xcat::get_nodes() {
     if (_cred_header.empty()) throw std::system_error(error::no_token);
-    return GetNodes(_func);
+    return GetNodes(_func, _cred_header);
+}
+std::function<bool(std::string&)> Xcat::get_os_images(const std::vector<std::string> &filter) {
+    if (_cred_header.empty()) throw std::system_error(error::no_token);
+    return GetOsImages(_func, _cred_header, filter);
+}
+std::function<bool(std::string&)> Xcat::get_bootstate(const std::vector<std::string> &filter) {
+    if (_cred_header.empty()) throw std::system_error(error::no_token);
+    return GetBootState(_func, _cred_header, filter);
 }
 
 
-/**
- * @brief Get information of all available nodes
- *
- * @param output output
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::get_nodes(std::string &output) {
-    int res = session->call("GET", "xcatws/nodes", output);
-
-    if (res != 0 || utils::check_errors(output))
-        return 1;
-
-    return 0;
-}
-
-/**
- * @brief Get os images
- *
- * @param filter filter
- * @param output output
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::get_os_images(const std::vector<std::string> &filter, std::string &output) {
-    std::string response, imageRange = "ALLRESOURCES";
-
-    if (filter.size())
-        imageRange = utils::join_vector_to_string(filter, ",");
-
-    int res = session->call("GET", "xcatws/osimages/" + imageRange, output);
-
-    if (res != 0 || utils::check_errors(output))
-        return 1;
-
-    return 0;
-}
-
-/**
- * @brief Get names of os images
- *
- * @param output output
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::get_os_image_names(std::vector<std::string> &output) {
-    std::string response;
-    std::vector<std::string> images;
-    if (get_os_images(images, response) != 0)
-        return 1;
-
+void parseGetNodes(std::string output) {
     rapidjson::Document d;
+    d.Parse(output.c_str());
 
-    d.Parse(response.c_str());
-
-    for (auto &i : d.GetObject()) {
-        output.push_back(i.name.GetString());
-    }
-
-    std::sort(output.begin(), output.end());
-
-    return 0;
-}
-
-/**
- * @brief Get os images
- *
- * @param filter filter
- * @param output output
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::get_bootstate(const std::vector<std::string> &filter, std::string &output) {
-    // this uri does not provide a way to query all nodes at once -> fetch all nodes and join to {noderange}
-    std::string nodeRange = "";
-    if (filter.size())
-        nodeRange = utils::join_vector_to_string(filter, ",");
-    else {
-        std::string nodeList;
-        if (get_nodes(nodeList) != 0)
-            return 1;
-
-        rapidjson::Document d;
-        d.Parse(nodeList.c_str());
-
-        auto list = d.GetArray();
-        for (rapidjson::SizeType i = 0; i < list.Size(); i++) {
-            if (list[i].IsString()) {
-                if (i != 0)
-                    nodeRange += ",";
-                nodeRange += list[i].GetString();
-            }
+    auto list = d.GetArray();
+    for (rapidjson::SizeType i = 0; i < list.Size(); i++) {
+        if (list[i].IsString()) {
+            if (i != 0)
+                nodeRange += ",";
+            nodeRange += list[i].GetString();
         }
     }
-    int res = session->call("GET", "xcatws/nodes/" + nodeRange + "/bootstate", output);
-
-    if (res != 0 || utils::check_errors(output))
-        return 1;
-
-    return 0;
 }
+
 
 /**
  * @brief Set os image
