@@ -51,6 +51,7 @@ include_directories(${INVOKE_LITE_INCLUDE_DIR})
 include_directories(${MAIN_INCLUDE_DIR})
 
 target_link_libraries( proxy shared)
+target_link_libraries( proxy xcat)
 target_link_libraries(proxy Threads::Threads)
 target_link_libraries(proxy ${Boost_LIBRARIES})
 target_link_libraries(proxy batchsystem)

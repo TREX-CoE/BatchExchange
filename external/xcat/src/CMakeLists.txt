@@ -16,14 +16,6 @@ add_library(xcat STATIC
 target_compile_features(xcat PUBLIC cxx_std_14)
 
 target_include_directories( xcat
-        SYSTEM PUBLIC	${LIBXMLPP_INCLUDE_DIRS}
-)
-
-target_link_libraries( xcat
-        ${LIBXMLPP_LIBRARIES}
-)
-
-target_include_directories( xcat
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
 )

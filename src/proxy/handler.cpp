@@ -45,6 +45,7 @@
 #include <boost/asio/error.hpp>
 
 #include "batchsystem/batchsystem.h"
+#include "xcat/xcat.h"
 
 
 namespace beast = boost::beast;                 // from <boost/beast.hpp>
@@ -673,6 +674,13 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
             f_resumeJob(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
         } else if (command == "rescheduleJob") {
             f_rescheduleRunningJobInQueue(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+        } else if (command == "xcat/login") {
+            xcat::Xcat xcat_session([](xcat::ApiCallResponse& res, const xcat::ApiCallRequest& req){
+                (void)res;
+                (void)req;
+            });
+            auto f = xcat_session.login("user", "pass");
+
         } else {
             send(response::json_error(error_wrapper(error_type::socket_command_unknown).with_msg(command)));
         }

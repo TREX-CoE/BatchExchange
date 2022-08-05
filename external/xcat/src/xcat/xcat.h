@@ -11,6 +11,7 @@ namespace xcat {
 enum class error {
     login_failed = 1,
     no_token,
+    api_error,
 };
 
 
@@ -44,6 +45,11 @@ struct ApiCallResponse {
     std::vector<std::string> headers;  
 };
 
+
+struct BootState {
+    std::string osImage;
+};
+
 using http_f = std::function<void(ApiCallResponse& res, const ApiCallRequest& req)>;
 
 class Xcat {
@@ -63,13 +69,10 @@ public:
     std::function<bool(std::string&)> get_os_images(const std::vector<std::string> &filter);
     std::function<bool(std::string&)> get_bootstate(const std::vector<std::string> &filter);
     std::function<bool()> set_os_image(const std::vector<std::string> &filter, std::string osImage);
-    std::function<bool()> reboot_nodes(const std::vector<std::string> &filter);
-
-    std::function<bool()> set_group_attributes(std::string group, const std::string &attributes);
-    std::function<bool()> set_node_attributes(const std::vector<std::string> &nodes, const std::string &attributes);
-    std::function<bool(std::vector<std::string>&)> get_group_members(std::string group);
-    std::function<bool(std::vector<std::string>&)> get_group_names();
-    std::function<bool(std::string&)> get_group(std::string group);
+    std::function<bool(std::string&)> power_nodes(const std::vector<std::string> &filter);
+    std::function<bool(std::string&)> set_bootstate(const std::vector<std::string> &filter, BootState state);
+    std::function<bool(std::string&)> set_group_attributes(const std::vector<std::string> &filter);
+    std::function<bool(std::string&)> get_groups(std::string group);
 };
 
 }

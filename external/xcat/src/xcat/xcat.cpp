@@ -19,13 +19,12 @@ using namespace xcat;
  * @return 0 No errors
  * @return 1 Errors found
  */
-int utils::check_errors(const std::string &o) {
+int check_errors(const std::string &o) {
     if (!o.length())
         return 0;
 
     rapidjson::Document d;
     if (d.Parse(o.c_str()).HasParseError()) {
-        std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
         return 1;
     }
 
@@ -73,6 +72,7 @@ const char* to_cstr(error type) {
   switch (type) {
       case error::login_failed: return "login failed";
       case error::no_token: return "no token for authentication set";
+      case error::api_error: return "api error";
       default: return "(unrecognized error)";
   }
 }
@@ -108,7 +108,7 @@ public:
     bool operator()(std::string& token) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::GET, uri});
+                func(resp, {HttpMethod::GET, uri, "", {}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -150,7 +150,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::GET, "xcatws/nodes", {cred_header}});
+                func(resp, {HttpMethod::GET, "xcatws/nodes", "", {cred_header}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -162,7 +162,7 @@ public:
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::get_nodes_failed);
+                    throw std::system_error(error::api_error);
 				}
 			}
             // fall through
@@ -192,7 +192,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::GET, uri, {cred_header}});
+                func(resp, {HttpMethod::GET, uri, "", {cred_header}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -205,7 +205,7 @@ public:
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::get_os_images_failed);
+                    throw std::system_error(error::api_error);
 				}
 			}
             // fall through
@@ -235,7 +235,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::GET, uri, {cred_header}});
+                func(resp, {HttpMethod::GET, uri, "", {cred_header}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -248,7 +248,7 @@ public:
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::get_os_images_failed);
+                    throw std::system_error(error::api_error);
 				}
 			}
             // fall through
@@ -260,6 +260,178 @@ public:
     }
 };
 
+class SetBootState {
+private:
+    http_f& func;
+    std::string cred_header;
+    BootState bootState;
+    std::string uri;
+    ApiCallResponse resp;
+    enum class State {
+        Start,
+        Waiting,
+        Done,
+    };
+    State state;
+public:
+    SetBootState(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_, BootState bootState_): func(func_), cred_header(cred_header_), bootState(bootState_), uri(filter_.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter_.begin(), filter_.end(), ",") + "/bootstate")) {}
+
+    bool operator()(std::string& output) {
+        switch (state) {
+			case State::Start: {
+                func(resp, {HttpMethod::PUT, uri, "{\"osimage\":\"" + bootState.osImage + "\"}", {cred_header}});
+				state = State::Waiting;
+			}
+			// fall through
+			case State::Waiting: {
+                if (resp.status_code == 0) {
+                    return false;
+                } else if (resp.status_code==200) {
+					state=State::Done;
+                    // TODO utils::check_errors(output)
+                    output=resp.body;
+                } else {
+                    state=State::Done;
+                    throw std::system_error(error::api_error);
+				}
+			}
+            // fall through
+			case State::Done: {
+                return true;
+			}
+			default: assert(false && "invalid state");
+        }
+    }
+};
+
+class PowerNodes {
+private:
+    http_f& func;
+    std::string cred_header;
+    std::string uri;
+    ApiCallResponse resp;
+    enum class State {
+        Start,
+        Waiting,
+        Done,
+    };
+    State state;
+public:
+    PowerNodes(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri(filter_.empty() ? "xcatws/nodes/ALLRESOURCES/power" : (std::string("xcatws/nodes/") + internal::joinString(filter_.begin(), filter_.end(), ",") + "/power")) {}
+
+    bool operator()(std::string& output) {
+        switch (state) {
+			case State::Start: {
+                func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {cred_header}});
+				state = State::Waiting;
+			}
+			// fall through
+			case State::Waiting: {
+                if (resp.status_code == 0) {
+                    return false;
+                } else if (resp.status_code==200) {
+					state=State::Done;
+                    // TODO utils::check_errors(output)
+                    output=resp.body;
+                } else {
+                    state=State::Done;
+                    throw std::system_error(error::api_error);
+				}
+			}
+            // fall through
+			case State::Done: {
+                return true;
+			}
+			default: assert(false && "invalid state");
+        }
+    }
+};
+
+class SetGroupAttributes {
+private:
+    http_f& func;
+    std::string cred_header;
+    std::string uri;
+    ApiCallResponse resp;
+    enum class State {
+        Start,
+        Waiting,
+        Done,
+    };
+    State state;
+public:
+    SetGroupAttributes(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri("xcatws/groups/" + internal::joinString(filter_.begin(), filter_.end(), ",")) {}
+
+    bool operator()(std::string& output) {
+        switch (state) {
+			case State::Start: {
+                func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {cred_header}});
+				state = State::Waiting;
+			}
+			// fall through
+			case State::Waiting: {
+                if (resp.status_code == 0) {
+                    return false;
+                } else if (resp.status_code==200) {
+					state=State::Done;
+                    // TODO utils::check_errors(output)
+                    output=resp.body;
+                } else {
+                    state=State::Done;
+                    throw std::system_error(error::api_error);
+				}
+			}
+            // fall through
+			case State::Done: {
+                return true;
+			}
+			default: assert(false && "invalid state");
+        }
+    }
+};
+
+class GetGroups {
+private:
+    http_f& func;
+    std::string cred_header;
+    ApiCallResponse resp;
+    std::string uri;
+    enum class State {
+        Start,
+        Waiting,
+        Done,
+    };
+    State state;
+public:
+    GetGroups(http_f& func_, std::string cred_header_, std::string group): func(func_), cred_header(cred_header_), uri(group.empty() ? "xcatws/groups/" : ("xcatws/groups/" + group)) {}
+
+    bool operator()(std::string& output) {
+        switch (state) {
+			case State::Start: {
+                func(resp, {HttpMethod::GET, uri, "", {cred_header}});
+				state = State::Waiting;
+			}
+			// fall through
+			case State::Waiting: {
+                if (resp.status_code == 0) {
+                    return false;
+                } else if (resp.status_code==200) {
+					state=State::Done;
+                    // TODO utils::check_errors(output)
+                    output=resp.body;
+                } else {
+                    state=State::Done;
+                    throw std::system_error(error::api_error);
+				}
+			}
+            // fall through
+			case State::Done: {
+                return true;
+			}
+			default: assert(false && "invalid state");
+        }
+    }
+};
 
 }
 
@@ -272,6 +444,8 @@ const std::error_category& error_category() noexcept {
 std::error_code make_error_code(error e) {
   return {static_cast<int>(e), error_cat};
 }
+
+Xcat::Xcat(http_f func): _func(func) {}
 
 void Xcat::set_token(std::string token) {
     _cred_header = "X-Auth-Token:" + token;
@@ -290,180 +464,21 @@ std::function<bool(std::string&)> Xcat::get_bootstate(const std::vector<std::str
     if (_cred_header.empty()) throw std::system_error(error::no_token);
     return GetBootState(_func, _cred_header, filter);
 }
-
-
-void parseGetNodes(std::string output) {
-    rapidjson::Document d;
-    d.Parse(output.c_str());
-
-    auto list = d.GetArray();
-    for (rapidjson::SizeType i = 0; i < list.Size(); i++) {
-        if (list[i].IsString()) {
-            if (i != 0)
-                nodeRange += ",";
-            nodeRange += list[i].GetString();
-        }
-    }
+std::function<bool(std::string&)> Xcat::set_bootstate(const std::vector<std::string> &filter, BootState state) {
+    if (_cred_header.empty()) throw std::system_error(error::no_token);
+    return SetBootState(_func, _cred_header, filter, state);
 }
-
-
-/**
- * @brief Set os image
- *
- * @param filter filter
- * @param output output
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::set_os_image(const std::vector<std::string> &filter, std::string osImage) {
-    if (!filter.size() || !osImage.length())
-        return 1;
-    std::string response;
-    int res = session->call("PUT", "xcatws/nodes/" + utils::join_vector_to_string(filter, ",") + "/bootstate", response, "{\"osimage\":\"" + osImage + "\"}");
-
-    if (utils::check_errors(response) || res != 0)
-        return 1;
-    std::cout << response << std::endl;
-    return 0;
+std::function<bool(std::string&)> Xcat::power_nodes(const std::vector<std::string> &filter) {
+    if (_cred_header.empty()) throw std::system_error(error::no_token);
+    return PowerNodes(_func, _cred_header, filter);
 }
-
-/**
- * @brief Reboot nodes
- *
- * @param filter filter
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::reboot_nodes(const std::vector<std::string> &filter) {
-    if (!filter.size())
-        return 1;
-    std::string response;
-    int res = session->call("PUT", "xcatws/nodes/" + utils::join_vector_to_string(filter, ",") + "/power", response, "{\"action\":\"reset\"}");
-
-    if (utils::check_errors(response) || res != 0)
-        return 1;
-    std::cout << response << std::endl;
-    return 0;
+std::function<bool(std::string&)> Xcat::set_group_attributes(const std::vector<std::string> &filter) {
+    if (_cred_header.empty()) throw std::system_error(error::no_token);
+    return SetGroupAttributes(_func, _cred_header, filter);
 }
-
-/**
- * @brief Set attributes of group
- *
- * @param group name of group
- * @param attributes json attributes
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::set_group_attributes(std::string group, const std::string &attributes) {
-    if (!group.length())
-        return 1;
-    std::string response;
-    int res = session->call("PUT", "xcatws/groups/" + group, response, attributes);
-
-    if (utils::check_errors(response) || res != 0)
-        return 1;
-
-    std::cout << response << std::endl;
-
-    return 0;
-}
-
-/**
- * @brief Set attributes of nodes
- *
- * @param nodes list of nodes
- * @param attributes json attributes
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::set_node_attributes(const std::vector<std::string> &nodes, const std::string &attributes) {
-    if (!nodes.size())
-        return 1;
-    std::string nodeRange;
-    nodeRange = utils::join_vector_to_string(nodes, ",");
-
-    std::string response;
-    int res = session->call("PUT", "xcatws/groups/" + nodeRange, response, attributes);
-
-    if (utils::check_errors(response) || res != 0)
-        return 1;
-
-    std::cout << response << std::endl;
-
-    return 0;
-}
-
-/**
- * @brief Get names of all groups
- *
- * @param output output
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::get_group_names(std::vector<std::string> &output) {
-    std::string response;
-    std::vector<std::string> images;
-    int res = session->call("GET", "xcatws/groups/", response);
-
-    if (utils::check_errors(response) || res != 0)
-        return 1;
-
-    rapidjson::Document d;
-    if (d.Parse(response.c_str()).HasParseError()) {
-        std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
-        return 1;
-    }
-    auto groups = d.GetArray();
-    for (rapidjson::SizeType i = 0; i < groups.Size(); i++) {
-        if (groups[i].IsString())
-            output.push_back(groups[i].GetString());
-    }
-
-    return 0;
-}
-
-/**
- * @brief Get attributes of group
- *
- * @param group group
- * @param output output
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::get_group(std::string group, std::string &output) {
-    int res = session->call("GET", "xcatws/groups/" + group, output);
-
-    if (res != 0 || utils::check_errors(output))
-        return 1;
-
-    return 0;
-}
-
-/**
- * @brief Get all members of group
- *
- * @param group group
- * @param output output
- * @return 0 Success
- * @return 1 Error
- */
-int CXCat::get_group_members(std::string group, std::vector<std::string> &output) {
-    std::string response;
-    if (get_group(group, response) != 0)
-        return 1;
-
-    rapidjson::Document d;
-    if (d.Parse(response.c_str()).HasParseError()) {
-        std::cerr << INVALID_JSON_ERROR_MSG << std::endl;
-        return 1;
-    }
-
-    auto c = group.c_str();
-    // members are always saved as a comma-separated string
-    if (d.IsObject() && d.HasMember(c) && d[c].HasMember("members") && d[c]["members"].IsString())
-        utils::str_split(d[c]["members"].GetString(), ",", output);
-
-    return 0;
+std::function<bool(std::string&)> Xcat::get_groups(std::string group) {
+    if (_cred_header.empty()) throw std::system_error(error::no_token);
+    return GetGroups(_func, _cred_header, group);
 }
 
 }
