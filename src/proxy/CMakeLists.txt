@@ -7,6 +7,7 @@ find_package( OpenSSL REQUIRED )
 
 set( proxy_SRC
     batchsystem_process.cpp
+    xcat_http.cpp
     main.cpp
     build_data.cpp
     credentials.cpp
@@ -20,6 +21,7 @@ set( proxy_SRC
 )
 set( proxy_HDR
     batchsystem_process.h
+    xcat_http.h
     build_data.h
     credentials.h
     globals.h

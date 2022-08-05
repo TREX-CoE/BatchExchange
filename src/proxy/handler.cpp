@@ -4,6 +4,7 @@
 #include "proxy/credentials.h"
 #include "proxy/batchsystem_json.h"
 #include "proxy/batchsystem_process.h"
+#include "proxy/xcat_http.h"
 #include "proxy/globals.h"
 #include "proxy/uri.h"
 #include "proxy/response.h"
@@ -621,6 +622,8 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
 
     auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd, timeout_cmd); };
 
+    auto http_callback = [&ioc, lifetime=send](::xcat::ApiCallResponse& res, const ::xcat::ApiCallRequest& req) { cw::proxy::xcat::runHttp(ioc, res, req, 10000); };
+
     try {
         if (command == "asyncapi.json") {
             return send_(cw::build::asyncapi_json);
@@ -675,10 +678,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         } else if (command == "rescheduleJob") {
             f_rescheduleRunningJobInQueue(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
         } else if (command == "xcat/login") {
-            xcat::Xcat xcat_session([](xcat::ApiCallResponse& res, const xcat::ApiCallRequest& req){
-                (void)res;
-                (void)req;
-            });
+            ::xcat::Xcat xcat_session(http_callback);
             auto f = xcat_session.login("user", "pass");
 
         } else {
