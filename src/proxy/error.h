@@ -74,6 +74,10 @@ enum class error_type {
     filterJobs_not_string_array,
     filterNodes_not_array,
     filterNodes_not_string_array,
+    xcat_host_missing,
+    xcat_port_missing,
+    xcat_user_missing,
+    xcat_password_missing,
 };
 
 const std::error_category& trex_category() noexcept;
@@ -90,4 +94,3 @@ namespace std
 }
 
 #endif /* BOOST_PROXY_ERROR */
-

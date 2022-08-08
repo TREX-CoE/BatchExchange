@@ -50,21 +50,16 @@ namespace cw {
 namespace proxy {
 namespace xcat {
 
-void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const ::xcat::ApiCallRequest& req, unsigned int timeout_ms = 0) {
+void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const ::xcat::ApiCallRequest& req, unsigned int timeout_ms, std::string host, std::string port) {
     // run batchsystem command asynchronously
     std::shared_ptr<Request> boost_req{new Request{boost::asio::ip::tcp::resolver{make_strand(ioc_.get_executor())}, boost::beast::tcp_stream{make_strand(ioc_.get_executor())}, {}, {}, {}}};
-
-    std::string host = "0.0.0.0";
-    std::string port = "80";
-    std::string target = "0.0.0.0";
 
     // Set up an HTTP GET request message
     auto method = convert_method(req.method);
     if (method == boost::beast::http::verb::unknown) throw std::runtime_error("Invalid method");
     boost_req->req.version(11);
     boost_req->req.method(method);
-    boost_req->req.target(target);
-    boost_req->req.set(http::field::host, host);
+    boost_req->req.target(host);
     boost_req->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 
 
@@ -74,7 +69,7 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
         port,
         [boost_req, &res, timeout_ms](beast::error_code ec, tcp::resolver::results_type results) {
             if (ec) {
-                std::cerr << "FAIL" << std::endl;
+                res.ec = ec;
                 return;
             }
 
@@ -86,7 +81,7 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
                 results,
                 [boost_req, &res, timeout_ms](beast::error_code ec_connect, tcp::resolver::results_type::endpoint_type) {
                     if (ec_connect) {
-                        std::cerr << "FAIL" << std::endl;
+                        res.ec = ec_connect;
                         return;
                     }
 
@@ -99,7 +94,7 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
                             boost::ignore_unused(bytes_transferred_read);
 
                             if (ec_write) {
-                                std::cerr << "FAIL" << std::endl;
+                                res.ec = ec_write;
                                 return;
                             }
 
@@ -109,7 +104,7 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
                                     boost::ignore_unused(bytes_transferred_write);
 
                                     if (ec_read) {
-                                        std::cerr << "FAIL" << std::endl;
+                                        res.ec = ec_read;
                                         return;
                                     }
 
@@ -121,7 +116,7 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
 
                                     // not_connected happens sometimes so don't bother reporting it.
                                     if(ec_read && ec_read != beast::errc::not_connected) {
-                                        std::cerr << "FAIL" << std::endl;
+                                        res.ec = ec_read;
                                         return;
                                     }
 

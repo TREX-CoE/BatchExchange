@@ -44,6 +44,7 @@ struct ApiCallResponse {
     unsigned int status_code = 0;
     std::string body;
     std::map<std::string, std::string> headers;
+    std::error_code ec;
 };
 
 
@@ -63,17 +64,17 @@ public:
 	Xcat(http_f func);
     void set_host(std::string host, unsigned int port);
 
-    std::function<bool(std::string&)> login(std::string username, std::string password);
+    std::function<bool(std::string&, std::error_code& ec)> login(std::string username, std::string password);
     void set_token(std::string token);
 
-    std::function<bool(std::string&)> get_nodes();
-    std::function<bool(std::string&)> get_os_images(const std::vector<std::string> &filter);
-    std::function<bool(std::string&)> get_bootstate(const std::vector<std::string> &filter);
-    std::function<bool()> set_os_image(const std::vector<std::string> &filter, std::string osImage);
-    std::function<bool(std::string&)> power_nodes(const std::vector<std::string> &filter);
-    std::function<bool(std::string&)> set_bootstate(const std::vector<std::string> &filter, BootState state);
-    std::function<bool(std::string&)> set_group_attributes(const std::vector<std::string> &filter);
-    std::function<bool(std::string&)> get_groups(std::string group);
+    std::function<bool(std::string&, std::error_code& ec)> get_nodes();
+    std::function<bool(std::string&, std::error_code& ec)> get_os_images(const std::vector<std::string> &filter);
+    std::function<bool(std::string&, std::error_code& ec)> get_bootstate(const std::vector<std::string> &filter);
+    std::function<bool(std::error_code& ec)> set_os_image(const std::vector<std::string> &filter, std::string osImage);
+    std::function<bool(std::string&, std::error_code& ec)> power_nodes(const std::vector<std::string> &filter);
+    std::function<bool(std::string&, std::error_code& ec)> set_bootstate(const std::vector<std::string> &filter, BootState state);
+    std::function<bool(std::string&, std::error_code& ec)> set_group_attributes(const std::vector<std::string> &filter);
+    std::function<bool(std::string&, std::error_code& ec)> get_groups(std::string group);
 };
 
 }

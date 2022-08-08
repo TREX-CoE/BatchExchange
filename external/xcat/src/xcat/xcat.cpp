@@ -101,11 +101,11 @@ private:
         Waiting,
         Done,
     };
-    State state;
+    State state = State::Start;
 public:
     Login(http_f& func_, std::string username, std::string password): func(func_), uri("xcatws/tokens?userName="+username+"&userPW="+password) {}
 
-    bool operator()(std::string& token) {
+    bool operator()(std::string& token, std::error_code& ec) {
         switch (state) {
 			case State::Start: {
                 func(resp, {HttpMethod::GET, uri, "", {}});
@@ -113,15 +113,17 @@ public:
 			}
 			// fall through
 			case State::Waiting: {
-                if (resp.status_code == 0) {
+                if (resp.ec) {
+                    state=State::Done;
+                    ec = resp.ec;
+                } else if (resp.status_code == 0) {
                     return false;
                 } else if (resp.status_code==200) {
 					state=State::Done;
-                    // TODO utils::check_errors(output)
                     token=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::login_failed);
+                    ec = error::login_failed;
 				}
 			}
             // fall through
@@ -143,11 +145,11 @@ private:
         Waiting,
         Done,
     };
-    State state;
+    State state = State::Start;
 public:
     GetNodes(http_f& func_, std::string cred_header_): func(func_), cred_header(cred_header_) {}
 
-    bool operator()(std::string& output) {
+    bool operator()(std::string& output, std::error_code& ec) {
         switch (state) {
 			case State::Start: {
                 func(resp, {HttpMethod::GET, "xcatws/nodes", "", {{"X-Auth-Token", cred_header}}});
@@ -155,14 +157,17 @@ public:
 			}
 			// fall through
 			case State::Waiting: {
-                if (resp.status_code == 0) {
+                if (resp.ec) {
+                    state=State::Done;
+                    ec = resp.ec;
+                } else if (resp.status_code == 0) {
                     return false;
                 } else if (resp.status_code==200) {
 					state=State::Done;
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::api_error);
+                    ec = error::api_error;
 				}
 			}
             // fall through
@@ -185,11 +190,11 @@ private:
         Waiting,
         Done,
     };
-    State state;
+    State state = State::Start;
 public:
     GetOsImages(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri(filter_.empty() ? "xcatws/osimages/ALLRESOURCES" : (std::string("xcatws/osimages/") + internal::joinString(filter_.begin(), filter_.end(), ","))) {}
 
-    bool operator()(std::string& output) {
+    bool operator()(std::string& output, std::error_code& ec) {
         switch (state) {
 			case State::Start: {
                 func(resp, {HttpMethod::GET, uri, "", {{"X-Auth-Token", cred_header}}});
@@ -197,15 +202,17 @@ public:
 			}
 			// fall through
 			case State::Waiting: {
-                if (resp.status_code == 0) {
+                if (resp.ec) {
+                    state=State::Done;
+                    ec = resp.ec;
+                } else if (resp.status_code == 0) {
                     return false;
                 } else if (resp.status_code==200) {
 					state=State::Done;
-                    // TODO utils::check_errors(output)
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::api_error);
+                    ec = error::api_error;
 				}
 			}
             // fall through
@@ -228,11 +235,11 @@ private:
         Waiting,
         Done,
     };
-    State state;
+    State state = State::Start;
 public:
     GetBootState(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri(filter_.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter_.begin(), filter_.end(), ",") + "/bootstate")) {}
 
-    bool operator()(std::string& output) {
+    bool operator()(std::string& output, std::error_code& ec) {
         switch (state) {
 			case State::Start: {
                 func(resp, {HttpMethod::GET, uri, "", {{"X-Auth-Token", cred_header}}});
@@ -240,15 +247,17 @@ public:
 			}
 			// fall through
 			case State::Waiting: {
-                if (resp.status_code == 0) {
+                if (resp.ec) {
+                    state=State::Done;
+                    ec = resp.ec;
+                } else if (resp.status_code == 0) {
                     return false;
                 } else if (resp.status_code==200) {
 					state=State::Done;
-                    // TODO utils::check_errors(output)
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::api_error);
+                    ec = error::api_error;
 				}
 			}
             // fall through
@@ -272,11 +281,11 @@ private:
         Waiting,
         Done,
     };
-    State state;
+    State state = State::Start;
 public:
     SetBootState(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_, BootState bootState_): func(func_), cred_header(cred_header_), bootState(bootState_), uri(filter_.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter_.begin(), filter_.end(), ",") + "/bootstate")) {}
 
-    bool operator()(std::string& output) {
+    bool operator()(std::string& output, std::error_code& ec) {
         switch (state) {
 			case State::Start: {
                 func(resp, {HttpMethod::PUT, uri, "{\"osimage\":\"" + bootState.osImage + "\"}", {{"X-Auth-Token", cred_header}}});
@@ -284,15 +293,17 @@ public:
 			}
 			// fall through
 			case State::Waiting: {
-                if (resp.status_code == 0) {
+                if (resp.ec) {
+                    state=State::Done;
+                    ec = resp.ec;
+                } else if (resp.status_code == 0) {
                     return false;
                 } else if (resp.status_code==200) {
 					state=State::Done;
-                    // TODO utils::check_errors(output)
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::api_error);
+                    ec = error::api_error;
 				}
 			}
             // fall through
@@ -315,11 +326,11 @@ private:
         Waiting,
         Done,
     };
-    State state;
+    State state = State::Start;
 public:
     PowerNodes(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri(filter_.empty() ? "xcatws/nodes/ALLRESOURCES/power" : (std::string("xcatws/nodes/") + internal::joinString(filter_.begin(), filter_.end(), ",") + "/power")) {}
 
-    bool operator()(std::string& output) {
+    bool operator()(std::string& output, std::error_code& ec) {
         switch (state) {
 			case State::Start: {
                 func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {{"X-Auth-Token", cred_header}}});
@@ -327,15 +338,17 @@ public:
 			}
 			// fall through
 			case State::Waiting: {
-                if (resp.status_code == 0) {
+                if (resp.ec) {
+                    state=State::Done;
+                    ec = resp.ec;
+                } else if (resp.status_code == 0) {
                     return false;
                 } else if (resp.status_code==200) {
 					state=State::Done;
-                    // TODO utils::check_errors(output)
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::api_error);
+                    ec = error::api_error;
 				}
 			}
             // fall through
@@ -358,11 +371,11 @@ private:
         Waiting,
         Done,
     };
-    State state;
+    State state = State::Start;
 public:
     SetGroupAttributes(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri("xcatws/groups/" + internal::joinString(filter_.begin(), filter_.end(), ",")) {}
 
-    bool operator()(std::string& output) {
+    bool operator()(std::string& output, std::error_code& ec) {
         switch (state) {
 			case State::Start: {
                 func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {{"X-Auth-Token", cred_header}}});
@@ -370,15 +383,17 @@ public:
 			}
 			// fall through
 			case State::Waiting: {
-                if (resp.status_code == 0) {
+                if (resp.ec) {
+                    state=State::Done;
+                    ec = resp.ec;
+                } else if (resp.status_code == 0) {
                     return false;
                 } else if (resp.status_code==200) {
 					state=State::Done;
-                    // TODO utils::check_errors(output)
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::api_error);
+                    ec = error::api_error;
 				}
 			}
             // fall through
@@ -401,11 +416,11 @@ private:
         Waiting,
         Done,
     };
-    State state;
+    State state = State::Start;
 public:
     GetGroups(http_f& func_, std::string cred_header_, std::string group): func(func_), cred_header(cred_header_), uri(group.empty() ? "xcatws/groups/" : ("xcatws/groups/" + group)) {}
 
-    bool operator()(std::string& output) {
+    bool operator()(std::string& output, std::error_code& ec) {
         switch (state) {
 			case State::Start: {
                 func(resp, {HttpMethod::GET, uri, "", {{"X-Auth-Token", cred_header}}});
@@ -413,15 +428,17 @@ public:
 			}
 			// fall through
 			case State::Waiting: {
-                if (resp.status_code == 0) {
+                if (resp.ec) {
+                    state=State::Done;
+                    ec = resp.ec;
+                } else if (resp.status_code == 0) {
                     return false;
                 } else if (resp.status_code==200) {
 					state=State::Done;
-                    // TODO utils::check_errors(output)
                     output=resp.body;
                 } else {
                     state=State::Done;
-                    throw std::system_error(error::api_error);
+                    ec = error::api_error;
 				}
 			}
             // fall through
@@ -451,32 +468,32 @@ void Xcat::set_token(std::string token) {
     _token = token;
 }
 
-std::function<bool(std::string&)> Xcat::login(std::string username, std::string password) { return Login(_func, username, password); }
-std::function<bool(std::string&)> Xcat::get_nodes() {
+std::function<bool(std::string&, std::error_code& ec)> Xcat::login(std::string username, std::string password) { return Login(_func, username, password); }
+std::function<bool(std::string&, std::error_code& ec)> Xcat::get_nodes() {
     if (_token.empty()) throw std::system_error(error::no_token);
     return GetNodes(_func, _token);
 }
-std::function<bool(std::string&)> Xcat::get_os_images(const std::vector<std::string> &filter) {
+std::function<bool(std::string&, std::error_code& ec)> Xcat::get_os_images(const std::vector<std::string> &filter) {
     if (_token.empty()) throw std::system_error(error::no_token);
     return GetOsImages(_func, _token, filter);
 }
-std::function<bool(std::string&)> Xcat::get_bootstate(const std::vector<std::string> &filter) {
+std::function<bool(std::string&, std::error_code& ec)> Xcat::get_bootstate(const std::vector<std::string> &filter) {
     if (_token.empty()) throw std::system_error(error::no_token);
     return GetBootState(_func, _token, filter);
 }
-std::function<bool(std::string&)> Xcat::set_bootstate(const std::vector<std::string> &filter, BootState state) {
+std::function<bool(std::string&, std::error_code& ec)> Xcat::set_bootstate(const std::vector<std::string> &filter, BootState state) {
     if (_token.empty()) throw std::system_error(error::no_token);
     return SetBootState(_func, _token, filter, state);
 }
-std::function<bool(std::string&)> Xcat::power_nodes(const std::vector<std::string> &filter) {
+std::function<bool(std::string&, std::error_code& ec)> Xcat::power_nodes(const std::vector<std::string> &filter) {
     if (_token.empty()) throw std::system_error(error::no_token);
     return PowerNodes(_func, _token, filter);
 }
-std::function<bool(std::string&)> Xcat::set_group_attributes(const std::vector<std::string> &filter) {
+std::function<bool(std::string&, std::error_code& ec)> Xcat::set_group_attributes(const std::vector<std::string> &filter) {
     if (_token.empty()) throw std::system_error(error::no_token);
     return SetGroupAttributes(_func, _token, filter);
 }
-std::function<bool(std::string&)> Xcat::get_groups(std::string group) {
+std::function<bool(std::string&, std::error_code& ec)> Xcat::get_groups(std::string group) {
     if (_token.empty()) throw std::system_error(error::no_token);
     return GetGroups(_func, _token, group);
 }

@@ -43,37 +43,41 @@ const char* to_cstr(error_type type) {
         case error_type::login_user_not_found: return "login user not found";
         case error_type::login_password_mismatch: return "login password incorrect";
         case error_type::login_auth_header_invalid: return "authorization header could not be parsed";
-        case error_type::writing_credentials_error: return "error";
-        case error_type::job_path_missing: return "error";
-        case error_type::job_path_not_string: return "error";
-        case error_type::job_nodes_not_int: return "error";
-        case error_type::job_nodes_smaller_1: return "error";
-        case error_type::job_nodesMax_not_int: return "error";
-        case error_type::job_nodesMax_smaller_1: return "error";
-        case error_type::job_tasks_not_int: return "error";
-        case error_type::job_tasks_smaller_1: return "error";
-        case error_type::job_gpus_not_int: return "error";
-        case error_type::job_gpus_smaller_1: return "error";
-        case error_type::job_missing: return "error";
-        case error_type::job_not_string: return "error";
-        case error_type::node_missing: return "error";
-        case error_type::node_not_string: return "error";
-        case error_type::queue_missing: return "error";
-        case error_type::state_missing: return "error";
-        case error_type::state_not_string: return "error";
-        case error_type::queue_not_string: return "error";
-        case error_type::rest_path_not_including_job_id: return "error";
-        case error_type::rest_query_user_missing: return "error";
-        case error_type::rest_path_not_including_node_id: return "error";
-        case error_type::reason_not_string: return "error";
-        case error_type::append_not_bool: return "error";
-        case error_type::rest_path_not_including_queue_id: return "error";
-        case error_type::comment_missing: return "error";
-        case error_type::comment_not_string: return "error";
-        case error_type::filterJobs_not_array: return "error";
-        case error_type::filterJobs_not_string_array: return "error";
-        case error_type::filterNodes_not_array: return "error";
-        case error_type::filterNodes_not_string_array: return "error";
+        case error_type::writing_credentials_error: return "error writing credentials to file";
+        case error_type::job_path_missing: return "job path not given";
+        case error_type::job_path_not_string: return "job path is not a string";
+        case error_type::job_nodes_not_int: return "job nodes is not a int";
+        case error_type::job_nodes_smaller_1: return "job nodes smaller than 1";
+        case error_type::job_nodesMax_not_int: return "job nodesMax is not a int";
+        case error_type::job_nodesMax_smaller_1: return "job nodesMax smaller than 1";
+        case error_type::job_tasks_not_int: return "job tasks is not a int";
+        case error_type::job_tasks_smaller_1: return "job tasks smaller than 1";
+        case error_type::job_gpus_not_int: return "job gpus is not a int";
+        case error_type::job_gpus_smaller_1: return "job gpus smaller than 1";
+        case error_type::job_missing: return "job is not given";
+        case error_type::job_not_string: return "job is not a string";
+        case error_type::node_missing: return "node is not given";
+        case error_type::node_not_string: return "node is not a string";
+        case error_type::queue_missing: return "queue is not given";
+        case error_type::state_missing: return "state is not given";
+        case error_type::state_not_string: return "state is not a string";
+        case error_type::queue_not_string: return "queue is not a string";
+        case error_type::rest_path_not_including_job_id: return "uri path is not including job id";
+        case error_type::rest_query_user_missing: return "uri query is not including user";
+        case error_type::rest_path_not_including_node_id: return "uri path is not including node id";
+        case error_type::reason_not_string: return "reason is not a string";
+        case error_type::append_not_bool: return "append is not a bool";
+        case error_type::rest_path_not_including_queue_id: return "uri path is not including queue id";
+        case error_type::comment_missing: return "comment is not given";
+        case error_type::comment_not_string: return "comment is not string";
+        case error_type::filterJobs_not_array: return "filterJobs is not an array";
+        case error_type::filterJobs_not_string_array: return "filterJObs is not a string array";
+        case error_type::filterNodes_not_array: return "filterNodes is not an array";
+        case error_type::filterNodes_not_string_array: return "filterNodes is not a string array";
+        case error_type::xcat_host_missing: return "xcat host is not given";
+        case error_type::xcat_port_missing: return "xcat port is not given";
+        case error_type::xcat_user_missing: return "xcat user is not given";
+        case error_type::xcat_password_missing: return "xcat password is not given";
         default: return "(unrecognized error)";
     }
 }
@@ -84,15 +88,15 @@ struct TrexErrCategory : std::error_category
   const char* name() const noexcept override;
   std::string message(int ev) const override;
 };
- 
+
 const char* TrexErrCategory::name() const noexcept {
   return "trex";
 }
- 
+
 std::string TrexErrCategory::message(int ev) const {
   return to_cstr(static_cast<error_type>(ev));
 }
- 
+
 const TrexErrCategory error_cat {};
 
 }
