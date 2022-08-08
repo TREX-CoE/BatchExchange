@@ -38,7 +38,7 @@ set( proxy_HDR
 )
 
 set( CMAKE_CXX_FLAGS "-Werror -Wall -Wextra -pedantic -Wshadow -Wswitch-enum -Wpointer-arith -Wwrite-strings -Wunreachable-code -Wformat=2 -Wundef -Wredundant-decls -Wcast-align -Wcast-qual -Wctor-dtor-privacy -Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-include-dirs -Wnoexcept -Woverloaded-virtual -Wredundant-decls -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=1 -Wundef -Wno-deprecated-copy -Wfloat-equal -Wswitch-default -Wconversion  -Wold-style-cast -Wstrict-overflow=2")
-# -Wsign-conversion 
+# -Wsign-conversion
 
 # add the executable
 add_executable( proxy
@@ -59,6 +59,7 @@ target_link_libraries(proxy ${Boost_LIBRARIES})
 target_link_libraries(proxy batchsystem)
 target_link_libraries(proxy OpenSSL::SSL)
 target_link_libraries(proxy OpenSSL::Crypto)
+target_link_libraries(proxy dl)
 
 file(READ "openapi.json" OPENAPI)
 file(READ "asyncapi.json" ASYNCAPI)
@@ -68,6 +69,3 @@ set(PEPPER 2VtWe3CVzV)
 set(PEPPER_XOR 0x55)
 target_compile_definitions( proxy PRIVATE PEPPER="${PEPPER}")
 target_compile_definitions( proxy PRIVATE PEPPER_XOR=${PEPPER_XOR})
-
-
-

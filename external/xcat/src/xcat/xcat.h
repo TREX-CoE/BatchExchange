@@ -5,6 +5,7 @@
 #include <system_error>
 #include <functional>
 #include <vector>
+#include <map>
 
 namespace xcat {
 
@@ -36,13 +37,13 @@ struct ApiCallRequest {
     HttpMethod method = HttpMethod::GET;
     std::string uri;
     std::string body;
-    std::vector<std::string> headers;  
+    std::map<std::string, std::string> headers;
 };
 
 struct ApiCallResponse {
     unsigned int status_code = 0;
     std::string body;
-    std::vector<std::string> headers;  
+    std::map<std::string, std::string> headers;
 };
 
 
@@ -57,7 +58,7 @@ private:
 	http_f _func;
     std::string _host;
     unsigned int _port;
-    std::string _cred_header;
+    std::string _token;
 public:
 	Xcat(http_f func);
     void set_host(std::string host, unsigned int port);

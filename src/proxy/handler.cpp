@@ -64,13 +64,14 @@ using namespace cw::error;
 using namespace cw::helper::uri;
 
 constexpr unsigned int timeout_cmd = 15000;
+constexpr unsigned int timeout_xcat_http = 15000;
 
 std::string jsonToString(const rapidjson::Document& document) {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     document.Accept(writer);
     return buffer.GetString();
-} 
+}
 
 void to_response(http::response<http::string_body>& res, const cw::proxy::response::resp& r) {
     res.result(r.second);
@@ -145,7 +146,7 @@ std::shared_ptr<BatchInterface> getBatch(const rapidjson::Document& document, co
         parseSystem(sys, document["batchsystem"].GetString());
         system = sys;
     }
-    
+
 
     if (!system.has_value()) return nullptr;
 
@@ -171,7 +172,7 @@ response::resp ws_login(std::set<std::string>& scopes, std::string& user, const 
     if (ec) {
         return response::json_error(error_wrapper(ec).with_msg(username));
     } else {
-        user = username; 
+        user = username;
         return response::valid_login(username, scopes);
     }
 }
@@ -603,9 +604,9 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         if (tag_given) r.first.AddMember("tag", tag, r.first.GetAllocator());
         send_(jsonToString(r.first));
     };
-    
-    if (!indocument.HasMember("command")) return send(response::json_error(error_wrapper(error_type::socket_command_missing))); 
-    if (!indocument["command"].IsString()) return send(response::json_error(error_wrapper(error_type::socket_command_not_string))); 
+
+    if (!indocument.HasMember("command")) return send(response::json_error(error_wrapper(error_type::socket_command_missing)));
+    if (!indocument["command"].IsString()) return send(response::json_error(error_wrapper(error_type::socket_command_not_string)));
     std::string command = indocument["command"].GetString();
 
     auto check_auth =
@@ -622,7 +623,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
 
     auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd, timeout_cmd); };
 
-    auto http_callback = [&ioc, lifetime=send](::xcat::ApiCallResponse& res, const ::xcat::ApiCallRequest& req) { cw::proxy::xcat::runHttp(ioc, res, req, 10000); };
+    auto http_callback = [&ioc, lifetime=send](::xcat::ApiCallResponse& res, const ::xcat::ApiCallRequest& req) { cw::proxy::xcat::runHttp(ioc, res, req, timeout_xcat_http); };
 
     try {
         if (command == "asyncapi.json") {
@@ -715,7 +716,7 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
         return false;
     };
 
-    auto check_json = 
+    auto check_json =
     [send_, res, &content_type, &req](rapidjson::Document& document) mutable
     {
         if (content_type != "application/json") {

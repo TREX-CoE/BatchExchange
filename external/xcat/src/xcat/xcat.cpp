@@ -83,7 +83,7 @@ struct ErrCategory : std::error_category
   const char* name() const noexcept {
     return "xcat";
   }
- 
+
   std::string message(int ev) const {
     return to_cstr(static_cast<error>(ev));
   }
@@ -150,7 +150,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::GET, "xcatws/nodes", "", {cred_header}});
+                func(resp, {HttpMethod::GET, "xcatws/nodes", "", {{"X-Auth-Token", cred_header}}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -192,7 +192,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::GET, uri, "", {cred_header}});
+                func(resp, {HttpMethod::GET, uri, "", {{"X-Auth-Token", cred_header}}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -235,7 +235,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::GET, uri, "", {cred_header}});
+                func(resp, {HttpMethod::GET, uri, "", {{"X-Auth-Token", cred_header}}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -279,7 +279,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::PUT, uri, "{\"osimage\":\"" + bootState.osImage + "\"}", {cred_header}});
+                func(resp, {HttpMethod::PUT, uri, "{\"osimage\":\"" + bootState.osImage + "\"}", {{"X-Auth-Token", cred_header}}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -322,7 +322,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {cred_header}});
+                func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {{"X-Auth-Token", cred_header}}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -365,7 +365,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {cred_header}});
+                func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {{"X-Auth-Token", cred_header}}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -408,7 +408,7 @@ public:
     bool operator()(std::string& output) {
         switch (state) {
 			case State::Start: {
-                func(resp, {HttpMethod::GET, uri, "", {cred_header}});
+                func(resp, {HttpMethod::GET, uri, "", {{"X-Auth-Token", cred_header}}});
 				state = State::Waiting;
 			}
 			// fall through
@@ -448,37 +448,37 @@ std::error_code make_error_code(error e) {
 Xcat::Xcat(http_f func): _func(func) {}
 
 void Xcat::set_token(std::string token) {
-    _cred_header = "X-Auth-Token:" + token;
+    _token = token;
 }
 
 std::function<bool(std::string&)> Xcat::login(std::string username, std::string password) { return Login(_func, username, password); }
 std::function<bool(std::string&)> Xcat::get_nodes() {
-    if (_cred_header.empty()) throw std::system_error(error::no_token);
-    return GetNodes(_func, _cred_header);
+    if (_token.empty()) throw std::system_error(error::no_token);
+    return GetNodes(_func, _token);
 }
 std::function<bool(std::string&)> Xcat::get_os_images(const std::vector<std::string> &filter) {
-    if (_cred_header.empty()) throw std::system_error(error::no_token);
-    return GetOsImages(_func, _cred_header, filter);
+    if (_token.empty()) throw std::system_error(error::no_token);
+    return GetOsImages(_func, _token, filter);
 }
 std::function<bool(std::string&)> Xcat::get_bootstate(const std::vector<std::string> &filter) {
-    if (_cred_header.empty()) throw std::system_error(error::no_token);
-    return GetBootState(_func, _cred_header, filter);
+    if (_token.empty()) throw std::system_error(error::no_token);
+    return GetBootState(_func, _token, filter);
 }
 std::function<bool(std::string&)> Xcat::set_bootstate(const std::vector<std::string> &filter, BootState state) {
-    if (_cred_header.empty()) throw std::system_error(error::no_token);
-    return SetBootState(_func, _cred_header, filter, state);
+    if (_token.empty()) throw std::system_error(error::no_token);
+    return SetBootState(_func, _token, filter, state);
 }
 std::function<bool(std::string&)> Xcat::power_nodes(const std::vector<std::string> &filter) {
-    if (_cred_header.empty()) throw std::system_error(error::no_token);
-    return PowerNodes(_func, _cred_header, filter);
+    if (_token.empty()) throw std::system_error(error::no_token);
+    return PowerNodes(_func, _token, filter);
 }
 std::function<bool(std::string&)> Xcat::set_group_attributes(const std::vector<std::string> &filter) {
-    if (_cred_header.empty()) throw std::system_error(error::no_token);
-    return SetGroupAttributes(_func, _cred_header, filter);
+    if (_token.empty()) throw std::system_error(error::no_token);
+    return SetGroupAttributes(_func, _token, filter);
 }
 std::function<bool(std::string&)> Xcat::get_groups(std::string group) {
-    if (_cred_header.empty()) throw std::system_error(error::no_token);
-    return GetGroups(_func, _cred_header, group);
+    if (_token.empty()) throw std::system_error(error::no_token);
+    return GetGroups(_func, _token, group);
 }
 
 }
