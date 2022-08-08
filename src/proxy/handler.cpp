@@ -684,7 +684,7 @@ namespace handler {
 namespace beast = boost::beast;                 // from <boost/beast.hpp>
 namespace http = beast::http;                   // from <boost/beast/http.hpp>
 
-void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, std::string input, std::set<std::string>& scopes, std::string& user, boost::optional<System>& selectedSystem, std::string& xcat_token) {
+void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, std::string input, std::set<std::string>& scopes, std::string& user, boost::optional<System>& selectedSystem, std::string& xcat_token, std::string& xcat_host, std::string& xcat_port) {
     cw::helper::uri::Uri url;
 
     rapidjson::Document indocument;
@@ -786,7 +786,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         } else if (command == "xcat/getNodes") {
             f_xcat_getNodes(check_auth, send, indocument, url, xcat_token, ioc);
         } else if (command == "xcat/setHost") {
-            return send(ws_xcat_setHost(xcat_host, xcat_port, indocument));
+            return send(ws_xcat_setHost(xcat_host, xcat_port, xcat_host, xcat_port, indocument));
         } else {
             send(response::json_error(error_wrapper(error_type::socket_command_unknown).with_msg(command)));
         }
