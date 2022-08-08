@@ -21,6 +21,7 @@ struct Handler {
         boost::optional<cw::batch::System> selectedSystem;
         std::function<void(std::string)> send_;
 
+        std::string xcat_token;
         template <class Session>
         static void init(Session& self) { (void)self; } // NOTE: storing std::function for send would cause leak for some reason
     };

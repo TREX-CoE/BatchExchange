@@ -611,7 +611,7 @@ void f_detect(CheckAuth check_auth, Send send, const rapidjson::Document& indocu
 }
 
 template <typename CheckAuth, typename Send>
-void f_xcat_login(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, boost::asio::io_context& ioc) {
+void f_xcat_login(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, std::string& token, boost::asio::io_context& ioc) {
     if (!check_auth({"xcat_login"})) return;
 
     std::string user;
@@ -637,11 +637,37 @@ void f_xcat_login(CheckAuth check_auth, Send send, const rapidjson::Document& in
     if (password.empty()) return send(response::json_error(error_wrapper(error_type::xcat_password_missing)));
 
     std::error_code ec_session;
-    auto xcat_session = getXcat(ioc, indocument, uri, "", "", "", ec_session);
+    auto xcat_session = getXcat(ioc, indocument, uri, token, "", "", ec_session);
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
 
 
     ioc.post(cw::helper::y_combinator_shared([xcat_session, f=xcat_session->login(user, password), &ioc, send](auto handler) mutable {
+        std::error_code ec;
+        std::string token;
+        if (f(token, ec)) return send(response::xcatTokenReturn(ec, token));
+        ioc.post(handler);
+    }));
+}
+
+template <typename CheckAuth, typename Send>
+void f_xcat_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, std::string token, boost::asio::io_context& ioc) {
+    if (!check_auth({"xcat_nodes"})) return;
+
+    if (uri.has_value() && uri.query.count("token")) {
+        token = uri.query.at("token");
+    }
+
+    if (indocument.IsObject() && indocument.HasMember("token") && indocument["token"].IsString()) {
+        token = indocument["token"].GetString();
+    }
+    if (token.empty()) return send(response::json_error(error_wrapper(error_type::xcat_token_missing)));
+
+    std::error_code ec_session;
+    auto xcat_session = getXcat(ioc, indocument, uri, token, "", "", ec_session);
+    if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
+
+
+    ioc.post(cw::helper::y_combinator_shared([xcat_session, f=xcat_session->get_nodes(), &ioc, send](auto handler) mutable {
         std::error_code ec;
         std::string token;
         if (f(token, ec)) return send(response::xcatTokenReturn(ec, token));
@@ -658,7 +684,7 @@ namespace handler {
 namespace beast = boost::beast;                 // from <boost/beast.hpp>
 namespace http = beast::http;                   // from <boost/beast/http.hpp>
 
-void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, std::string input, std::set<std::string>& scopes, std::string& user, boost::optional<System>& selectedSystem) {
+void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, std::string input, std::set<std::string>& scopes, std::string& user, boost::optional<System>& selectedSystem, std::string& xcat_token) {
     cw::helper::uri::Uri url;
 
     rapidjson::Document indocument;
@@ -757,6 +783,10 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
             f_rescheduleRunningJobInQueue(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
         } else if (command == "xcat/login") {
             f_xcat_login(check_auth, send, indocument, url, ioc);
+        } else if (command == "xcat/getNodes") {
+            f_xcat_getNodes(check_auth, send, indocument, url, xcat_token, ioc);
+        } else if (command == "xcat/setHost") {
+            return send(ws_xcat_setHost(xcat_host, xcat_port, indocument));
         } else {
             send(response::json_error(error_wrapper(error_type::socket_command_unknown).with_msg(command)));
         }
@@ -889,6 +919,8 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
         } else if (req.method() == http::verb::post && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "login") {
             if (!check_json(indocument)) return;
             f_xcat_login(check_auth, send, indocument, url, ioc);
+        } else if (req.method() == http::verb::get && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "nodes") {
+            f_xcat_getNodes(check_auth, send, indocument, url, xcat_token, ioc);
         } else {
             send(response::json_error(error_wrapper(error_type::request_unknown).with_msg(std::string(boost::beast::http::to_string(req.method())) + " " + std::string(req.target()))));
         }
