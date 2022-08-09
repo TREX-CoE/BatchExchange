@@ -78,6 +78,7 @@ enum class error_type {
     xcat_port_missing,
     xcat_user_missing,
     xcat_password_missing,
+    xcat_token_missing,
 };
 
 const std::error_category& trex_category() noexcept;

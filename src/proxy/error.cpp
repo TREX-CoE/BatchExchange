@@ -78,6 +78,7 @@ const char* to_cstr(error_type type) {
         case error_type::xcat_port_missing: return "xcat port is not given";
         case error_type::xcat_user_missing: return "xcat user is not given";
         case error_type::xcat_password_missing: return "xcat password is not given";
+        case error_type::xcat_token_missing: return "xcat token is not given";
         default: return "(unrecognized error)";
     }
 }

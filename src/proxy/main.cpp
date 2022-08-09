@@ -3,6 +3,9 @@
  * @brief Proxy
  *
  * ./src/proxy/proxy --cred ../data/creds run --cert ../data/server.crt --priv ../data/server.key --dh ../data/dh2048.pem --port 2000 --host 0.0.0.0
+ *
+ * wscat -n -c "wss://127.0.0.1:2000/"
+ * {"command": "xcat/set", "user": "admin", "password": "admin", "host": "127.0.0.1", "port": 3000}
  **/
 
 #include <signal.h>
