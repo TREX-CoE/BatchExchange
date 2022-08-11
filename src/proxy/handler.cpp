@@ -192,7 +192,12 @@ std::shared_ptr<::xcat::Xcat> getXcat(boost::asio::io_context& ioc, const rapidj
         return nullptr;
     }
 
-    std::shared_ptr<::xcat::Xcat> xcat_session{new ::xcat::Xcat{[&ioc, host, port](::xcat::ApiCallResponse& res, const ::xcat::ApiCallRequest& req) { cw::proxy::xcat::runHttp(ioc, res, req, timeout_xcat_http, host, port); }}};
+        
+
+
+    std::shared_ptr<::xcat::Xcat> xcat_session{new ::xcat::Xcat{[&ioc, host, port](::xcat::ApiCallRequest req, auto resp) {
+        cw::proxy::xcat::runHttp(ioc, req, resp, timeout_xcat_http, host, port);
+    }}};
     xcat_session->set_token(token);
     return xcat_session;
 }
@@ -667,13 +672,9 @@ void f_xcat_login(CheckAuth check_auth, Send send, const rapidjson::Document& in
     auto xcat_session = getXcat(ioc, indocument, uri, token, "", "", ec_session);
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
 
-
-    ioc.post(cw::helper::y_combinator_shared([xcat_session, f=xcat_session->login(user, password), &ioc, send](auto handler) mutable {
-        std::error_code ec;
-        std::string output;
-        if (f(output, ec)) return send(response::xcatTokenReturn(ec, output));
-        ioc.post(handler);
-    }));
+    xcat_session->login(user, password, [xcat_session, send](std::string t, std::error_code ec) mutable {
+        return send(response::xcatTokenReturn(error_wrapper(ec), t));
+    });
 }
 
 template <typename CheckAuth, typename Send>
@@ -696,16 +697,9 @@ void f_xcat_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document&
     auto xcat_session = getXcat(ioc, indocument, uri, token, "", "", ec_session);
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
 
-
-    ioc.post(cw::helper::y_combinator_shared([xcat_session, f=xcat_session->get_nodes(), &ioc, send](auto handler) mutable {
-        std::error_code ec;
-        std::string output;
-        if (f(output, ec)) {
-            send(response::xcatTokenReturn(ec, output));
-            return;
-        }
-        ioc.post(handler);
-    }));
+    xcat_session->get_nodes([xcat_session, send](std::string t, std::error_code ec) mutable {
+        return send(response::xcatTokenReturn(error_wrapper(ec), t));
+    });
 }
 
 }

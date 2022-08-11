@@ -91,364 +91,10 @@ struct ErrCategory : std::error_category
 
 const ErrCategory error_cat {};
 
-class Login {
-private:
-    http_f& func;
-    ApiCallResponse resp;
-    std::string uri;
-    enum class State {
-        Start,
-        Waiting,
-        Done,
-    };
-    State state = State::Start;
-public:
-    Login(http_f& func_, std::string username, std::string password): func(func_), uri("xcatws/tokens?userName="+username+"&userPW="+password) {}
 
-    bool operator()(std::string& token, std::error_code& ec) {
-        switch (state) {
-			case State::Start: {
-                func(resp, {HttpMethod::GET, uri, "", {}});
-				state = State::Waiting;
-			}
-			// fall through
-			case State::Waiting: {
-                if (resp.ec) {
-                    state=State::Done;
-                    ec = resp.ec;
-                } else if (resp.status_code == 0) {
-                    return false;
-                } else if (resp.status_code==200) {
-					state=State::Done;
-                    token=resp.body;
-                } else {
-                    state=State::Done;
-                    ec = error::login_failed;
-				}
-			}
-            // fall through
-			case State::Done: {
-                return true;
-			}
-			default: assert(false && "invalid state");
-        }
-    }
-};
 
-class GetNodes {
-private:
-    http_f& func;
-    std::string cred_header;
-    ApiCallResponse resp;
-    enum class State {
-        Start,
-        Waiting,
-        Done,
-    };
-    State state = State::Start;
-public:
-    GetNodes(http_f& func_, std::string cred_header_): func(func_), cred_header(cred_header_) {}
 
-    bool operator()(std::string& output, std::error_code& ec) {
-        switch (state) {
-			case State::Start: {
-                func(resp, {HttpMethod::GET, "xcatws/nodes", "", {{"X-Auth-Token", cred_header}}});
-				state = State::Waiting;
-			}
-			// fall through
-			case State::Waiting: {
-                if (resp.ec) {
-                    state=State::Done;
-                    ec = resp.ec;
-                } else if (resp.status_code == 0) {
-                    return false;
-                } else if (resp.status_code==200) {
-					state=State::Done;
-                    output=resp.body;
-                } else {
-                    state=State::Done;
-                    ec = error::api_error;
-				}
-			}
-            // fall through
-			case State::Done: {
-                return true;
-			}
-			default: assert(false && "invalid state");
-        }
-    }
-};
 
-class GetOsImages {
-private:
-    http_f& func;
-    std::string cred_header;
-    std::string uri;
-    ApiCallResponse resp;
-    enum class State {
-        Start,
-        Waiting,
-        Done,
-    };
-    State state = State::Start;
-public:
-    GetOsImages(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri(filter_.empty() ? "xcatws/osimages/ALLRESOURCES" : (std::string("xcatws/osimages/") + internal::joinString(filter_.begin(), filter_.end(), ","))) {}
-
-    bool operator()(std::string& output, std::error_code& ec) {
-        switch (state) {
-			case State::Start: {
-                func(resp, {HttpMethod::GET, uri, "", {{"X-Auth-Token", cred_header}}});
-				state = State::Waiting;
-			}
-			// fall through
-			case State::Waiting: {
-                if (resp.ec) {
-                    state=State::Done;
-                    ec = resp.ec;
-                } else if (resp.status_code == 0) {
-                    return false;
-                } else if (resp.status_code==200) {
-					state=State::Done;
-                    output=resp.body;
-                } else {
-                    state=State::Done;
-                    ec = error::api_error;
-				}
-			}
-            // fall through
-			case State::Done: {
-                return true;
-			}
-			default: assert(false && "invalid state");
-        }
-    }
-};
-
-class GetBootState {
-private:
-    http_f& func;
-    std::string cred_header;
-    std::string uri;
-    ApiCallResponse resp;
-    enum class State {
-        Start,
-        Waiting,
-        Done,
-    };
-    State state = State::Start;
-public:
-    GetBootState(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri(filter_.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter_.begin(), filter_.end(), ",") + "/bootstate")) {}
-
-    bool operator()(std::string& output, std::error_code& ec) {
-        switch (state) {
-			case State::Start: {
-                func(resp, {HttpMethod::GET, uri, "", {{"X-Auth-Token", cred_header}}});
-				state = State::Waiting;
-			}
-			// fall through
-			case State::Waiting: {
-                if (resp.ec) {
-                    state=State::Done;
-                    ec = resp.ec;
-                } else if (resp.status_code == 0) {
-                    return false;
-                } else if (resp.status_code==200) {
-					state=State::Done;
-                    output=resp.body;
-                } else {
-                    state=State::Done;
-                    ec = error::api_error;
-				}
-			}
-            // fall through
-			case State::Done: {
-                return true;
-			}
-			default: assert(false && "invalid state");
-        }
-    }
-};
-
-class SetBootState {
-private:
-    http_f& func;
-    std::string cred_header;
-    BootState bootState;
-    std::string uri;
-    ApiCallResponse resp;
-    enum class State {
-        Start,
-        Waiting,
-        Done,
-    };
-    State state = State::Start;
-public:
-    SetBootState(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_, BootState bootState_): func(func_), cred_header(cred_header_), bootState(bootState_), uri(filter_.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter_.begin(), filter_.end(), ",") + "/bootstate")) {}
-
-    bool operator()(std::string& output, std::error_code& ec) {
-        switch (state) {
-			case State::Start: {
-                func(resp, {HttpMethod::PUT, uri, "{\"osimage\":\"" + bootState.osImage + "\"}", {{"X-Auth-Token", cred_header}}});
-				state = State::Waiting;
-			}
-			// fall through
-			case State::Waiting: {
-                if (resp.ec) {
-                    state=State::Done;
-                    ec = resp.ec;
-                } else if (resp.status_code == 0) {
-                    return false;
-                } else if (resp.status_code==200) {
-					state=State::Done;
-                    output=resp.body;
-                } else {
-                    state=State::Done;
-                    ec = error::api_error;
-				}
-			}
-            // fall through
-			case State::Done: {
-                return true;
-			}
-			default: assert(false && "invalid state");
-        }
-    }
-};
-
-class PowerNodes {
-private:
-    http_f& func;
-    std::string cred_header;
-    std::string uri;
-    ApiCallResponse resp;
-    enum class State {
-        Start,
-        Waiting,
-        Done,
-    };
-    State state = State::Start;
-public:
-    PowerNodes(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri(filter_.empty() ? "xcatws/nodes/ALLRESOURCES/power" : (std::string("xcatws/nodes/") + internal::joinString(filter_.begin(), filter_.end(), ",") + "/power")) {}
-
-    bool operator()(std::string& output, std::error_code& ec) {
-        switch (state) {
-			case State::Start: {
-                func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {{"X-Auth-Token", cred_header}}});
-				state = State::Waiting;
-			}
-			// fall through
-			case State::Waiting: {
-                if (resp.ec) {
-                    state=State::Done;
-                    ec = resp.ec;
-                } else if (resp.status_code == 0) {
-                    return false;
-                } else if (resp.status_code==200) {
-					state=State::Done;
-                    output=resp.body;
-                } else {
-                    state=State::Done;
-                    ec = error::api_error;
-				}
-			}
-            // fall through
-			case State::Done: {
-                return true;
-			}
-			default: assert(false && "invalid state");
-        }
-    }
-};
-
-class SetGroupAttributes {
-private:
-    http_f& func;
-    std::string cred_header;
-    std::string uri;
-    ApiCallResponse resp;
-    enum class State {
-        Start,
-        Waiting,
-        Done,
-    };
-    State state = State::Start;
-public:
-    SetGroupAttributes(http_f& func_, std::string cred_header_, const std::vector<std::string>& filter_): func(func_), cred_header(cred_header_), uri("xcatws/groups/" + internal::joinString(filter_.begin(), filter_.end(), ",")) {}
-
-    bool operator()(std::string& output, std::error_code& ec) {
-        switch (state) {
-			case State::Start: {
-                func(resp, {HttpMethod::PUT, uri, "{\"action\":\"reset\"}", {{"X-Auth-Token", cred_header}}});
-				state = State::Waiting;
-			}
-			// fall through
-			case State::Waiting: {
-                if (resp.ec) {
-                    state=State::Done;
-                    ec = resp.ec;
-                } else if (resp.status_code == 0) {
-                    return false;
-                } else if (resp.status_code==200) {
-					state=State::Done;
-                    output=resp.body;
-                } else {
-                    state=State::Done;
-                    ec = error::api_error;
-				}
-			}
-            // fall through
-			case State::Done: {
-                return true;
-			}
-			default: assert(false && "invalid state");
-        }
-    }
-};
-
-class GetGroups {
-private:
-    http_f& func;
-    std::string cred_header;
-    ApiCallResponse resp;
-    std::string uri;
-    enum class State {
-        Start,
-        Waiting,
-        Done,
-    };
-    State state = State::Start;
-public:
-    GetGroups(http_f& func_, std::string cred_header_, std::string group): func(func_), cred_header(cred_header_), uri(group.empty() ? "xcatws/groups/" : ("xcatws/groups/" + group)) {}
-
-    bool operator()(std::string& output, std::error_code& ec) {
-        switch (state) {
-			case State::Start: {
-                func(resp, {HttpMethod::GET, uri, "", {{"X-Auth-Token", cred_header}}});
-				state = State::Waiting;
-			}
-			// fall through
-			case State::Waiting: {
-                if (resp.ec) {
-                    state=State::Done;
-                    ec = resp.ec;
-                } else if (resp.status_code == 0) {
-                    return false;
-                } else if (resp.status_code==200) {
-					state=State::Done;
-                    output=resp.body;
-                } else {
-                    state=State::Done;
-                    ec = error::api_error;
-				}
-			}
-            // fall through
-			case State::Done: {
-                return true;
-			}
-			default: assert(false && "invalid state");
-        }
-    }
-};
 
 }
 
@@ -468,34 +114,91 @@ void Xcat::set_token(std::string token) {
     _token = token;
 }
 
-std::function<bool(std::string&, std::error_code& ec)> Xcat::login(std::string username, std::string password) { return Login(_func, username, password); }
-std::function<bool(std::string&, std::error_code& ec)> Xcat::get_nodes() {
-    if (_token.empty()) throw std::system_error(error::no_token);
-    return GetNodes(_func, _token);
+void Xcat::login(std::string username, std::string password, std::function<void(std::string token, std::error_code ec)> cb) {
+    _func({HttpMethod::GET, "xcatws/tokens?userName="+username+"&userPW="+password, "", {}}, [cb](ApiCallResponse resp){
+        if (resp.status_code == 200) {
+            cb(resp.body, {});
+        } else {
+            cb("", error::login_failed);
+        }
+    });
 }
-std::function<bool(std::string&, std::error_code& ec)> Xcat::get_os_images(const std::vector<std::string> &filter) {
+
+void Xcat::get_nodes(std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    return GetOsImages(_func, _token, filter);
+    _func({HttpMethod::GET, "xcatws/nodes", "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+        if (resp.status_code == 200) {
+            cb(resp.body, {});
+        } else {
+            cb("", error::login_failed);
+        }
+    });
 }
-std::function<bool(std::string&, std::error_code& ec)> Xcat::get_bootstate(const std::vector<std::string> &filter) {
+
+void Xcat::get_os_images(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    return GetBootState(_func, _token, filter);
+    _func({HttpMethod::GET, filter.empty() ? "xcatws/osimages/ALLRESOURCES" : (std::string("xcatws/osimages/") + internal::joinString(filter.begin(), filter.end(), ",")), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+        if (resp.status_code == 200) {
+            cb(resp.body, {});
+        } else {
+            cb("", error::login_failed);
+        }
+    });
 }
-std::function<bool(std::string&, std::error_code& ec)> Xcat::set_bootstate(const std::vector<std::string> &filter, BootState state) {
+
+void Xcat::get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    return SetBootState(_func, _token, filter, state);
+    _func({HttpMethod::GET, filter.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+        if (resp.status_code == 200) {
+            cb(resp.body, {});
+        } else {
+            cb("", error::login_failed);
+        }
+    });
 }
-std::function<bool(std::string&, std::error_code& ec)> Xcat::power_nodes(const std::vector<std::string> &filter) {
+
+void Xcat::set_bootstate(const std::vector<std::string> &filter, BootState bootState, std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    return PowerNodes(_func, _token, filter);
+    _func({HttpMethod::PUT, filter.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "{\"osimage\":\"" + bootState.osImage + "\"}", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+        if (resp.status_code == 200) {
+            cb(resp.body, {});
+        } else {
+            cb("", error::login_failed);
+        }
+    });
 }
-std::function<bool(std::string&, std::error_code& ec)> Xcat::set_group_attributes(const std::vector<std::string> &filter) {
+
+void Xcat::power_nodes(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    return SetGroupAttributes(_func, _token, filter);
+    _func({HttpMethod::PUT, filter.empty() ? "xcatws/nodes/ALLRESOURCES/power" : (std::string("xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/power"), "{\"action\":\"reset\"}", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+        if (resp.status_code == 200) {
+            cb(resp.body, {});
+        } else {
+            cb("", error::login_failed);
+        }
+    });
 }
-std::function<bool(std::string&, std::error_code& ec)> Xcat::get_groups(std::string group) {
+
+void Xcat::set_group_attributes(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    return GetGroups(_func, _token, group);
+    _func({HttpMethod::PUT, "xcatws/groups/" + internal::joinString(filter.begin(), filter.end(), ","), "{\"action\":\"reset\"}", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+        if (resp.status_code == 200) {
+            cb(resp.body, {});
+        } else {
+            cb("", error::login_failed);
+        }
+    });
+}
+
+void Xcat::get_groups(std::string group, std::function<void(std::string, std::error_code ec)> cb) {
+    if (_token.empty()) throw std::system_error(error::no_token);
+    _func({HttpMethod::GET, group.empty() ? "xcatws/groups/" : ("xcatws/groups/" + group), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+        if (resp.status_code == 200) {
+            cb(resp.body, {});
+        } else {
+            cb("", error::login_failed);
+        }
+    });
 }
 
 }

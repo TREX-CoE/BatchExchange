@@ -52,7 +52,7 @@ struct BootState {
     std::string osImage;
 };
 
-using http_f = std::function<void(ApiCallResponse& res, const ApiCallRequest& req)>;
+using http_f = std::function<void(ApiCallRequest req, std::function<void(ApiCallResponse)> resp)>;
 
 class Xcat {
 private:
@@ -64,18 +64,18 @@ public:
 	Xcat(http_f func);
     void set_host(std::string host, unsigned int port);
 
-    std::function<bool(std::string&, std::error_code& ec)> login(std::string username, std::string password);
+    void login(std::string username, std::string password, std::function<void(std::string token, std::error_code ec)> cb);
     void set_token(std::string token);
 
-    std::function<bool(std::string&, std::error_code& ec)> get_nodes();
-    std::function<bool(std::string&, std::error_code& ec)> get_os_images(const std::vector<std::string> &filter);
-    std::function<bool(std::string&, std::error_code& ec)> get_bootstate(const std::vector<std::string> &filter);
-    std::function<bool(std::error_code& ec)> set_os_image(const std::vector<std::string> &filter, std::string osImage);
-    std::function<bool(std::string&, std::error_code& ec)> power_nodes(const std::vector<std::string> &filter);
-    std::function<bool(std::string&, std::error_code& ec)> set_bootstate(const std::vector<std::string> &filter, BootState state);
-    std::function<bool(std::string&, std::error_code& ec)> set_group_attributes(const std::vector<std::string> &filter);
-    std::function<bool(std::string&, std::error_code& ec)> get_groups(std::string group);
-};
+    void get_nodes(std::function<void(std::string, std::error_code ec)> cb);
+    void get_os_images(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
+    void get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
+    void power_nodes(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
+    void set_bootstate(const std::vector<std::string> &filter, BootState state, std::function<void(std::string, std::error_code ec)> cb);
+    void set_group_attributes(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
+    void get_groups(std::string group, std::function<void(std::string, std::error_code ec)> cb);
+}; 
+
 
 }
 

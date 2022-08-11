@@ -4,12 +4,14 @@
 
 #include "xcat/xcat.h"
 #include <boost/asio/io_context.hpp>
+#include <functional>
 
 namespace cw {
 namespace proxy {
 namespace xcat {
 
-void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const ::xcat::ApiCallRequest& req, unsigned int timeout_ms, std::string host, std::string port);
+void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::function<void(::xcat::ApiCallResponse)> resp, unsigned int timeout_ms, std::string host, std::string port);
+
 
 }
 }

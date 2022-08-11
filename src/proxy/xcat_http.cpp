@@ -50,7 +50,7 @@ namespace cw {
 namespace proxy {
 namespace xcat {
 
-void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const ::xcat::ApiCallRequest& req, unsigned int timeout_ms, std::string host, std::string port) {
+void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::function<void(::xcat::ApiCallResponse)> resp, unsigned int timeout_ms, std::string host, std::string port) {
     // run batchsystem command asynchronously
     std::shared_ptr<Request> boost_req{new Request{boost::asio::ip::tcp::resolver{make_strand(ioc_.get_executor())}, boost::beast::tcp_stream{make_strand(ioc_.get_executor())}, {}, {}, {}}};
 
@@ -62,14 +62,15 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
     boost_req->req.target(host);
     boost_req->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 
-
     // Look up the domain name
     boost_req->resolver.async_resolve(
         host,
         port,
-        [boost_req, &res, timeout_ms](beast::error_code ec, tcp::resolver::results_type results) {
+        [boost_req, resp, timeout_ms](beast::error_code ec, tcp::resolver::results_type results) {
             if (ec) {
+                ::xcat::ApiCallResponse res;
                 res.ec = ec;
+                resp(res);
                 return;
             }
 
@@ -79,9 +80,11 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
 
             boost_req->stream.async_connect(
                 results,
-                [boost_req, &res, timeout_ms](beast::error_code ec_connect, tcp::resolver::results_type::endpoint_type) {
+                [boost_req, resp, timeout_ms](beast::error_code ec_connect, tcp::resolver::results_type::endpoint_type) {
                     if (ec_connect) {
+                        ::xcat::ApiCallResponse res;
                         res.ec = ec_connect;
+                        resp(res);
                         return;
                     }
 
@@ -90,21 +93,25 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
 
                     // Send the HTTP request to the remote host
                     http::async_write(boost_req->stream, boost_req->req,
-                        [boost_req, &res](beast::error_code ec_write, std::size_t bytes_transferred_read) {
+                        [boost_req, resp](beast::error_code ec_write, std::size_t bytes_transferred_read) {
                             boost::ignore_unused(bytes_transferred_read);
 
                             if (ec_write) {
+                                ::xcat::ApiCallResponse res;
                                 res.ec = ec_write;
+                                resp(res);
                                 return;
                             }
 
                             // Receive the HTTP response
                             http::async_read(boost_req->stream, boost_req->buffer, boost_req->res,
-                                [boost_req, &res](beast::error_code ec_read, std::size_t bytes_transferred_write) {
+                                [boost_req, resp](beast::error_code ec_read, std::size_t bytes_transferred_write) {
                                     boost::ignore_unused(bytes_transferred_write);
 
                                     if (ec_read) {
+                                        ::xcat::ApiCallResponse res;
                                         res.ec = ec_read;
+                                        resp(res);
                                         return;
                                     }
 
@@ -116,11 +123,15 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
 
                                     // not_connected happens sometimes so don't bother reporting it.
                                     if(ec_read && ec_read != beast::errc::not_connected) {
+                                        ::xcat::ApiCallResponse res;
                                         res.ec = ec_read;
+                                        resp(res);
                                         return;
                                     }
 
+                                    ::xcat::ApiCallResponse res;
                                     res.status_code = boost_req->res.result_int();
+                                    resp(res);
 
                                     // If we get here then the connection is closed gracefully
 
@@ -135,6 +146,7 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallResponse& res, const 
         }
     );
 }
+
 
 }
 }
