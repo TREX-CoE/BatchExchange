@@ -64,6 +64,26 @@ Vagrant.configure("2") do |config|
       yes | sudo /opt/xcat/share/xcat/scripts/setup-local-client.sh vagrant
       lsxcatd -a
       sudo systemctl enable xcatd.service
+
+      # enable rest api ssl support
+      sudo a2enmod ssl
+      ln -s ../sites-available/default-ssl.conf  /etc/apache2/sites-enabled/ssl.conf
+      sudo service apache2 restart
+
+      # verify ssl is loaded
+      sudo apache2ctl -t -D DUMP_MODULES | grep ssl
+
+      apt-get install libjson-perl
+
+      # set password for root login
+      tabch key=xcat,username=root passwd.password=root
+
+      # add non root user
+      useradd -u 1101 user1
+      (echo 'pass'; echo 'pass') | passwd user1
+      tabch key=xcat,username=user1 passwd.password=pass
+      mkdef -t policy 6 name=user1 rule=allow
+
     SHELL
   end
   

@@ -15,6 +15,9 @@ struct CmdProcess {
     boost::optional<bp::async_pipe> pipe_err;
     boost::optional<boost::asio::deadline_timer> deadline_timer;
     boost::process::group group;
+    std::string out;
+    std::string err;
+    
 };
 
 }
@@ -23,20 +26,25 @@ namespace cw {
 namespace proxy {
 namespace batch {
 
-void runCommand(boost::asio::io_context& ioc_, cw::batch::Result& result, const cw::batch::Cmd& cmd, unsigned int timeout_ms) {
+void runCommand(boost::asio::io_context& ioc_, cw::batch::Cmd cmd, std::function<void(cw::batch::Result)> resp, unsigned int timeout_ms) {
     // run batchsystem command asynchronously
     std::shared_ptr<CmdProcess> process{new CmdProcess{}};
-    auto cb = [process, &result](int ret, const std::error_code& ec) {
+    auto cb = [process, resp](int ret, const std::error_code& ec) {
         if (process->deadline_timer.has_value()) process->deadline_timer->cancel();
-        result.exit = ec ? cmd_status_spawn_failed : ret; // use to mark error in boost process (failed to start/find command etc.)
+        cw::batch::Result res;
+        res.ec = ec;
+        res.exit = ec ? cmd_status_spawn_failed : ret; // use to mark error in boost process (failed to start/find command etc.)
+        res.out = std::move(process->out);
+        res.err = std::move(process->err);
+        resp(res);
     };
     if (cmd.opts & cw::batch::cmdopt::capture_stdout) {
         process->pipe_out.emplace(ioc_);
-        boost::asio::async_read(*(process->pipe_out), boost::asio::dynamic_buffer(result.out), [](const boost::system::error_code &, std::size_t){});
+        boost::asio::async_read(*(process->pipe_out), boost::asio::dynamic_buffer(process->out), [](const boost::system::error_code &, std::size_t){});
     }
     if (cmd.opts & cw::batch::cmdopt::capture_stderr) {
         process->pipe_err.emplace(ioc_);
-        boost::asio::async_read(*(process->pipe_err), boost::asio::dynamic_buffer(result.err), [](const boost::system::error_code &, std::size_t){});
+        boost::asio::async_read(*(process->pipe_err), boost::asio::dynamic_buffer(process->err), [](const boost::system::error_code &, std::size_t){});
     }
 
     if ((cmd.opts & cw::batch::cmdopt::capture_stdout_stderr) == cw::batch::cmdopt::capture_stdout_stderr) {
@@ -54,7 +62,7 @@ void runCommand(boost::asio::io_context& ioc_, cw::batch::Result& result, const 
     if (timeout_ms != 0) {
         process->deadline_timer.emplace(ioc_);
         process->deadline_timer->expires_from_now(boost::posix_time::milliseconds(timeout_ms));
-        process->deadline_timer->async_wait([process, &result](boost::system::error_code ec){
+        process->deadline_timer->async_wait([process](boost::system::error_code ec){
             if (ec == boost::asio::error::operation_aborted) return;
             process->group.terminate();
         });

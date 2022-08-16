@@ -17,8 +17,6 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
-#include "nonstd/invoke.hpp"
-
 #include <chrono>
 #include <ctime>
 #include <exception>
@@ -80,45 +78,6 @@ void to_response(http::response<http::string_body>& res, const cw::proxy::respon
     res.prepare_payload();
 }
 
-
-template <typename AsyncF, typename CallbackF>
-void run_async(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
-    ioc_.post(cw::helper::y_combinator_shared([asyncF, callbackF, &ioc_](auto handler) mutable {
-        try {
-            if (asyncF()) {
-                callbackF(error_wrapper());
-                return;
-            }
-        } catch (const boost::process::process_error& e) {
-            callbackF(error_wrapper(error_type::boost_process_error).with_msg(e.what()).with_base(e.code()));
-            return;
-        } catch (const std::system_error& e) {
-            callbackF(error_wrapper(e.code()).with_msg(e.what()));
-            return;
-        }
-        ioc_.post(handler);
-    }));
-}
-
-template <typename T, typename AsyncF, typename CallbackF>
-void run_async_state(boost::asio::io_context& ioc_, AsyncF asyncF, CallbackF callbackF) {
-    ioc_.post(cw::helper::y_combinator_shared([state=T(), asyncF, callbackF, &ioc_](auto handler) mutable {
-        try {
-            if (asyncF(state)) {
-                callbackF(error_wrapper(), std::move(state));
-                return;
-            }
-        } catch (const boost::process::process_error& e) {
-            callbackF(error_wrapper(error_type::boost_process_error).with_msg(e.what()).with_base(e.code()), std::move(state));
-            return;
-        } catch (const std::system_error& e) {
-            callbackF(error_wrapper(e.code()).with_msg(e.what()), std::move(state));
-            return;
-        }
-        ioc_.post(handler);
-    }));
-}
-
 bool parseSystem(System& system, const std::string& input) {
     if (input == "pbs") {
         system = System::Pbs;
@@ -133,7 +92,7 @@ bool parseSystem(System& system, const std::string& input) {
     return false;
 }
 
-std::shared_ptr<BatchInterface> getBatch(const rapidjson::Document& document, const Uri& uri, cmd_f _func, boost::optional<System> system) {
+std::shared_ptr<BatchInterface> getBatch(boost::asio::io_context& ioc, const rapidjson::Document& document, const Uri& uri, boost::optional<System> system) {
     if (uri.has_value()) {
         if (uri.query.count("batchsystem")) {
             System sys;
@@ -150,7 +109,9 @@ std::shared_ptr<BatchInterface> getBatch(const rapidjson::Document& document, co
 
     if (!system.has_value()) return nullptr;
 
-    return create_batch(system.value(), std::move(_func));
+    return create_batch(system.value(), [&ioc](cw::batch::Cmd cmd, auto resp) {
+        cw::proxy::batch::runCommand(ioc, cmd, resp, timeout_cmd);
+    });
 }
 
 std::shared_ptr<::xcat::Xcat> getXcat(boost::asio::io_context& ioc, const rapidjson::Document& document, const Uri& uri, std::string token, std::string host, std::string port, std::error_code& ec) {
@@ -328,7 +289,7 @@ void f_usersAdd(CheckAuth check_auth, Send send, const rapidjson::Document& indo
     const std::string& password = std::get<2>(*o);
     if (password.empty()) return send(response::json_error(error_wrapper(error_type::invalid_password_empty)));
 
-    nonstd::apply([&creds](auto&&... args){cw::helper::credentials::set_user(creds, args...);}, std::move(*o));
+    cw::helper::credentials::set_user(creds, std::get<0>(*o), std::get<1>(*o), std::get<2>(*o));
     write_creds_async(ioc, creds, [send, user=std::move(username), s=std::move(scopes)](auto e) mutable {
         return send(response::writingCredentialsReturn(e, {{user, s}}, boost::beast::http::status::created));
     });
@@ -357,11 +318,11 @@ void f_usersDelete(CheckAuth check_auth, Send send, const rapidjson::Document& i
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_jobsSubmit(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_jobsSubmit(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"jobs_submit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->runJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -369,18 +330,17 @@ void f_jobsSubmit(CheckAuth check_auth, Send send, const rapidjson::Document& in
     std::error_code ec;
     auto o = cw_proxy_batch::runJob(indocument, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
-    auto f = batch->runJob(*o);
 
-    run_async_state<std::string>(ioc, f, [batch, send](auto e, std::string jobName) mutable {
-        return send(response::runJobReturn(e, jobName));
+    batch->runJob(*o, [batch, send](std::string jobName, std::error_code e) mutable {
+        return send(response::runJobReturn(error_wrapper(e), jobName));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_jobsDeleteById(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_jobsDeleteById(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"jobs_delete"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->deleteJobById(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -389,17 +349,16 @@ void f_jobsDeleteById(CheckAuth check_auth, Send send, const rapidjson::Document
     auto o = cw_proxy_batch::deleteJobById(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->deleteJobById(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->deleteJobById(std::get<0>(*o), std::get<1>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_jobsDeleteByUser(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_jobsDeleteByUser(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"jobs_user_delete"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->deleteJobByUser(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -408,17 +367,16 @@ void f_jobsDeleteByUser(CheckAuth check_auth, Send send, const rapidjson::Docume
     auto o = cw_proxy_batch::deleteJobByUser(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->deleteJobByUser(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->deleteJobByUser(std::get<0>(*o), std::get<1>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_setNodeState(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_setNodeState(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"nodes_state_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->changeNodeState(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -427,17 +385,16 @@ void f_setNodeState(CheckAuth check_auth, Send send, const rapidjson::Document& 
     auto o = cw_proxy_batch::changeNodeState(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->changeNodeState(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->changeNodeState(std::get<0>(*o), std::get<1>(*o), std::get<2>(*o), std::get<3>(*o), std::get<4>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_setQueueState(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_setQueueState(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"queues_state_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->setQueueState(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -446,17 +403,16 @@ void f_setQueueState(CheckAuth check_auth, Send send, const rapidjson::Document&
     auto o = cw_proxy_batch::setQueueState(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->setQueueState(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->setQueueState(std::get<0>(*o), std::get<1>(*o), std::get<2>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_setNodeComment(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_setNodeComment(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"nodes_comment_edit"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->setNodeComment(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -465,17 +421,16 @@ void f_setNodeComment(CheckAuth check_auth, Send send, const rapidjson::Document
     auto o = cw_proxy_batch::setNodeComment(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->setNodeComment(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->setNodeComment(std::get<0>(*o), std::get<1>(*o), std::get<2>(*o), std::get<3>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_holdJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_holdJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"jobs_hold"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->holdJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -484,17 +439,16 @@ void f_holdJob(CheckAuth check_auth, Send send, const rapidjson::Document& indoc
     auto o = cw_proxy_batch::holdJob(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->holdJob(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->holdJob(std::get<0>(*o), std::get<1>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_releaseJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_releaseJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"jobs_release"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->releaseJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -503,17 +457,16 @@ void f_releaseJob(CheckAuth check_auth, Send send, const rapidjson::Document& in
     auto o = cw_proxy_batch::releaseJob(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->releaseJob(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->releaseJob(std::get<0>(*o), std::get<1>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_suspendJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_suspendJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"jobs_suspend"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->suspendJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -522,17 +475,16 @@ void f_suspendJob(CheckAuth check_auth, Send send, const rapidjson::Document& in
     auto o = cw_proxy_batch::suspendJob(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->suspendJob(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->suspendJob(std::get<0>(*o), std::get<1>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_resumeJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_resumeJob(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"jobs_resume"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->resumeJob(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -541,17 +493,16 @@ void f_resumeJob(CheckAuth check_auth, Send send, const rapidjson::Document& ind
     auto o = cw_proxy_batch::resumeJob(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->resumeJob(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->resumeJob(std::get<0>(*o), std::get<1>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_rescheduleRunningJobInQueue(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_rescheduleRunningJobInQueue(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"jobs_reschedule"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->rescheduleRunningJobInQueue(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -560,18 +511,17 @@ void f_rescheduleRunningJobInQueue(CheckAuth check_auth, Send send, const rapidj
     auto o = cw_proxy_batch::rescheduleRunningJobInQueue(indocument, uri, ec);
     if (!o) return send(response::json_error(error_wrapper(ec)));
 
-    auto f = nonstd::apply([batch](auto&&... args){ return batch->rescheduleRunningJobInQueue(args...); }, std::move(*o));
-    run_async(ioc, f, [batch, send](auto e) mutable {
-        return send(response::commandReturn(e));
+    batch->rescheduleRunningJobInQueue(std::get<0>(*o), std::get<1>(*o), [batch, send](std::error_code e) mutable {
+        return send(response::commandReturn(error_wrapper(e)));
     });
 }
 
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_getJobs(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_getJobs(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"jobs_info"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->getJobs(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -580,30 +530,30 @@ void f_getJobs(CheckAuth check_auth, Send send, const rapidjson::Document& indoc
     auto o = cw_proxy_batch::getJobs(indocument, uri, ec);
     if (ec) return send(response::json_error(error_wrapper(ec)));
 
-    run_async_state<std::vector<cw::batch::Job>>(ioc, [batch, f=batch->getJobs(o)](std::vector<cw::batch::Job>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto e, auto container) mutable {
-        return send(response::containerReturn(e, container));
+    batch->getJobs(o, [batch, send](auto container, std::error_code e) mutable {
+        return send(response::containerReturn(error_wrapper(e), container));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_getQueues(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_getQueues(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"queues_info"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->getQueues(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
-    run_async_state<std::vector<cw::batch::Queue>>(ioc, [batch, f=batch->getQueues()](std::vector<cw::batch::Queue>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto ec, auto container) mutable {
-        return send(response::containerReturn(ec, container));
+    batch->getQueues([batch, send](auto container, std::error_code e) mutable {
+        return send(response::containerReturn(error_wrapper(e), container));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"nodes_info"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->getNodes(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
@@ -611,34 +561,34 @@ void f_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document& indo
     auto o = cw_proxy_batch::getNodes(indocument, uri, ec);
     if (ec) return send(response::json_error(error_wrapper(ec)));
 
-    run_async_state<std::vector<cw::batch::Node>>(ioc, [batch, f=batch->getNodes(o)](std::vector<cw::batch::Node>& state){ return f([&state](auto n) { state.push_back(std::move(n)); return true; }); }, [send](auto e, auto container) mutable {
-        return send(response::containerReturn(e, container));
+    batch->getNodes(o, [batch, send](auto container, std::error_code e) mutable {
+        return send(response::containerReturn(error_wrapper(e), container));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_getBatchInfo(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_getBatchInfo(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"batch_info"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
     if (!batch->getBatchInfo(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
-    run_async_state<BatchInfo>(ioc, [batch, f=batch->getBatchInfo()](BatchInfo& state){ return f(state); }, [send](auto ec, auto batchinfo) mutable {
-        return send(response::getBatchInfoReturn(ec, batchinfo));
+    batch->getBatchInfo([batch, send](auto batchinfo, std::error_code ec) mutable {
+        return send(response::getBatchInfoReturn(error_wrapper(ec), batchinfo));
     });
 }
 
-template <typename CheckAuth, typename Send, typename ExecCb>
-void f_detect(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, ExecCb exec_cb, const boost::optional<System>& system, boost::asio::io_context& ioc) {
+template <typename CheckAuth, typename Send>
+void f_detect(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, const boost::optional<System>& system, boost::asio::io_context& ioc) {
     if (!check_auth({"batch_detect"})) return;
 
-    auto batch = getBatch(indocument, uri, exec_cb, system);
+    auto batch = getBatch(ioc, indocument, uri, system);
     if (!batch) return send(response::json_error(error_wrapper(error_type::batchsystem_unknown)));
 
-    run_async_state<bool>(ioc, [batch, f=batch->detect()](bool& detected){ return f(detected); }, [send](auto ec, auto detected) mutable {
-        return send(response::detectReturn(ec, detected));
+    batch->detect([batch, send](bool detected, std::error_code ec) mutable {
+        return send(response::detectReturn(error_wrapper(ec), detected));
     });
 }
 
@@ -753,8 +703,6 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         return true;
     };
 
-    auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd, timeout_cmd); };
-
     try {
         if (command == "asyncapi.json") {
             return send_(cw::build::asyncapi_json);
@@ -771,15 +719,15 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         } else if (command == "setBatchsystem") {
             return send(ws_setBatchsystem(selectedSystem, indocument));
         } else if (command == "detect") {
-            f_detect(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_detect(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "getBatchInfo") {
-            f_getBatchInfo(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_getBatchInfo(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "getNodes") {
-            f_getNodes(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_getNodes(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "getQueues") {
-            f_getQueues(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_getQueues(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "getJobs") {
-            f_getJobs(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_getJobs(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "usersAdd") {
             f_usersAdd(check_auth, send, indocument, url, ioc);
         } else if (command == "usersEdit") {
@@ -787,27 +735,27 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         } else if (command == "usersDelete") {
             f_usersDelete(check_auth, send, indocument, url, ioc, &user, &scopes);
         } else if (command == "jobsSubmit") {
-            f_jobsSubmit(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_jobsSubmit(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "jobsDeleteById") {
-            f_jobsDeleteById(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_jobsDeleteById(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "jobsDeleteByUser") {
-            f_jobsDeleteByUser(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_jobsDeleteByUser(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "setNodeState") {
-            f_setNodeState(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_setNodeState(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "setQueueState") {
-            f_setQueueState(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_setQueueState(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "setNodeComment") {
-            f_setNodeComment(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_setNodeComment(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "holdJob") {
-            f_holdJob(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_holdJob(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "releaseJob") {
-            f_releaseJob(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_releaseJob(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "suspendJob") {
-            f_suspendJob(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_suspendJob(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "resumeJob") {
-            f_resumeJob(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_resumeJob(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "rescheduleJob") {
-            f_rescheduleRunningJobInQueue(check_auth, send, indocument, url, exec_callback, selectedSystem, ioc);
+            f_rescheduleRunningJobInQueue(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "xcat/login") {
             f_xcat_login(check_auth, send, indocument, url, xcat_token, ioc);
         } else if (command == "xcat/getNodes") {
@@ -867,8 +815,6 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
         return true;
     };
 
-    auto exec_callback = [&ioc, lifetime=send](cw::batch::Result& result, const cw::batch::Cmd& cmd) { cw::proxy::batch::runCommand(ioc, result, cmd, timeout_cmd); };
-
     auto send_info = [send_, res](auto ec, auto container) mutable {
         to_response(res, response::containerReturn(ec, container));
         return send_(std::move(res));
@@ -895,15 +841,15 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "info") {
             return send(response::info());
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "state") {
-            f_detect(check_auth, send, indocument, url, exec_callback, {}, ioc);
+            f_detect(check_auth, send, indocument, url, {}, ioc);
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "batchinfo") {
-            f_getBatchInfo(check_auth, send, indocument, url, exec_callback, {}, ioc);
+            f_getBatchInfo(check_auth, send, indocument, url, {}, ioc);
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "nodes") {
-            f_getNodes(check_auth, send, indocument, url, exec_callback, {}, ioc);
+            f_getNodes(check_auth, send, indocument, url, {}, ioc);
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "queues") {
-            f_getQueues(check_auth, send, indocument, url, exec_callback, {}, ioc);
+            f_getQueues(check_auth, send, indocument, url, {}, ioc);
         } else if (req.method() == http::verb::get && url.path.size() == 1 && url.path[0] == "jobs") {
-            f_getJobs(check_auth, send, indocument, url, exec_callback, {}, ioc);
+            f_getJobs(check_auth, send, indocument, url, {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 1 && url.path[0] == "users") {
             if (!check_json(indocument)) return;
             f_usersAdd(check_auth, send, indocument, url.remove_prefix(1), ioc);
@@ -914,35 +860,35 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
             f_usersDelete(check_auth, send, indocument, url.remove_prefix(1), ioc, nullptr, nullptr);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[1] == "*" && url.path[2] == "submit") {
             if (!check_json(indocument)) return;
-            f_jobsSubmit(check_auth, send, indocument, url, exec_callback, {}, ioc);
+            f_jobsSubmit(check_auth, send, indocument, url, {}, ioc);
         } else if (req.method() == http::verb::delete_ && url.path.size() == 2 && url.path[0] == "jobs" && url.path[1] == "*") {
-            f_jobsDeleteByUser(check_auth, send, indocument, url, exec_callback, {}, ioc);
+            f_jobsDeleteByUser(check_auth, send, indocument, url, {}, ioc);
         } else if (req.method() == http::verb::delete_ && url.path.size() == 2 && url.path[0] == "jobs") {
-            f_jobsDeleteById(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+            f_jobsDeleteById(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "nodes" && url.path[2] == "state") {
             if (!check_json(indocument)) return;
-            f_setNodeState(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+            f_setNodeState(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "queues" && url.path[2] == "state") {
             if (!check_json(indocument)) return;
-            f_setQueueState(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+            f_setQueueState(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "nodes" && url.path[2] == "comment") {
             if (!check_json(indocument)) return;
-            f_setNodeComment(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+            f_setNodeComment(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "hold") {
             if (!check_json(indocument)) return;
-            f_holdJob(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+            f_holdJob(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "release") {
             if (!check_json(indocument)) return;
-            f_releaseJob(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+            f_releaseJob(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "suspend") {
             if (!check_json(indocument)) return;
-            f_suspendJob(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+            f_suspendJob(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "resume") {
             if (!check_json(indocument)) return;
-            f_resumeJob(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+            f_resumeJob(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 3 && url.path[0] == "jobs" && url.path[2] == "reschedule") {
             if (!check_json(indocument)) return;
-            f_rescheduleRunningJobInQueue(check_auth, send, indocument, url.remove_prefix(1), exec_callback, {}, ioc);
+            f_rescheduleRunningJobInQueue(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "login") {
             if (!check_json(indocument)) return;
             std::string token;

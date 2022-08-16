@@ -49,7 +49,6 @@ add_executable( proxy
 
 include_directories(${Boost_INCLUDE_DIR})
 include_directories(${CLIPP_INCLUDE_DIR})
-include_directories(${INVOKE_LITE_INCLUDE_DIR})
 include_directories(${MAIN_INCLUDE_DIR})
 
 target_link_libraries( proxy shared)
