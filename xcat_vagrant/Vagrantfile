@@ -1,97 +1,66 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-# All Vagrant configuration is done below. The "2" in Vagrant.configure
-# configures the configuration version (we support older styles for
-# backwards compatibility). Please don't change it unless you know what
-# you're doing.
-Vagrant.configure("2") do |config|
-    # The most common configuration options are documented and commented below.
-    # For a complete reference, please see the online documentation at
-    # https://docs.vagrantup.com.
-  
-    # Every Vagrant development environment requires a box. You can search for
-    # boxes at https://vagrantcloud.com/search.
-    config.vm.box = "generic/ubuntu1804"
-  
-    # Disable automatic box update checking. If you disable this, then
-    # boxes will only be checked for updates when the user runs
-    # `vagrant box outdated`. This is not recommended.
-    # config.vm.box_check_update = false
-  
-    # Create a forwarded port mapping which allows access to a specific port
-    # within the machine from a port on the host machine. In the example below,
-    # accessing "localhost:8080" will access port 80 on the guest machine.
-    # NOTE: This will enable public access to the opened port
-    # config.vm.network "forwarded_port", guest: 80, host: 8080
-  
-    # Create a forwarded port mapping which allows access to a specific port
-    # within the machine from a port on the host machine and only allow access
-    # via 127.0.0.1 to disable public access
+Vagrant.configure("2") do |main|
+
+    main.vm.define "master" do |config|
+      config.vm.box = "generic/ubuntu1804"
     
-    # Create a private network, which allows host-only access to the machine
-    # using a specific IP.
-    config.vm.network "private_network", ip: "192.168.56.10"
-  
-    # Create a public network, which generally matched to bridged network.
-    # Bridged networks make the machine appear as another physical device on
-    # your network.
-    # config.vm.network "public_network"
-  
-    # Share an additional folder to the guest VM. The first argument is
-    # the path on the host to the actual folder. The second argument is
-    # the path on the guest to mount the folder. And the optional third
-    # argument is a set of non-required options.
-    # config.vm.synced_folder "../data", "/vagrant_data"
-  
-    config.vm.provider "hyperv" do |hv|
-      hv.vmname = "vagrant_xcat"
-      hv.cpus = 1
-      hv.maxmemory = "2048"
-      hv.memory = "1024"
+      config.vm.network "private_network", ip: "192.168.56.10"
+    
+      config.vm.provider "virtualbox" do |v|
+        v.name = "vagrant_xcat_master"
+        v.check_guest_additions = false
+        v.memory = 1024
+        v.cpus = 1
+        v.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
+      end
+    
+      config.vm.provision "shell", inline: <<-SHELL
+        wget -O - "http://xcat.org/files/xcat/repos/apt/apt.key" | apt-key add -
+        echo "deb [arch=amd64] http://xcat.org/files/xcat/repos/apt/latest/xcat-core bionic main\ndeb [arch=amd64] http://xcat.org/files/xcat/repos/apt/latest/xcat-dep bionic main" > /etc/apt/sources.list.d/xcat.list
+        apt-get update
+        apt-get install -y xcat
+        source /etc/profile.d/xcat.sh
+        yes | sudo /opt/xcat/share/xcat/scripts/setup-local-client.sh vagrant
+        lsxcatd -a
+        sudo systemctl enable xcatd.service
+
+        # enable rest api ssl support
+        sudo a2enmod ssl
+        ln -s ../sites-available/default-ssl.conf  /etc/apache2/sites-enabled/ssl.conf
+        sudo service apache2 restart
+
+        # verify ssl is loaded
+        sudo apache2ctl -t -D DUMP_MODULES | grep ssl
+
+        apt-get install libjson-perl
+
+        # set password for root login
+        tabch key=xcat,username=root passwd.password=root
+
+        # add non root user
+        useradd -u 1101 user1
+        (echo 'pass'; echo 'pass') | passwd user1
+        tabch key=xcat,username=user1 passwd.password=pass
+        mkdef -t policy 6 name=user1 rule=allow
+
+        # register node
+        mkdef -t node node1 groups=all ip=192.168.56.11 installnic=mac primarynic=mac mac=aa:06:fd:af:4d:c9
+
+
+      SHELL
     end
 
-    config.vm.provider "virtualbox" do |v|
-      v.name = "vagrant_xcat"
-      v.check_guest_additions = false
-      v.memory = 1024
-      v.cpus = 1
-      v.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
+    main.vm.define "node1" do |config|
+      config.vm.box = "generic/alpine38"
+      config.vm.network "private_network", ip: "192.168.56.11", mac: "AA06FDAF4DC9"
+      config.vm.provider "virtualbox" do |v|
+        v.name = "vagrant_xcat_node1"
+        v.check_guest_additions = false
+        v.memory = 256
+        v.cpus = 1
+        v.customize ["modifyvm", :id, "--cpuexecutioncap", "25"]
+      end
     end
-    
-  
-    # Enable provisioning with a shell script. Additional provisioners such as
-    # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
-    # documentation for more information about their specific syntax and use.
-    config.vm.provision "shell", inline: <<-SHELL
-      wget -O - "http://xcat.org/files/xcat/repos/apt/apt.key" | apt-key add -
-      echo "deb [arch=amd64] http://xcat.org/files/xcat/repos/apt/latest/xcat-core bionic main\ndeb [arch=amd64] http://xcat.org/files/xcat/repos/apt/latest/xcat-dep bionic main" > /etc/apt/sources.list.d/xcat.list
-      apt-get update
-      apt-get install -y xcat
-      source /etc/profile.d/xcat.sh
-      yes | sudo /opt/xcat/share/xcat/scripts/setup-local-client.sh vagrant
-      lsxcatd -a
-      sudo systemctl enable xcatd.service
-
-      # enable rest api ssl support
-      sudo a2enmod ssl
-      ln -s ../sites-available/default-ssl.conf  /etc/apache2/sites-enabled/ssl.conf
-      sudo service apache2 restart
-
-      # verify ssl is loaded
-      sudo apache2ctl -t -D DUMP_MODULES | grep ssl
-
-      apt-get install libjson-perl
-
-      # set password for root login
-      tabch key=xcat,username=root passwd.password=root
-
-      # add non root user
-      useradd -u 1101 user1
-      (echo 'pass'; echo 'pass') | passwd user1
-      tabch key=xcat,username=user1 passwd.password=pass
-      mkdef -t policy 6 name=user1 rule=allow
-
-    SHELL
-  end
-  
+end
