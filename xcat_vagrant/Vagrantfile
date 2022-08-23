@@ -8,95 +8,46 @@ set password for 'slurm'@'localhost' = password('slurmdbpass');
 grant usage on *.* to 'slurm'@'localhost';
 grant all privileges on slurm_acct_db.* to 'slurm'@'localhost';
 flush privileges;
+exit;
 BLOCK
 
 $SLURMCONF = <<-'BLOCK'
 ClusterName=cluster
 ControlMachine=slurm
 ControlAddr=192.168.56.9
-#ControlAddr=
-#BackupController=
-#BackupAddr=
-#
-SlurmUser=slurm
-#SlurmdUser=root
+SlurmUser=root
+SlurmdUser=root
 SlurmctldPort=6817
 SlurmdPort=6818
 AuthType=auth/munge
-#JobCredentialPrivateKey=
-#JobCredentialPublicCertificate=
-StateSaveLocation=/var/spool/slurm/ctld
-SlurmdSpoolDir=/var/spool/slurm/d
 SwitchType=switch/none
 MpiDefault=none
-SlurmctldPidFile=/var/run/slurmctld.pid
-SlurmdPidFile=/var/run/slurmd.pid
-ProctrackType=proctrack/pgid
-#PluginDir=
-#FirstJobId=
+SlurmctldPidFile=/var/run/slurm-llnl/slurmctld.pid
+SlurmdPidFile=/var/run/slurm-llnl/slurmd.pid
 ReturnToService=0
-#MaxJobCount=
-#PlugStackConfig=
-#PropagatePrioProcess=
-#PropagateResourceLimits=
-#PropagateResourceLimitsExcept=
-#Prolog=
-#Epilog=
-#SrunProlog=
-#SrunEpilog=
-#TaskProlog=
-#TaskEpilog=
-#TaskPlugin=
-#TrackWCKey=no
-#TreeWidth=50
-#TmpFS=
-#UsePAM=
-#
-# TIMERS
 SlurmctldTimeout=300
 SlurmdTimeout=300
 InactiveLimit=0
 MinJobAge=300
 KillWait=30
 Waittime=0
-#
-# SCHEDULING
 SchedulerType=sched/backfill
-#SchedulerAuth=
-#SelectType=select/linear
-#PriorityType=priority/multifactor
-#PriorityDecayHalfLife=14-0
-#PriorityUsageResetPeriod=14-0
-#PriorityWeightFairshare=100000
-#PriorityWeightAge=1000
-#PriorityWeightPartition=10000
-#PriorityWeightJobSize=1000
-#PriorityMaxAge=1-0
-#
-# LOGGING
 SlurmctldDebug=info
 SlurmctldLogFile=/var/log/slurmctld.log
 SlurmdDebug=info
 SlurmdLogFile=/var/log/slurmd.log
 JobCompType=jobcomp/none
-#JobCompLoc=
-#
-# ACCOUNTING
-#JobAcctGatherType=jobacct_gather/linux
-#JobAcctGatherFrequency=30
-#
-#AccountingStorageType=accounting_storage/slurmdbd
-#AccountingStorageHost=
-#AccountingStorageLoc=
-#AccountingStoragePass=
-#AccountingStorageUser=
-#
-
 
 # COMPUTE NODES
-NodeName=node[1-2] CPUs=1 State=UNKNOWN
+NodeName=node1 NodeAddr=192.168.56.11 CPUs=1 State=UNKNOWN
 PartitionName=debug Nodes=ALL Default=YES MaxTime=INFINITE State=UP
 BLOCK
+
+$HOSTS = <<-SHELL
+192.168.56.9 slurm
+192.168.56.10 xcat
+192.168.56.11 node1
+SHELL
 
 $PROVISION_SLURM = <<-SHELL
 apt-get update
@@ -107,7 +58,29 @@ EOF
 cat << EOF > /etc/slurm-llnl/slurm.conf
 #{$SLURMCONF}
 EOF
-exit
+cat << EOF >> /etc/hosts
+#{$HOSTS}
+EOF
+systemctl enable slurmctld.service
+systemctl start slurmctld.service
+SHELL
+
+$PROVISION_NODE = <<-SHELL
+apt-get update
+apt-get install -y slurmd
+cat << EOF > /etc/slurm-llnl/slurm.conf
+#{$SLURMCONF}
+EOF
+cat << EOF > /etc/slurm-llnl/cgroup.conf
+CgroupAutomount=yes
+ConstrainCores=no
+ConstrainRAMSpace=no
+EOF
+cat << EOF >> /etc/hosts
+#{$HOSTS}
+EOF
+systemctl enable slurmd.service
+systemctl start slurmd.service
 SHELL
 
 $PROVISION_XCAT = <<-SHELL
@@ -142,6 +115,10 @@ mkdef -t policy 6 name=user1 rule=allow
 # register node
 mkdef -t node node1 groups=all ip=192.168.56.11 installnic=mac primarynic=mac mac=aa:06:fd:af:4d:c9
 
+cat << EOF >> /etc/hosts
+#{$HOSTS}
+EOF
+
 SHELL
 
 Vagrant.configure("2") do |main|
@@ -160,7 +137,7 @@ Vagrant.configure("2") do |main|
         v.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
       end
     
-      config.vm.provision "shell", inline: $PROVVISION_XCAT
+      config.vm.provision "shell", inline: $PROVISION_XCAT
     end
 
     main.vm.define "slurm" do |config|
@@ -178,18 +155,24 @@ Vagrant.configure("2") do |main|
       end
 
       config.vm.provision "shell", inline: $PROVISION_SLURM
+
+      config.vm.provision "file", source: "./munge.key", destination: "/etc/munge/munge.key"
     end
 
     main.vm.define "node1" do |config|
-      config.vm.box = "generic/alpine38"
+      config.vm.box = "generic/ubuntu1804"
       config.vm.network "private_network", ip: "192.168.56.11", mac: "AA06FDAF4DC9"
       config.vm.hostname = "node1"
       config.vm.provider "virtualbox" do |v|
         v.name = "vagrant_trex_node1"
         v.check_guest_additions = false
-        v.memory = 256
+        v.memory = 1024
         v.cpus = 1
         v.customize ["modifyvm", :id, "--cpuexecutioncap", "25"]
       end
+
+      config.vm.provision "shell", inline: $PROVISION_NODE
+      
+      config.vm.provision "file", source: "./munge.key", destination: "/etc/munge/munge.key"
     end
 end
