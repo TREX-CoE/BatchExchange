@@ -47,14 +47,21 @@ void runCommand(boost::asio::io_context& ioc_, cw::batch::Cmd cmd, std::function
         boost::asio::async_read(*(process->pipe_err), boost::asio::dynamic_buffer(process->err), [](const boost::system::error_code &, std::size_t){});
     }
 
-    if ((cmd.opts & cw::batch::cmdopt::capture_stdout_stderr) == cw::batch::cmdopt::capture_stdout_stderr) {
-        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > *(process->pipe_out), bp::std_err > *(process->pipe_err), ioc_, process->group, bp::on_exit=cb);
-    } else if (cmd.opts & cw::batch::cmdopt::capture_stdout) {
-        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > *(process->pipe_out), bp::std_err > bp::null, ioc_, process->group, bp::on_exit=cb);
-    } else if (cmd.opts & cw::batch::cmdopt::capture_stderr) {
-        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_err > *(process->pipe_err), bp::std_out > bp::null, ioc_, process->group, bp::on_exit=cb);
-    } else {
-        process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > bp::null, bp::std_err > bp::null, ioc_, process->group, bp::on_exit=cb);
+    try {
+        if ((cmd.opts & cw::batch::cmdopt::capture_stdout_stderr) == cw::batch::cmdopt::capture_stdout_stderr) {
+            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > *(process->pipe_out), bp::std_err > *(process->pipe_err), ioc_, process->group, bp::on_exit=cb);
+        } else if (cmd.opts & cw::batch::cmdopt::capture_stdout) {
+            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > *(process->pipe_out), bp::std_err > bp::null, ioc_, process->group, bp::on_exit=cb);
+        } else if (cmd.opts & cw::batch::cmdopt::capture_stderr) {
+            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_err > *(process->pipe_err), bp::std_out > bp::null, ioc_, process->group, bp::on_exit=cb);
+        } else {
+            process->cp.emplace(bp::search_path(cmd.cmd), bp::args(cmd.args), bp::std_out > bp::null, bp::std_err > bp::null, ioc_, process->group, bp::on_exit=cb);
+        }
+    } catch (const bp::process_error& e) {
+        cw::batch::Result res;
+        res.ec = e.code();
+        resp(res);
+        return;
     }
 
     // has to be after process::child construction with process->cp.emplace

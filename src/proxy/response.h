@@ -171,7 +171,7 @@ resp getBatchInfoReturn(const error_wrapper& e, const cw::batch::BatchInfo& batc
 
 
 resp detectReturn(const error_wrapper& e, bool detected) {
-    if (e.ec() != std::error_code(error_type::command_not_found)) { // ignore notfound error as that simply means batch not detected
+    if (e.ec() && e.ec() != std::error_code(error_type::command_not_found)) { // ignore notfound error as that simply means batch not detected
         return json_error(e);
     } else {
         resp r;
