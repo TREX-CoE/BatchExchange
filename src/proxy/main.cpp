@@ -6,6 +6,7 @@
  *
  * wscat -n -c "wss://127.0.0.1:2000/"
  * {"command": "xcat/set", "user": "admin", "password": "admin", "host": "127.0.0.1", "port": 3000}
+ * {"command": "xcat/login", "user": "admin", "password": "admin", "host": "127.0.0.1", "port": 3000}
  * {"command": "login", "user": "admin", "password": "admin"}
  * {"command": "detect", "batchsystem": "slurm"}
  **/

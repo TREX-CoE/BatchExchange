@@ -79,6 +79,7 @@ const char* to_cstr(error_type type) {
         case error_type::xcat_user_missing: return "xcat user is not given";
         case error_type::xcat_password_missing: return "xcat password is not given";
         case error_type::xcat_token_missing: return "xcat token is not given";
+        case error_type::invalid_method: return "invalid http method";
         default: return "(unrecognized error)";
     }
 }
