@@ -75,11 +75,11 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fun
 
     boost_req->req.version(11);
     boost_req->req.method(method);
-    boost_req->req.target(host+req.uri);
+    boost_req->req.target("http://"+host+"/"+req.uri);
     boost_req->req.set(http::field::host, host);
     boost_req->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 
-    std::cout << "target " << host+req.uri << std::endl;
+    std::cout << "target " << host+"/"+req.uri << std::endl;
 
     // Look up the domain name
     boost_req->resolver.async_resolve(
@@ -167,7 +167,7 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fun
     );
 }
 
-void runHttps(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::function<void(::xcat::ApiCallResponse)> resp, unsigned int timeout_ms, std::string host, std::string port, boost::asio::ssl::context& ctx) {
+void runHttps(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::function<void(::xcat::ApiCallResponse)> resp, unsigned int timeout_ms, std::string host, std::string port, boost::asio::ssl::context ctx) {
 
     // Set up an HTTP GET request message
     auto method = convert_method(req.method);
@@ -183,11 +183,11 @@ void runHttps(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fu
 
     boost_req->req.version(11);
     boost_req->req.method(method);
-    boost_req->req.target(host+req.uri);
+    boost_req->req.target("https://"+host+"/"+req.uri);
     boost_req->req.set(http::field::host, host);
     boost_req->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 
-    std::cout << "target " << host+req.uri << std::endl;
+    std::cout << "target " << host+"/"+req.uri << std::endl;
 
     // Look up the domain name
     boost_req->resolver.async_resolve(

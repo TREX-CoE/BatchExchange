@@ -116,6 +116,7 @@ std::shared_ptr<BatchInterface> getBatch(boost::asio::io_context& ioc, const rap
 
 std::shared_ptr<::xcat::Xcat> getXcat(boost::asio::io_context& ioc, const rapidjson::Document& document, const Uri& uri, std::string token, std::string host, std::string port, std::error_code& ec) {
     bool ssl = true;
+    bool ssl_verify = false;
     if (uri.has_value()) {
         if (uri.query.count("host")) {
             host = uri.query.at("host");
@@ -128,6 +129,9 @@ std::shared_ptr<::xcat::Xcat> getXcat(boost::asio::io_context& ioc, const rapidj
         }
         if (uri.query.count("ssl")) {
             ssl = uri.query.at("ssl") != "false";
+        }
+        if (uri.query.count("ssl_verify")) {
+            ssl_verify = uri.query.at("ssl_verify") == "true";
         }
     }
 
@@ -148,6 +152,9 @@ std::shared_ptr<::xcat::Xcat> getXcat(boost::asio::io_context& ioc, const rapidj
         if (document.HasMember("ssl") && document["ssl"].IsBool()) {
             ssl = document["ssl"].GetBool();
         }
+        if (document.HasMember("ssl_verify") && document["ssl_verify"].IsBool()) {
+            ssl_verify = document["ssl_verify"].GetBool();
+        }
     }
 
 
@@ -163,8 +170,14 @@ std::shared_ptr<::xcat::Xcat> getXcat(boost::asio::io_context& ioc, const rapidj
         
 
     if (ssl) {
-        std::shared_ptr<::xcat::Xcat> xcat_session{new ::xcat::Xcat{[&ioc, host, port](::xcat::ApiCallRequest req, auto resp) {
-            cw::proxy::xcat::runHttp(ioc, req, resp, timeout_xcat_http, host, port);
+        std::shared_ptr<::xcat::Xcat> xcat_session{new ::xcat::Xcat{[&ioc, host, port, ssl_verify](::xcat::ApiCallRequest req, auto resp) {
+            boost::asio::ssl::context ctx{boost::asio::ssl::context::tlsv12_client};
+
+            // Verify the remote server's certificate
+            if (ssl_verify) ctx.set_verify_mode(boost::asio::ssl::verify_peer);
+
+            cw::proxy::xcat::runHttps(ioc, req, resp, timeout_xcat_http, host, port, std::move(ctx));
+
         }}};
         xcat_session->set_token(token);
         return xcat_session;

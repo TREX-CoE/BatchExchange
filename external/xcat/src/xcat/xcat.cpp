@@ -115,11 +115,11 @@ void Xcat::set_token(std::string token) {
 }
 
 void Xcat::login(std::string username, std::string password, std::function<void(std::string token, std::error_code ec)> cb) {
-    _func({HttpMethod::GET, "xcatws/tokens?userName="+username+"&userPW="+password, "", {}}, [cb](ApiCallResponse resp){
+    _func({HttpMethod::POST, "xcatws/tokens?userName="+username+"&userPW="+password, "", {}}, [cb](ApiCallResponse resp){
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
-            cb("", error::login_failed);
+            cb("", resp.ec);
         }
     });
 }
@@ -130,7 +130,7 @@ void Xcat::get_nodes(std::function<void(std::string, std::error_code ec)> cb) {
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
-            cb("", error::login_failed);
+            cb("", resp.ec);
         }
     });
 }
@@ -141,7 +141,7 @@ void Xcat::get_os_images(const std::vector<std::string> &filter, std::function<v
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
-            cb("", error::login_failed);
+            cb("", resp.ec);
         }
     });
 }
@@ -152,7 +152,7 @@ void Xcat::get_bootstate(const std::vector<std::string> &filter, std::function<v
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
-            cb("", error::login_failed);
+            cb("", resp.ec);
         }
     });
 }
@@ -163,7 +163,7 @@ void Xcat::set_bootstate(const std::vector<std::string> &filter, BootState bootS
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
-            cb("", error::login_failed);
+            cb("", resp.ec);
         }
     });
 }
@@ -174,7 +174,7 @@ void Xcat::power_nodes(const std::vector<std::string> &filter, std::function<voi
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
-            cb("", error::login_failed);
+            cb("", resp.ec);
         }
     });
 }
@@ -185,7 +185,7 @@ void Xcat::set_group_attributes(const std::vector<std::string> &filter, std::fun
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
-            cb("", error::login_failed);
+            cb("", resp.ec);
         }
     });
 }
@@ -196,7 +196,7 @@ void Xcat::get_groups(std::string group, std::function<void(std::string, std::er
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
-            cb("", error::login_failed);
+            cb("", resp.ec);
         }
     });
 }
