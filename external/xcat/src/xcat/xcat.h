@@ -54,6 +54,11 @@ struct BootState {
 
 using http_f = std::function<void(ApiCallRequest req, std::function<void(ApiCallResponse)> resp)>;
 
+struct TokenInfo {
+    std::string token;
+    unsigned long int expires;
+};
+
 class Xcat {
 private:
 	http_f _func;
@@ -64,7 +69,7 @@ public:
 	Xcat(http_f func);
     void set_host(std::string host, unsigned int port);
 
-    void login(std::string username, std::string password, std::function<void(std::string token, std::error_code ec)> cb);
+    void login(std::string username, std::string password, std::function<void(TokenInfo token, std::error_code ec)> cb);
     void set_token(std::string token);
 
     void get_nodes(std::function<void(std::string, std::error_code ec)> cb);

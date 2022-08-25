@@ -649,7 +649,7 @@ void f_xcat_login(CheckAuth check_auth, Send send, const rapidjson::Document& in
     auto xcat_session = getXcat(ioc, indocument, uri, token, "", "", ec_session);
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
 
-    xcat_session->login(user, password, [xcat_session, send](std::string t, std::error_code ec) mutable {
+    xcat_session->login(user, password, [xcat_session, send](auto t, std::error_code ec) mutable {
         return send(response::xcatTokenReturn(error_wrapper(ec), t));
     });
 }
@@ -675,7 +675,9 @@ void f_xcat_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document&
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
 
     xcat_session->get_nodes([xcat_session, send](std::string t, std::error_code ec) mutable {
-        return send(response::xcatTokenReturn(error_wrapper(ec), t));
+        (void)t;
+        (void)ec;
+        //return send(response::xcatTokenReturn(error_wrapper(ec), ""));
     });
 }
 

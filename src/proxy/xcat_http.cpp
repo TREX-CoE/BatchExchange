@@ -53,6 +53,37 @@ boost::beast::http::verb convert_method(xcat::HttpMethod method) {
     }
 }
 
+std::error_code requestConvert(::xcat::ApiCallRequest& req, http::request<http::string_body>& reqOut, std::string host, std::string port, bool https) {
+    auto method = convert_method(req.method);
+    if (method == boost::beast::http::verb::unknown) {
+        return cw::error::error_type::invalid_method;
+    }
+    reqOut.version(11);
+    reqOut.method(method);
+    reqOut.target(std::string(https ? "https://" : "http://")+host+":"+port+req.uri);
+    reqOut.set(http::field::host, host);
+    reqOut.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
+    for (auto const& p : req.headers) {
+        reqOut.set(p.first, p.second);
+    }
+
+    reqOut.body() = req.body;
+    reqOut.prepare_payload();
+
+    return {};
+}
+
+::xcat::ApiCallResponse responseConvert(http::response<http::string_body> res) {
+    ::xcat::ApiCallResponse out;
+    out.status_code = res.result_int();
+    out.body = res.body();
+    for (const auto& h : res.base()) {
+        out.headers[std::string(h.name_string())] = std::string(h.value());
+    }
+    return out;
+}
+
 }
 
 namespace cw {
@@ -60,26 +91,15 @@ namespace proxy {
 namespace xcat {
 
 void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::function<void(::xcat::ApiCallResponse)> resp, unsigned int timeout_ms, std::string host, std::string port) {
-
-    // Set up an HTTP GET request message
-    auto method = convert_method(req.method);
-    if (method == boost::beast::http::verb::unknown) {
+    // run batchsystem command asynchronously
+    std::shared_ptr<Request> boost_req{new Request{boost::asio::ip::tcp::resolver{make_strand(ioc_.get_executor())}, boost::beast::tcp_stream{make_strand(ioc_.get_executor())}, {}, {}, {}}};
+    auto ec_convert = requestConvert(req, boost_req->req, host, port, false);
+    if (ec_convert) {
         ::xcat::ApiCallResponse res;
-        res.ec = cw::error::error_type::invalid_method;
+        res.ec = ec_convert;
         resp(res);
         return;
     }
-
-    // run batchsystem command asynchronously
-    std::shared_ptr<Request> boost_req{new Request{boost::asio::ip::tcp::resolver{make_strand(ioc_.get_executor())}, boost::beast::tcp_stream{make_strand(ioc_.get_executor())}, {}, {}, {}}};
-
-    boost_req->req.version(11);
-    boost_req->req.method(method);
-    boost_req->req.target("http://"+host+"/"+req.uri);
-    boost_req->req.set(http::field::host, host);
-    boost_req->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-
-    std::cout << "target " << host+"/"+req.uri << std::endl;
 
     // Look up the domain name
     boost_req->resolver.async_resolve(
@@ -134,9 +154,6 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fun
                                         return;
                                     }
 
-                                    // Write the message to standard out
-                                    std::cout << boost_req->res << std::endl;
-
                                     // Gracefully close the socket
                                     boost_req->stream.socket().shutdown(tcp::socket::shutdown_both, ec_read);
 
@@ -148,10 +165,7 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fun
                                         return;
                                     }
 
-                                    ::xcat::ApiCallResponse res;
-                                    res.status_code = boost_req->res.result_int();
-                                    std::cout << res.status_code << " " << res.body << std::endl;
-                                    resp(res);
+                                    resp(responseConvert(boost_req->res));
 
                                     // If we get here then the connection is closed gracefully
 
@@ -169,25 +183,14 @@ void runHttp(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fun
 
 void runHttps(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::function<void(::xcat::ApiCallResponse)> resp, unsigned int timeout_ms, std::string host, std::string port, boost::asio::ssl::context ctx) {
 
-    // Set up an HTTP GET request message
-    auto method = convert_method(req.method);
-    if (method == boost::beast::http::verb::unknown) {
+    std::shared_ptr<RequestSSL> boost_req{new RequestSSL{boost::asio::ip::tcp::resolver{make_strand(ioc_.get_executor())}, beast::ssl_stream<beast::tcp_stream>{make_strand(ioc_.get_executor()), ctx}, {}, {}, {}}};
+    auto ec_convert = requestConvert(req, boost_req->req, host, port, true);
+    if (ec_convert) {
         ::xcat::ApiCallResponse res;
-        res.ec = cw::error::error_type::invalid_method;
+        res.ec = ec_convert;
         resp(res);
         return;
     }
-
-    // run batchsystem command asynchronously
-    std::shared_ptr<RequestSSL> boost_req{new RequestSSL{boost::asio::ip::tcp::resolver{make_strand(ioc_.get_executor())}, beast::ssl_stream<beast::tcp_stream>{make_strand(ioc_.get_executor()), ctx}, {}, {}, {}}};
-
-    boost_req->req.version(11);
-    boost_req->req.method(method);
-    boost_req->req.target("https://"+host+"/"+req.uri);
-    boost_req->req.set(http::field::host, host);
-    boost_req->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-
-    std::cout << "target " << host+"/"+req.uri << std::endl;
 
     // Look up the domain name
     boost_req->resolver.async_resolve(
@@ -250,9 +253,6 @@ void runHttps(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fu
                                             return;
                                         }
 
-                                        // Write the message to standard out
-                                        std::cout << boost_req->res << std::endl;
-
                                         // Gracefully close the socket
                                         beast::get_lowest_layer(boost_req->stream).socket().shutdown(tcp::socket::shutdown_both, ec_read);
 
@@ -264,10 +264,7 @@ void runHttps(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fu
                                             return;
                                         }
 
-                                        ::xcat::ApiCallResponse res;
-                                        res.status_code = boost_req->res.result_int();
-                                        std::cout << res.status_code << " " << res.body << std::endl;
-                                        resp(res);
+                                        resp(responseConvert(boost_req->res));
 
                                         // If we get here then the connection is closed gracefully
 

@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+#define RAPIDJSON_HAS_STDSTRING 1
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
@@ -114,12 +115,26 @@ void Xcat::set_token(std::string token) {
     _token = token;
 }
 
-void Xcat::login(std::string username, std::string password, std::function<void(std::string token, std::error_code ec)> cb) {
-    _func({HttpMethod::POST, "xcatws/tokens?userName="+username+"&userPW="+password, "", {}}, [cb](ApiCallResponse resp){
-        if (resp.status_code == 200) {
-            cb(resp.body, {});
+void Xcat::login(std::string username, std::string password, std::function<void(TokenInfo token, std::error_code ec)> cb) {
+    _func({HttpMethod::POST, "/xcatws/tokens", "{\"userName\":\""+username+"\",\"userPW\":\""+password+"\"}", {{"Content-Type", "application/json"}}}, [cb](ApiCallResponse resp){
+        if (resp.ec) {
+            cb({}, resp.ec);
+        } else if (resp.status_code == 201) {
+            rapidjson::Document indocument;
+            indocument.Parse(resp.body);
+            if (!indocument.HasParseError() && indocument.HasMember("token") && indocument["token"].IsObject() && indocument["token"].HasMember("id") && indocument["token"]["id"].IsString()) {
+                TokenInfo info;
+                info.token = indocument["token"]["id"].GetString();
+                info.expires = 0;
+                if (indocument["token"].HasMember("expire") && indocument["token"]["expire"].IsString()) {
+                    info.expires = 1;
+                }
+                cb(info, {});
+            } else {
+                cb({}, error::login_failed);
+            }
         } else {
-            cb("", resp.ec);
+            cb({}, error::login_failed);
         }
     });
 }

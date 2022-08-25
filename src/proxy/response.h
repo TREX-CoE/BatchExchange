@@ -17,6 +17,7 @@
 #include "proxy/build_data.h"
 #include "proxy/error.h"
 #include "proxy/error_wrapper.h"
+#include "xcat/xcat.h"
 
 namespace {
 
@@ -188,7 +189,7 @@ resp detectReturn(const error_wrapper& e, bool detected) {
     }
 }
 
-resp xcatTokenReturn(const error_wrapper& e, std::string token) {
+resp xcatTokenReturn(const error_wrapper& e, ::xcat::TokenInfo token) {
     if (e.ec()) {
         return json_error(e);
     } else {
@@ -199,7 +200,7 @@ resp xcatTokenReturn(const error_wrapper& e, std::string token) {
         {
             rapidjson::Value data;
             data.SetObject();
-            data.AddMember("token", token, allocator);
+            data.AddMember("token", token.token, allocator);
             r.first.AddMember("data", data, allocator);
         }
         return r;
