@@ -59,6 +59,16 @@ struct TokenInfo {
     unsigned long int expires;
 };
 
+struct NodeInfo {
+    std::string name;
+    std::string postscripts;
+    std::string postbootscripts;
+    std::string installnic;
+    std::string primarynic;
+    std::string mac;
+    std::string groups;
+};
+
 class Xcat {
 private:
 	http_f _func;
@@ -72,7 +82,7 @@ public:
     void login(std::string username, std::string password, std::function<void(TokenInfo token, std::error_code ec)> cb);
     void set_token(std::string token);
 
-    void get_nodes(std::function<void(std::string, std::error_code ec)> cb);
+    void get_nodes(std::function<void(std::map<std::string, NodeInfo>, std::error_code ec)> cb);
     void get_os_images(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
     void get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
     void power_nodes(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);

@@ -155,13 +155,31 @@ void Xcat::login(std::string username, std::string password, std::function<void(
     });
 }
 
-void Xcat::get_nodes(std::function<void(std::string, std::error_code ec)> cb) {
+void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::GET, "xcatws/nodes", "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
-        if (resp.status_code == 200) {
-            cb(resp.body, {});
+    _func({HttpMethod::GET, "/xcatws/nodes/ALLRESOURCES", "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+        if (resp.ec) {
+            cb({}, resp.ec);
+        } else if (resp.status_code == 200) {
+            rapidjson::Document indocument;
+            indocument.Parse(resp.body);
+            if (!indocument.HasParseError() && indocument.IsObject()) {
+                std::map<std::string, NodeInfo> nodes;
+                for (const auto& p : indocument.GetObject()) {
+                    NodeInfo info;
+                    info.name = p.name.GetString();
+
+                    const auto& o = p.value.GetObject();
+                    if (o.HasMember("groups") && o["groups"].IsString()) info.groups = o["groups"].GetString();
+                    nodes[info.name] = info;
+                }
+
+                cb(nodes, {});
+            } else {
+                cb({}, error::login_failed);
+            }
         } else {
-            cb("", resp.ec);
+            cb({}, error::login_failed);
         }
     });
 }

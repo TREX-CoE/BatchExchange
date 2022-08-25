@@ -201,11 +201,30 @@ resp xcatTokenReturn(const error_wrapper& e, ::xcat::TokenInfo token) {
             rapidjson::Value data;
             data.SetObject();
             data.AddMember("token", token.token, allocator);
+            data.AddMember("expires", token.expires, allocator);
             r.first.AddMember("data", data, allocator);
         }
         return r;
     }
 }
+
+resp xcatNodesReturn(const error_wrapper& e, std::map<std::string, ::xcat::NodeInfo> nodes) {
+    if (e.ec()) {
+        return json_error(e);
+    } else {
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.second = boost::beast::http::status::ok;
+        r.first.SetObject();
+        {
+            rapidjson::Value data;
+            data.SetObject();
+            r.first.AddMember("data", data, allocator);
+        }
+        return r;
+    }
+}
+
 
 
 resp runJobReturn(const error_wrapper& e, const std::string& jobName) {
