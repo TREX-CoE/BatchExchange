@@ -9,6 +9,7 @@
  * {"command": "xcat/set", "user": "admin", "password": "admin", "host": "127.0.0.1", "port": 3000}
  * {"command": "xcat/login", "user": "admin", "password": "admin", "host": "127.0.0.1", "port": 3000}
  * {"command": "detect", "batchsystem": "slurm"}
+ * {"command": "xcat/login", "user": "root", "password": "root", "host": "192.168.56.10", "port": 443}
  **/
 
 #include <signal.h>

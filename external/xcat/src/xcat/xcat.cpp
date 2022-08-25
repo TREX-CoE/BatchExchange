@@ -1,6 +1,10 @@
 #include "xcat.h"
 
 #include <iostream>
+#include <algorithm>
+#include <string>
+#include <sstream>
+#include <iomanip>
 
 #define RAPIDJSON_HAS_STDSTRING 1
 #include "rapidjson/document.h"
@@ -12,6 +16,15 @@
 namespace {
 
 using namespace xcat;
+
+static inline bool timeToEpoch(const std::string& isoDatetime, std::time_t& epoch, const char* format) {
+	std::istringstream ss(isoDatetime);
+	std::tm t{};
+	ss >> std::get_time(&t, format);
+	if (ss.fail()) return false;
+	epoch = mktime(&t);
+	return true;
+}
 
 /**
  * @brief Check json output for errors
@@ -127,7 +140,10 @@ void Xcat::login(std::string username, std::string password, std::function<void(
                 info.token = indocument["token"]["id"].GetString();
                 info.expires = 0;
                 if (indocument["token"].HasMember("expire") && indocument["token"]["expire"].IsString()) {
-                    info.expires = 1;
+                    time_t time;
+                    if (timeToEpoch(indocument["token"]["expire"].GetString(), time, "%Y-%m-%d %H:%M:%S")) {
+                        time = static_cast<unsigned long int>(info.expires);
+                    }
                 }
                 cb(info, {});
             } else {
