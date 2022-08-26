@@ -219,6 +219,20 @@ resp xcatNodesReturn(const error_wrapper& e, std::map<std::string, ::xcat::NodeI
         {
             rapidjson::Value data;
             data.SetObject();
+            for (const auto& p : nodes) {
+                rapidjson::Value node;
+                node.SetObject();
+                node.AddMember("name", p.second.name, allocator);
+                node.AddMember("postscripts", p.second.postscripts, allocator);
+                node.AddMember("postbootscripts", p.second.postbootscripts, allocator);
+                node.AddMember("installnic", p.second.installnic, allocator);
+                node.AddMember("primarynic", p.second.primarynic, allocator);
+                node.AddMember("mac", p.second.mac, allocator);
+                node.AddMember("groups", p.second.groups, allocator);
+
+                rapidjson::Value key(p.first.c_str(), allocator);
+                data.AddMember(key, node, allocator);
+            }
             r.first.AddMember("data", data, allocator);
         }
         return r;

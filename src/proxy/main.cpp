@@ -6,10 +6,10 @@
  *
  * wscat -n -c "wss://127.0.0.1:2000/"
  * {"command": "login", "user": "admin", "password": "admin"}
- * {"command": "xcat/set", "user": "admin", "password": "admin", "host": "127.0.0.1", "port": 3000}
- * {"command": "xcat/login", "user": "admin", "password": "admin", "host": "127.0.0.1", "port": 3000}
  * {"command": "detect", "batchsystem": "slurm"}
+ * {"command": "xcat/set", "user": "root", "password": "root", "host": "192.168.56.10", "port": 443, "ssl": true, "ssl_verify": false}
  * {"command": "xcat/login", "user": "root", "password": "root", "host": "192.168.56.10", "port": 443}
+ * {"command": "xcat/getNodes"}
  **/
 
 #include <signal.h>

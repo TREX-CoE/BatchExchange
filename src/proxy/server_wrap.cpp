@@ -21,18 +21,15 @@ struct Handler {
         boost::optional<cw::batch::System> selectedSystem;
         std::function<void(std::string)> send_;
 
-        std::string xcat_token;
-        std::string xcat_host;
-        std::string xcat_port;
-        std::string xcat_user;
-        std::string xcat_password;
+        cw::proxy::XcatOptions xcat_opts;
+
         template <class Session>
         static void init(Session& self) { (void)self; } // NOTE: storing std::function for send would cause leak for some reason
     };
 
     template <class Session>
     static void handle_socket(Session& self, std::string input) {
-        cw::proxy::handler::ws([session=self.shared_from_this()](std::string s){session->send(s);}, self.ioc(), input, self.scopes, self.user, self.selectedSystem, self.xcat_token, self.xcat_host, self.xcat_port, self.xcat_user, self.xcat_password);
+        cw::proxy::handler::ws([session=self.shared_from_this()](std::string s){session->send(s);}, self.ioc(), input, self.scopes, self.user, self.selectedSystem, self.xcat_opts);
     }
 
     template<class Session>

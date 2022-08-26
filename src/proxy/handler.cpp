@@ -114,78 +114,34 @@ std::shared_ptr<BatchInterface> getBatch(boost::asio::io_context& ioc, const rap
     });
 }
 
-std::shared_ptr<::xcat::Xcat> getXcat(boost::asio::io_context& ioc, const rapidjson::Document& document, const Uri& uri, std::string token, std::string host, std::string port, std::error_code& ec) {
-    bool ssl = true;
-    bool ssl_verify = false;
-    if (uri.has_value()) {
-        if (uri.query.count("host")) {
-            host = uri.query.at("host");
-        }
-        if (uri.query.count("port")) {
-            port = uri.query.at("port");
-        }
-        if (uri.query.count("token")) {
-            token = uri.query.at("token");
-        }
-        if (uri.query.count("ssl")) {
-            ssl = uri.query.at("ssl") != "false";
-        }
-        if (uri.query.count("ssl_verify")) {
-            ssl_verify = uri.query.at("ssl_verify") == "true";
-        }
-    }
+std::shared_ptr<::xcat::Xcat> getXcat(boost::asio::io_context& ioc, const cw::proxy::XcatOptions& opts, std::error_code& ec) {
 
-    if (document.IsObject()) {
-        if (document.HasMember("host") && document["host"].IsString()) {
-            host = document["host"].GetString();
-        }
-        if (document.HasMember("port")) {
-            if (document["port"].IsString()) {
-                port = document["port"].GetString();
-            } else if (document["port"].IsInt()) {
-                port = std::to_string(document["port"].GetInt());
-            }
-        }
-        if (document.HasMember("token") && document["token"].IsString()) {
-            token = document["token"].GetString();
-        }
-        if (document.HasMember("ssl") && document["ssl"].IsBool()) {
-            ssl = document["ssl"].GetBool();
-        }
-        if (document.HasMember("ssl_verify") && document["ssl_verify"].IsBool()) {
-            ssl_verify = document["ssl_verify"].GetBool();
-        }
-    }
-
-
-    if (host.empty()) {
+    if (opts.host.empty()) {
         ec = error_type::xcat_host_missing;
         return nullptr;
     }
-    if (port.empty()) {
+    if (opts.port.empty()) {
         ec = error_type::xcat_port_missing;
         return nullptr;
-    }
+    } 
 
-        
-
-    if (ssl) {
-        std::shared_ptr<::xcat::Xcat> xcat_session{new ::xcat::Xcat{[&ioc, host, port, ssl_verify](::xcat::ApiCallRequest req, auto resp) {
+    if (opts.ssl) {
+        std::shared_ptr<::xcat::Xcat> xcat_session{new ::xcat::Xcat{[&ioc, opts](::xcat::ApiCallRequest req, auto resp) {
             boost::asio::ssl::context ctx{boost::asio::ssl::context::tlsv12_client};
 
             // Verify the remote server's certificate
-            if (ssl_verify) ctx.set_verify_mode(boost::asio::ssl::verify_peer);
+            if (opts.ssl_verify) ctx.set_verify_mode(boost::asio::ssl::verify_peer);
 
-            cw::proxy::xcat::runHttps(ioc, req, resp, timeout_xcat_http, host, port, std::move(ctx));
+            cw::proxy::xcat::runHttps(ioc, req, resp, timeout_xcat_http, opts.host, opts.port, std::move(ctx));
 
         }}};
-        xcat_session->set_token(token);
+        xcat_session->set_token(opts.token);
         return xcat_session;
     } else {
-        std::shared_ptr<::xcat::Xcat> xcat_session{new ::xcat::Xcat{[&ioc, host, port](::xcat::ApiCallRequest req, auto resp) {
-            cw::proxy::xcat::runHttp(ioc, req, resp, timeout_xcat_http, host, port);
+        std::shared_ptr<::xcat::Xcat> xcat_session{new ::xcat::Xcat{[&ioc, opts](::xcat::ApiCallRequest req, auto resp) {
+            cw::proxy::xcat::runHttp(ioc, req, resp, timeout_xcat_http, opts.host, opts.port);
         }}};
-        xcat_session->set_token(token);
+        xcat_session->set_token(opts.token);
         return xcat_session;
     }
 }
@@ -223,26 +179,68 @@ response::resp ws_setBatchsystem(boost::optional<System>& system, const rapidjso
     return response::commandSuccess();
 }
 
-response::resp ws_xcat_set(std::string& xcat_token, std::string& xcat_host, std::string& xcat_port, std::string& xcat_user, std::string& xcat_password, const rapidjson::Document& indocument) {
+std::error_code xcat_get_opts_uri(const Uri& uri, cw::proxy::XcatOptions& opts) {
+    if (uri.has_value()) {
+        if (uri.query.count("host")) {
+            opts.host = uri.query.at("host");
+        }
+        if (uri.query.count("port")) {
+            opts.port = uri.query.at("port");
+        }
+        if (uri.query.count("token")) {
+            opts.token = uri.query.at("token");
+        }
+        if (uri.query.count("user")) {
+            opts.user = uri.query.at("user");
+        }
+        if (uri.query.count("password")) {
+            opts.password = uri.query.at("password");
+        }
+        if (uri.query.count("ssl")) {
+            opts.ssl = uri.query.at("ssl") != "false";
+        }
+        if (uri.query.count("ssl_verify")) {
+            opts.ssl_verify = uri.query.at("ssl_verify") == "true";
+        }
+    }
+    return {};
+}
+
+std::error_code xcat_get_opts_json(const rapidjson::Document& indocument, cw::proxy::XcatOptions& opts) {
     if (indocument.HasMember("host") && indocument["host"].IsString()) {
-        xcat_host = indocument["host"].GetString();
+        opts.host = indocument["host"].GetString();
     }
     if (indocument.HasMember("port")) {
         if (indocument["port"].IsString()) {
-            xcat_port = indocument["port"].GetString();
+            opts.port = indocument["port"].GetString();
         } else if (indocument["port"].IsInt()) {
-            xcat_port = std::to_string(indocument["port"].GetInt());
+            opts.port = std::to_string(indocument["port"].GetInt());
         }
     }
     if (indocument.HasMember("token") && indocument["token"].IsString()) {
-        xcat_token = indocument["token"].GetString();
+        opts.token = indocument["token"].GetString();
     }
     if (indocument.HasMember("user") && indocument["user"].IsString()) {
-        xcat_user = indocument["user"].GetString();
+        opts.user = indocument["user"].GetString();
     }
     if (indocument.HasMember("password") && indocument["password"].IsString()) {
-        xcat_password = indocument["password"].GetString();
+        opts.password = indocument["password"].GetString();
     }
+    if (indocument.HasMember("expires") && indocument["expires"].IsUint()) {
+        opts.expires = indocument["expires"].GetUint();
+    }
+    if (indocument.HasMember("ssl") && indocument["ssl"].IsBool()) {
+        opts.ssl = indocument["ssl"].GetBool();
+    }
+    if (indocument.HasMember("ssl_verify") && indocument["ssl_verify"].IsBool()) {
+        opts.ssl_verify = indocument["ssl_verify"].GetBool();
+    }
+    return {};
+}
+
+response::resp ws_xcat_set(cw::proxy::XcatOptions& opts, const rapidjson::Document& indocument) {
+    auto ec = xcat_get_opts_json(indocument, opts);
+    if (ec) return response::json_error(error_wrapper(ec));
     return response::commandSuccess();
 }
 
@@ -620,58 +618,40 @@ void f_detect(CheckAuth check_auth, Send send, const rapidjson::Document& indocu
 }
 
 template <typename CheckAuth, typename Send>
-void f_xcat_login(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, std::string& token, boost::asio::io_context& ioc) {
+void f_xcat_login(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
     if (!check_auth({"xcat_login"})) return;
 
-    std::string user;
-    std::string password;
-    if (uri.has_value()) {
-        if (uri.query.count("user")) {
-            user = uri.query.at("user");
-        }
-        if (uri.query.count("password")) {
-            password = uri.query.at("password");
-        }
-    }
-
-    if (indocument.IsObject()) {
-        if (indocument.HasMember("user") && indocument["user"].IsString()) {
-            user = indocument["user"].GetString();
-        }
-        if (indocument.HasMember("password") && indocument["password"].IsString()) {
-            password = indocument["password"].GetString();
-        }
-    }
-    if (user.empty()) return send(response::json_error(error_wrapper(error_type::xcat_user_missing)));
-    if (password.empty()) return send(response::json_error(error_wrapper(error_type::xcat_password_missing)));
+    xcat_get_opts_uri(uri, opts);
+    xcat_get_opts_json(indocument, opts);
+    if (opts.user.empty()) return send(response::json_error(error_wrapper(error_type::xcat_user_missing)));
+    if (opts.password.empty()) return send(response::json_error(error_wrapper(error_type::xcat_password_missing)));
 
     std::error_code ec_session;
-    auto xcat_session = getXcat(ioc, indocument, uri, token, "", "", ec_session);
+    auto xcat_session = getXcat(ioc, opts, ec_session);
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
 
-    xcat_session->login(user, password, [xcat_session, send](auto t, std::error_code ec) mutable {
+    xcat_session->login(opts.user, opts.password, [xcat_session, send, &opts](auto t, std::error_code ec) mutable {
+        // store token
+        opts.token = t.token;
+        opts.expires = t.expires;
         return send(response::xcatTokenReturn(error_wrapper(ec), t));
     });
 }
 
 template <typename CheckAuth, typename Send>
-void f_xcat_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, std::string token, boost::asio::io_context& ioc) {
+void f_xcat_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
     if (!check_auth({"xcat_nodes"})) return;
 
-    if (uri.has_value() && uri.query.count("token")) {
-        token = uri.query.at("token");
-    }
+    xcat_get_opts_uri(uri, opts);
+    xcat_get_opts_json(indocument, opts);
 
-    if (indocument.IsObject() && indocument.HasMember("token") && indocument["token"].IsString()) {
-        token = indocument["token"].GetString();
-    }
-    if (token.empty()) {
+    if (opts.token.empty()) {
         send(response::json_error(error_wrapper(error_type::xcat_token_missing)));
         return;
     }
 
     std::error_code ec_session;
-    auto xcat_session = getXcat(ioc, indocument, uri, token, "", "", ec_session);
+    auto xcat_session = getXcat(ioc, opts, ec_session);
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
 
     xcat_session->get_nodes([xcat_session, send](auto nodes, std::error_code ec) mutable {
@@ -688,7 +668,7 @@ namespace handler {
 namespace beast = boost::beast;                 // from <boost/beast.hpp>
 namespace http = beast::http;                   // from <boost/beast/http.hpp>
 
-void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, std::string input, std::set<std::string>& scopes, std::string& user, boost::optional<System>& selectedSystem, std::string& xcat_token, std::string& xcat_host, std::string& xcat_port, std::string& xcat_user, std::string& xcat_password) {
+void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, std::string input, std::set<std::string>& scopes, std::string& user, boost::optional<System>& selectedSystem, cw::proxy::XcatOptions& xcat_opts) {
     cw::helper::uri::Uri url;
 
     rapidjson::Document indocument;
@@ -784,11 +764,11 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         } else if (command == "rescheduleJob") {
             f_rescheduleRunningJobInQueue(check_auth, send, indocument, url, selectedSystem, ioc);
         } else if (command == "xcat/login") {
-            f_xcat_login(check_auth, send, indocument, url, xcat_token, ioc);
+            f_xcat_login(check_auth, send, indocument, url, xcat_opts, ioc);
         } else if (command == "xcat/getNodes") {
-            f_xcat_getNodes(check_auth, send, indocument, url, xcat_token, ioc);
+            f_xcat_getNodes(check_auth, send, indocument, url, xcat_opts, ioc);
         } else if (command == "xcat/set") {
-            send(ws_xcat_set(xcat_token, xcat_host, xcat_port, xcat_user, xcat_password, indocument));
+            send(ws_xcat_set(xcat_opts, indocument));
         } else {
             send(response::json_error(error_wrapper(error_type::socket_command_unknown).with_msg(command)));
         }
@@ -918,10 +898,12 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
             f_rescheduleRunningJobInQueue(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "login") {
             if (!check_json(indocument)) return;
-            std::string token;
-            f_xcat_login(check_auth, send, indocument, url, token, ioc);
+            cw::proxy::XcatOptions opts;
+            f_xcat_login(check_auth, send, indocument, url, opts, ioc);
         } else if (req.method() == http::verb::get && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "nodes") {
-            f_xcat_getNodes(check_auth, send, indocument, url, "", ioc);
+            check_json(indocument);
+            cw::proxy::XcatOptions opts;
+            f_xcat_getNodes(check_auth, send, indocument, url, opts, ioc);
         } else {
             send(response::json_error(error_wrapper(error_type::request_unknown).with_msg(std::string(boost::beast::http::to_string(req.method())) + " " + std::string(req.target()))));
         }

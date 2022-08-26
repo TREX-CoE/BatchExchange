@@ -170,6 +170,11 @@ void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, std::er
                     info.name = p.name.GetString();
 
                     const auto& o = p.value.GetObject();
+                    if (o.HasMember("postscripts") && o["postscripts"].IsString()) info.postscripts = o["postscripts"].GetString();
+                    if (o.HasMember("postbootscripts") && o["postbootscripts"].IsString()) info.postbootscripts = o["postbootscripts"].GetString();
+                    if (o.HasMember("installnic") && o["installnic"].IsString()) info.installnic = o["installnic"].GetString();
+                    if (o.HasMember("primarynic") && o["primarynic"].IsString()) info.primarynic = o["primarynic"].GetString();
+                    if (o.HasMember("mac") && o["mac"].IsString()) info.mac = o["mac"].GetString();
                     if (o.HasMember("groups") && o["groups"].IsString()) info.groups = o["groups"].GetString();
                     nodes[info.name] = info;
                 }
