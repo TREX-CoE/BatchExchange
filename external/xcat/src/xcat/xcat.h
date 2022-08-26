@@ -13,6 +13,8 @@ enum class error {
     login_failed = 1,
     no_token,
     api_error,
+    get_nodes_failed,
+    get_groups_failed,
 };
 
 
@@ -47,11 +49,6 @@ struct ApiCallResponse {
     std::error_code ec;
 };
 
-
-struct BootState {
-    std::string osImage;
-};
-
 using http_f = std::function<void(ApiCallRequest req, std::function<void(ApiCallResponse)> resp)>;
 
 struct TokenInfo {
@@ -69,6 +66,13 @@ struct NodeInfo {
     std::string groups;
 };
 
+struct GroupInfo {
+    std::string name;
+    std::string mgt;
+    std::string netboot;
+    std::vector<std::string> members;
+};
+
 class Xcat {
 private:
 	http_f _func;
@@ -83,12 +87,12 @@ public:
     void set_token(std::string token);
 
     void get_nodes(std::function<void(std::map<std::string, NodeInfo>, std::error_code ec)> cb);
+    void get_groups(std::string group, std::function<void(std::map<std::string, GroupInfo>, std::error_code ec)> cb);
     void get_os_images(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
     void get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
-    void power_nodes(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
-    void set_bootstate(const std::vector<std::string> &filter, BootState state, std::function<void(std::string, std::error_code ec)> cb);
-    void set_group_attributes(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
-    void get_groups(std::string group, std::function<void(std::string, std::error_code ec)> cb);
+    void power_nodes(const std::vector<std::string> &filter, std::string action, std::function<void(std::string, std::error_code ec)> cb);
+    void set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(std::string, std::error_code ec)> cb);
+    void set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(std::string, std::error_code ec)> cb);
 }; 
 
 

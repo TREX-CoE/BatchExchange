@@ -8,7 +8,9 @@
  * {"command": "login", "user": "admin", "password": "admin"}
  * {"command": "detect", "batchsystem": "slurm"}
  * {"command": "xcat/set", "user": "root", "password": "root", "host": "192.168.56.10", "port": 443, "ssl": true, "ssl_verify": false}
- * {"command": "xcat/login", "user": "root", "password": "root", "host": "192.168.56.10", "port": 443}
+ * {"command": "xcat/login"}
+ * {"command": "xcat/setBootstate", "osimage": "hpc.iso"}
+ * {"command": "xcat/setPowerstate", "action": "reset"}
  * {"command": "xcat/getNodes"}
  **/
 

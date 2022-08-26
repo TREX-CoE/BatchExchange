@@ -17,6 +17,22 @@ namespace {
 
 using namespace xcat;
 
+std::string jsonToString(const rapidjson::Document& document) {
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    document.Accept(writer);
+    return buffer.GetString();
+}
+
+std::vector<std::string> split(const std::string& s, char del) {
+   std::vector<std::string> out;
+   std::string token;
+   std::istringstream stream(s);
+   while (std::getline(stream, token, del)) out.push_back(std::move(token));
+   return out;
+}
+
+
 static inline bool timeToEpoch(const std::string& isoDatetime, std::time_t& epoch, const char* format) {
 	std::istringstream ss(isoDatetime);
 	std::tm t{};
@@ -85,6 +101,8 @@ int check_errors(const std::string &o) {
 const char* to_cstr(error type) {
   switch (type) {
       case error::login_failed: return "login failed";
+      case error::get_nodes_failed: return "get nodes failed";
+      case error::get_groups_failed: return "get groups failed";
       case error::no_token: return "no token for authentication set";
       case error::api_error: return "api error";
       default: return "(unrecognized error)";
@@ -169,6 +187,11 @@ void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, std::er
                     NodeInfo info;
                     info.name = p.name.GetString();
 
+                    if (info.name == "info" && !p.value.IsObject()) {
+                        // "Could not find any object definitions to display."
+                        continue;
+                    }
+
                     const auto& o = p.value.GetObject();
                     if (o.HasMember("postscripts") && o["postscripts"].IsString()) info.postscripts = o["postscripts"].GetString();
                     if (o.HasMember("postbootscripts") && o["postbootscripts"].IsString()) info.postbootscripts = o["postbootscripts"].GetString();
@@ -181,17 +204,17 @@ void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, std::er
 
                 cb(nodes, {});
             } else {
-                cb({}, error::login_failed);
+                cb({}, error::get_nodes_failed);
             }
         } else {
-            cb({}, error::login_failed);
+            cb({}, error::get_nodes_failed);
         }
     });
 }
 
 void Xcat::get_os_images(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::GET, filter.empty() ? "xcatws/osimages/ALLRESOURCES" : (std::string("xcatws/osimages/") + internal::joinString(filter.begin(), filter.end(), ",")), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+    _func({HttpMethod::GET, filter.empty() ? "/xcatws/osimages/ALLRESOURCES" : (std::string("/xcatws/osimages/") + internal::joinString(filter.begin(), filter.end(), ",")), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
@@ -211,9 +234,9 @@ void Xcat::get_bootstate(const std::vector<std::string> &filter, std::function<v
     });
 }
 
-void Xcat::set_bootstate(const std::vector<std::string> &filter, BootState bootState, std::function<void(std::string, std::error_code ec)> cb) {
+void Xcat::set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::PUT, filter.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "{\"osimage\":\"" + bootState.osImage + "\"}", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+    _func({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "{\"osimage\":\"" + osimage + "\"}", {{"Content-Type", "application/json"}, {"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
@@ -222,9 +245,9 @@ void Xcat::set_bootstate(const std::vector<std::string> &filter, BootState bootS
     });
 }
 
-void Xcat::power_nodes(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb) {
+void Xcat::power_nodes(const std::vector<std::string> &filter, std::string action, std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::PUT, filter.empty() ? "xcatws/nodes/ALLRESOURCES/power" : (std::string("xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/power"), "{\"action\":\"reset\"}", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+    _func({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/power" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/power"), "{\"action\":\""+action+"\"}", {{"Content-Type", "application/json"}, {"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
@@ -233,9 +256,21 @@ void Xcat::power_nodes(const std::vector<std::string> &filter, std::function<voi
     });
 }
 
-void Xcat::set_group_attributes(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb) {
+void Xcat::set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(std::string, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::PUT, "xcatws/groups/" + internal::joinString(filter.begin(), filter.end(), ","), "{\"action\":\"reset\"}", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+
+    rapidjson::Document doc;
+    rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
+    doc.SetObject();
+    {
+        for (const auto& p : attrs) {
+            rapidjson::Value key(p.first.c_str(), allocator);
+            rapidjson::Value val(p.second.c_str(), allocator);
+            doc.AddMember(key, val, allocator);
+        }
+    }
+
+    _func({HttpMethod::PUT, "/xcatws/groups/" + internal::joinString(filter.begin(), filter.end(), ","), jsonToString(doc), {{"Content-Type", "application/json"}, {"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
         if (resp.status_code == 200) {
             cb(resp.body, {});
         } else {
@@ -244,13 +279,38 @@ void Xcat::set_group_attributes(const std::vector<std::string> &filter, std::fun
     });
 }
 
-void Xcat::get_groups(std::string group, std::function<void(std::string, std::error_code ec)> cb) {
+void Xcat::get_groups(std::string group, std::function<void(std::map<std::string, GroupInfo>, std::error_code ec)> cb) {
     if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::GET, group.empty() ? "xcatws/groups/" : ("xcatws/groups/" + group), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
-        if (resp.status_code == 200) {
-            cb(resp.body, {});
+    _func({HttpMethod::GET, group.empty() ? "/xcatws/groups/ALLRESOURCES" : ("/xcatws/groups/" + group), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+        if (resp.ec) {
+            cb({}, resp.ec);
+        } else if (resp.status_code == 200) {
+            rapidjson::Document indocument;
+            indocument.Parse(resp.body);
+            if (!indocument.HasParseError() && indocument.IsObject()) {
+                std::map<std::string, GroupInfo> groups;
+                for (const auto& p : indocument.GetObject()) {
+                    GroupInfo info;
+                    info.name = p.name.GetString();
+
+                    if (info.name == "info" && !p.value.IsObject()) {
+                        // "Could not find any object definitions to display."
+                        continue;
+                    }
+
+                    const auto& o = p.value.GetObject();
+                    if (o.HasMember("members") && o["members"].IsString()) info.members = split(o["members"].GetString(), ',');
+                    if (o.HasMember("mgt") && o["mgt"].IsString()) info.mgt = o["mgt"].GetString();
+                    if (o.HasMember("netboot") && o["netboot"].IsString()) info.netboot = o["netboot"].GetString();
+                    groups[info.name] = info;
+                }
+
+                cb(groups, {});
+            } else {
+                cb({}, error::get_groups_failed);
+            }
         } else {
-            cb("", resp.ec);
+            cb({}, error::get_groups_failed);
         }
     });
 }
