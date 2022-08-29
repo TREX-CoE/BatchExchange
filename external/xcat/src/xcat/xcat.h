@@ -11,10 +11,16 @@ namespace xcat {
 
 enum class error {
     login_failed = 1,
-    no_token,
+    no_auth,
     api_error,
     get_nodes_failed,
     get_groups_failed,
+    get_bootstate_failed,
+    set_bootstate_failed,
+    get_osimages_failed,
+    set_group_attributes_failed,
+    set_nextboot_failed,
+    set_powerstate_failed,
 };
 
 
@@ -49,12 +55,13 @@ struct ApiCallResponse {
     std::error_code ec;
 };
 
-using http_f = std::function<void(ApiCallRequest req, std::function<void(ApiCallResponse)> resp)>;
-
-struct TokenInfo {
-    std::string token;
-    unsigned long int expires;
+struct XcatError {
+    std::error_code ec;
+    int error_code;
+    std::string msg;
 };
+
+using http_f = std::function<void(ApiCallRequest req, std::function<void(ApiCallResponse)> resp)>;
 
 struct NodeInfo {
     std::string name;
@@ -63,7 +70,7 @@ struct NodeInfo {
     std::string installnic;
     std::string primarynic;
     std::string mac;
-    std::string groups;
+    std::vector<std::string> groups;
 };
 
 struct GroupInfo {
@@ -73,26 +80,42 @@ struct GroupInfo {
     std::vector<std::string> members;
 };
 
+struct OsimageInfo {
+    std::string name;
+    std::string profile;
+    std::string osname;
+    std::string osarch;
+    std::string osvers;
+    std::string provmethod;
+};
+
 class Xcat {
 private:
 	http_f _func;
-    std::string _host;
-    unsigned int _port;
     std::string _token;
+    unsigned long int _expires;
+    std::string _username;
+    std::string _password;
+
+    ApiCallRequest add_auth(ApiCallRequest req, bool has_query_params);
 public:
 	Xcat(http_f func);
-    void set_host(std::string host, unsigned int port);
 
-    void login(std::string username, std::string password, std::function<void(TokenInfo token, std::error_code ec)> cb);
-    void set_token(std::string token);
+    void set_token(std::string token, unsigned long expires);
+    void set_credentials(std::string username, std::string password);
 
-    void get_nodes(std::function<void(std::map<std::string, NodeInfo>, std::error_code ec)> cb);
-    void get_groups(std::string group, std::function<void(std::map<std::string, GroupInfo>, std::error_code ec)> cb);
-    void get_os_images(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
-    void get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb);
-    void power_nodes(const std::vector<std::string> &filter, std::string action, std::function<void(std::string, std::error_code ec)> cb);
-    void set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(std::string, std::error_code ec)> cb);
-    void set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(std::string, std::error_code ec)> cb);
+    void get_token(std::function<void(std::string token, unsigned long int expires, XcatError ec)> cb);
+
+    bool check_auth();
+
+    void get_nodes(std::function<void(std::map<std::string, NodeInfo>, XcatError ec)> cb);
+    void get_groups(const std::vector<std::string> &filter, std::function<void(std::map<std::string, GroupInfo>, XcatError ec)> cb);
+    void get_osimages(const std::vector<std::string> &filter, std::function<void(std::map<std::string, OsimageInfo>, XcatError ec)> cb);
+    void get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, XcatError ec)> cb);
+    void set_powerstate(const std::vector<std::string> &filter, std::string action, std::function<void(std::string, XcatError ec)> cb);
+    void set_nextboot(const std::vector<std::string> &filter, std::string order, std::function<void(std::string, XcatError ec)> cb);
+    void set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(std::string, XcatError ec)> cb);
+    void set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(std::string, XcatError ec)> cb);
 }; 
 
 

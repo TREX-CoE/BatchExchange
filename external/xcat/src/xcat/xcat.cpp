@@ -49,17 +49,14 @@ static inline bool timeToEpoch(const std::string& isoDatetime, std::time_t& epoc
  * @return 0 No errors
  * @return 1 Errors found
  */
-int check_errors(const std::string &o) {
-    if (!o.length())
-        return 0;
+XcatError check_errors(const std::string &o, std::error_code ec = {}) {
+    XcatError error{ec, 0, ""};
+
+    if (!o.length()) return error;
 
     rapidjson::Document d;
-    if (d.Parse(o.c_str()).HasParseError()) {
-        return 1;
-    }
+    if (d.Parse(o.c_str()).HasParseError() || !d.IsObject()) return error;
 
-    if (!d.IsObject())
-        return 0;
 
     std::string key = "";
     if (d.HasMember("errors"))
@@ -67,34 +64,28 @@ int check_errors(const std::string &o) {
     else if (d.HasMember("error"))
         key = "error";
 
-    const char *errorKey = key.c_str();
-    const char *errorCodeKey = "errorcode";
-    int errorCode = 0;
-    if (d.HasMember(errorCodeKey)) {
-        if (d[errorCodeKey].IsString())
-            errorCode = std::stoi(d[errorCodeKey].GetString());
-        else if (d[errorCodeKey].IsInt())
-            errorCode = d[errorCodeKey].GetInt();
-    }
+    if (key.empty()) return error;
 
-    if (errorCode != 0)
-        std::cerr << "Error Code " << errorCode << " - ";
+    // found unknown error
+    if (!error.ec) error.ec = error::api_error;
+
+
+    if (d.HasMember("errorcode")) {
+        if (d["errorcode"].IsString())
+            error.error_code = std::stoi(d["errorcode"].GetString());
+        else if (d["errorcode"].IsInt())
+            error.error_code = d["errorcode"].GetInt();
+    }
 
     if (key.length()) {
-        if (d[errorKey].IsString()) {
-            std::string err = d[errorKey].GetString();
-            if (err.length()) {
-                std::cerr << err << std::endl;
-                return 1;
-            }
-        } else if (d[errorKey].IsArray()) {
-            auto err = d[errorKey].GetArray();
-            for (rapidjson::SizeType i = 0; i < err.Size(); i++)
-                if (err[i].IsString())
-                    std::cerr << err[i].GetString() << std::endl;
+        if (d[key.c_str()].IsString()) {
+            error.msg = d[key.c_str()].GetString();
+        } else if (d[key.c_str()].IsArray()) {
+            for (const auto& s : d[key.c_str()].GetArray())
+                if (s.IsString()) error.msg += s.GetString();
         }
     }
-    return 0;
+    return error;
 }
 
 
@@ -103,8 +94,14 @@ const char* to_cstr(error type) {
       case error::login_failed: return "login failed";
       case error::get_nodes_failed: return "get nodes failed";
       case error::get_groups_failed: return "get groups failed";
-      case error::no_token: return "no token for authentication set";
+      case error::no_auth: return "no authentication set";
       case error::api_error: return "api error";
+      case error::set_bootstate_failed: return "set bootstate failed";
+      case error::get_bootstate_failed: return "get bootstate failed";
+      case error::get_osimages_failed: return "get osimages failed";
+      case error::set_group_attributes_failed: return "set group attributes failed";
+      case error::set_nextboot_failed: return "set nextboot failed";
+      case error::set_powerstate_failed: return "set powerstate failed";
       default: return "(unrecognized error)";
   }
 }
@@ -142,42 +139,60 @@ std::error_code make_error_code(error e) {
 
 Xcat::Xcat(http_f func): _func(func) {}
 
-void Xcat::set_token(std::string token) {
+void Xcat::set_token(std::string token, unsigned long int expires) {
     _token = token;
+    _expires = expires;
 }
 
-void Xcat::login(std::string username, std::string password, std::function<void(TokenInfo token, std::error_code ec)> cb) {
-    _func({HttpMethod::POST, "/xcatws/tokens", "{\"userName\":\""+username+"\",\"userPW\":\""+password+"\"}", {{"Content-Type", "application/json"}}}, [cb](ApiCallResponse resp){
+void Xcat::set_credentials(std::string username, std::string password) {
+    _username = username;
+    _password = password;
+}
+
+void Xcat::get_token(std::function<void(std::string token, unsigned long int expires, XcatError ec)> cb) {
+    _func({HttpMethod::POST, "/xcatws/tokens", "{\"userName\":\""+_username+"\",\"userPW\":\""+_password+"\"}", {{"Content-Type", "application/json"}}}, [cb](ApiCallResponse resp){
         if (resp.ec) {
-            cb({}, resp.ec);
+            cb({}, 0, {resp.ec, 0, ""});
         } else if (resp.status_code == 201) {
             rapidjson::Document indocument;
             indocument.Parse(resp.body);
             if (!indocument.HasParseError() && indocument.HasMember("token") && indocument["token"].IsObject() && indocument["token"].HasMember("id") && indocument["token"]["id"].IsString()) {
-                TokenInfo info;
-                info.token = indocument["token"]["id"].GetString();
-                info.expires = 0;
+                unsigned long int expires = 0;
                 if (indocument["token"].HasMember("expire") && indocument["token"]["expire"].IsString()) {
                     time_t time;
                     if (timeToEpoch(indocument["token"]["expire"].GetString(), time, "%Y-%m-%d %H:%M:%S")) {
-                        time = static_cast<unsigned long int>(info.expires);
+                        expires = static_cast<unsigned long int>(time);
                     }
                 }
-                cb(info, {});
+                std::string token = indocument["token"]["id"].GetString();
+                cb(token, expires, {});
             } else {
-                cb({}, error::login_failed);
+                cb({}, 0, {error::login_failed, 0, ""});
             }
         } else {
-            cb({}, error::login_failed);
+            cb({}, 0, {error::login_failed, 0, ""});
         }
     });
 }
 
-void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, std::error_code ec)> cb) {
-    if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::GET, "/xcatws/nodes/ALLRESOURCES", "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+bool Xcat::check_auth() {
+    return !_token.empty() || (!_username.empty() && !_password.empty());
+}
+
+ApiCallRequest Xcat::add_auth(ApiCallRequest req, bool has_query_params) {
+    if (!_token.empty()) {
+        req.headers["X-Auth-Token"] = _token;
+    } else if (!_username.empty() && !_password.empty()) {
+        req.uri += std::string(has_query_params ? "&" : "?") +"userName="+_username+"&userPW="+_password;
+    }
+    return req;
+}
+
+void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, XcatError ec)> cb) {
+    if (!check_auth()) throw std::system_error(error::no_auth);
+    _func(add_auth({HttpMethod::GET, "/xcatws/nodes/ALLRESOURCES", "", {}}, false), [cb](ApiCallResponse resp){
         if (resp.ec) {
-            cb({}, resp.ec);
+            cb({}, {resp.ec, 0, ""});
         } else if (resp.status_code == 200) {
             rapidjson::Document indocument;
             indocument.Parse(resp.body);
@@ -198,66 +213,114 @@ void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, std::er
                     if (o.HasMember("installnic") && o["installnic"].IsString()) info.installnic = o["installnic"].GetString();
                     if (o.HasMember("primarynic") && o["primarynic"].IsString()) info.primarynic = o["primarynic"].GetString();
                     if (o.HasMember("mac") && o["mac"].IsString()) info.mac = o["mac"].GetString();
-                    if (o.HasMember("groups") && o["groups"].IsString()) info.groups = o["groups"].GetString();
+                    if (o.HasMember("groups") && o["groups"].IsString()) info.groups = split(o["groups"].GetString(), ',');
+
                     nodes[info.name] = info;
                 }
 
-                cb(nodes, {});
+                cb(nodes, check_errors(resp.body));
             } else {
-                cb({}, error::get_nodes_failed);
+                cb({}, check_errors(resp.body, error::get_nodes_failed));
             }
         } else {
-            cb({}, error::get_nodes_failed);
+            cb({}, check_errors(resp.body, error::get_nodes_failed));
         }
     });
 }
 
-void Xcat::get_os_images(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb) {
-    if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::GET, filter.empty() ? "/xcatws/osimages/ALLRESOURCES" : (std::string("/xcatws/osimages/") + internal::joinString(filter.begin(), filter.end(), ",")), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
-        if (resp.status_code == 200) {
-            cb(resp.body, {});
+void Xcat::get_osimages(const std::vector<std::string> &filter, std::function<void(std::map<std::string, OsimageInfo>, XcatError ec)> cb) {
+    if (!check_auth()) throw std::system_error(error::no_auth);
+    _func(add_auth({HttpMethod::GET, filter.empty() ? "/xcatws/osimages/ALLRESOURCES" : (std::string("/xcatws/osimages/") + internal::joinString(filter.begin(), filter.end(), ",")), "", {}}, false), [cb](ApiCallResponse resp){
+        if (resp.ec) {
+            cb({}, {resp.ec, 0, ""});
+        } else if (resp.status_code == 200) {
+            rapidjson::Document indocument;
+            indocument.Parse(resp.body);
+            if (!indocument.HasParseError() && indocument.IsObject()) {
+                std::map<std::string, OsimageInfo> nodes;
+                for (const auto& p : indocument.GetObject()) {
+                    OsimageInfo info;
+                    info.name = p.name.GetString();
+
+                    if (info.name == "info" && !p.value.IsObject()) {
+                        // "Could not find any object definitions to display."
+                        continue;
+                    }
+
+                    const auto& o = p.value.GetObject();
+                    if (o.HasMember("profile") && o["profile"].IsString()) info.profile = o["profile"].GetString();
+                    if (o.HasMember("osname") && o["osname"].IsString()) info.osname = o["osname"].GetString();
+                    if (o.HasMember("osarch") && o["osarch"].IsString()) info.osarch = o["osarch"].GetString();
+                    if (o.HasMember("osvers") && o["osvers"].IsString()) info.osvers = o["osvers"].GetString();
+                    if (o.HasMember("provmethod") && o["provmethod"].IsString()) info.provmethod = o["provmethod"].GetString();
+
+                    nodes[info.name] = info;
+                }
+
+                cb(nodes, check_errors(resp.body));
+            } else {
+                cb({}, check_errors(resp.body, error::get_osimages_failed));
+            }
         } else {
-            cb("", resp.ec);
+            cb({}, check_errors(resp.body, error::get_osimages_failed));
         }
     });
 }
 
-void Xcat::get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, std::error_code ec)> cb) {
-    if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::GET, filter.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
-        if (resp.status_code == 200) {
-            cb(resp.body, {});
+void Xcat::get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, XcatError ec)> cb) {
+    if (!check_auth()) throw std::system_error(error::no_auth);
+    _func(add_auth({HttpMethod::GET, filter.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "", {}}, false), [cb](ApiCallResponse resp){
+        if (resp.ec) {
+            cb("", {resp.ec, 0, ""});
+        } else if (resp.status_code == 200) {
+            cb("", check_errors(resp.body));
         } else {
-            cb("", resp.ec);
+            cb("", check_errors(resp.body, error::get_bootstate_failed));
         }
     });
 }
 
-void Xcat::set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(std::string, std::error_code ec)> cb) {
-    if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "{\"osimage\":\"" + osimage + "\"}", {{"Content-Type", "application/json"}, {"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
-        if (resp.status_code == 200) {
-            cb(resp.body, {});
+void Xcat::set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(std::string, XcatError ec)> cb) {
+    if (!check_auth()) throw std::system_error(error::no_auth);
+    _func(add_auth({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "{\"osimage\":\"" + osimage + "\"}", {{"Content-Type", "application/json"}}}, false), [cb](ApiCallResponse resp){
+        if (resp.ec) {
+            cb("", {resp.ec, 0, ""});
+        } else if (resp.status_code == 200) {
+            cb("", check_errors(resp.body));
         } else {
-            cb("", resp.ec);
+            cb("", check_errors(resp.body, error::set_bootstate_failed));
         }
     });
 }
 
-void Xcat::power_nodes(const std::vector<std::string> &filter, std::string action, std::function<void(std::string, std::error_code ec)> cb) {
-    if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/power" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/power"), "{\"action\":\""+action+"\"}", {{"Content-Type", "application/json"}, {"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
-        if (resp.status_code == 200) {
-            cb(resp.body, {});
+void Xcat::set_nextboot(const std::vector<std::string> &filter, std::string order, std::function<void(std::string, XcatError ec)> cb) {
+    if (!check_auth()) throw std::system_error(error::no_auth);
+    _func(add_auth({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/nextboot" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/nextboot"), "{\"order\":\"" + order + "\"}", {{"Content-Type", "application/json"}}}, false), [cb](ApiCallResponse resp){
+        if (resp.ec) {
+            cb("", {resp.ec, 0, ""});
+        } else if (resp.status_code == 200) {
+            cb("", check_errors(resp.body));
         } else {
-            cb("", resp.ec);
+            cb("", check_errors(resp.body, error::set_nextboot_failed));
         }
     });
 }
 
-void Xcat::set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(std::string, std::error_code ec)> cb) {
-    if (_token.empty()) throw std::system_error(error::no_token);
+void Xcat::set_powerstate(const std::vector<std::string> &filter, std::string action, std::function<void(std::string, XcatError ec)> cb) {
+    if (!check_auth()) throw std::system_error(error::no_auth);
+    _func(add_auth({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/power" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/power"), "{\"action\":\""+action+"\"}", {{"Content-Type", "application/json"}}}, false), [cb](ApiCallResponse resp){
+        if (resp.ec) {
+            cb("", {resp.ec, 0, ""});
+        } else if (resp.status_code == 200) {
+            cb("", check_errors(resp.body));
+        } else {
+            cb("", check_errors(resp.body, error::set_powerstate_failed));
+        }
+    });
+}
+
+void Xcat::set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(std::string, XcatError ec)> cb) {
+    if (!check_auth()) throw std::system_error(error::no_auth);
 
     rapidjson::Document doc;
     rapidjson::Document::AllocatorType& allocator = doc.GetAllocator();
@@ -270,20 +333,22 @@ void Xcat::set_group_attributes(const std::vector<std::string> &filter, const st
         }
     }
 
-    _func({HttpMethod::PUT, "/xcatws/groups/" + internal::joinString(filter.begin(), filter.end(), ","), jsonToString(doc), {{"Content-Type", "application/json"}, {"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
-        if (resp.status_code == 200) {
-            cb(resp.body, {});
+    _func(add_auth({HttpMethod::PUT, "/xcatws/groups/" + internal::joinString(filter.begin(), filter.end(), ","), jsonToString(doc), {{"Content-Type", "application/json"}}}, false), [cb](ApiCallResponse resp){
+        if (resp.ec) {
+            cb("", {resp.ec, 0, ""});
+        } else if (resp.status_code == 200) {
+            cb("", check_errors(resp.body));
         } else {
-            cb("", resp.ec);
+            cb("", check_errors(resp.body, error::set_group_attributes_failed));
         }
     });
 }
 
-void Xcat::get_groups(std::string group, std::function<void(std::map<std::string, GroupInfo>, std::error_code ec)> cb) {
-    if (_token.empty()) throw std::system_error(error::no_token);
-    _func({HttpMethod::GET, group.empty() ? "/xcatws/groups/ALLRESOURCES" : ("/xcatws/groups/" + group), "", {{"X-Auth-Token", _token}}}, [cb](ApiCallResponse resp){
+void Xcat::get_groups(const std::vector<std::string> &filter, std::function<void(std::map<std::string, GroupInfo>, XcatError ec)> cb) {
+    if (!check_auth()) throw std::system_error(error::no_auth);
+    _func(add_auth({HttpMethod::GET, filter.empty() ? "/xcatws/groups/ALLRESOURCES" : (std::string("/xcatws/groups/") + internal::joinString(filter.begin(), filter.end(), ",")), "", {}}, false), [cb](ApiCallResponse resp){
         if (resp.ec) {
-            cb({}, resp.ec);
+            cb({}, {resp.ec, 0, ""});
         } else if (resp.status_code == 200) {
             rapidjson::Document indocument;
             indocument.Parse(resp.body);
@@ -305,12 +370,12 @@ void Xcat::get_groups(std::string group, std::function<void(std::map<std::string
                     groups[info.name] = info;
                 }
 
-                cb(groups, {});
+                cb(groups, check_errors(resp.body));
             } else {
-                cb({}, error::get_groups_failed);
+                cb({}, check_errors(resp.body, error::get_groups_failed));
             }
         } else {
-            cb({}, error::get_groups_failed);
+            cb({}, check_errors(resp.body, error::get_groups_failed));
         }
     });
 }

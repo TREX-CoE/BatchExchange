@@ -264,6 +264,8 @@ void runHttps(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fu
                                             return;
                                         }
 
+                                        std::cout << boost_req->res << std::endl;
+
                                         resp(responseConvert(boost_req->res));
 
                                         // If we get here then the connection is closed gracefully

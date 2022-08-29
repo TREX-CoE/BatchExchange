@@ -135,13 +135,15 @@ std::shared_ptr<::xcat::Xcat> getXcat(boost::asio::io_context& ioc, const cw::pr
             cw::proxy::xcat::runHttps(ioc, req, resp, timeout_xcat_http, opts.host, opts.port, std::move(ctx));
 
         }}};
-        xcat_session->set_token(opts.token);
+        xcat_session->set_token(opts.token, opts.expires);
+        xcat_session->set_credentials(opts.user, opts.password);
         return xcat_session;
     } else {
         std::shared_ptr<::xcat::Xcat> xcat_session{new ::xcat::Xcat{[&ioc, opts](::xcat::ApiCallRequest req, auto resp) {
             cw::proxy::xcat::runHttp(ioc, req, resp, timeout_xcat_http, opts.host, opts.port);
         }}};
-        xcat_session->set_token(opts.token);
+        xcat_session->set_token(opts.token, opts.expires);
+        xcat_session->set_credentials(opts.user, opts.password);
         return xcat_session;
     }
 }
@@ -630,11 +632,11 @@ void f_xcat_login(CheckAuth check_auth, Send send, const rapidjson::Document& in
     auto xcat_session = getXcat(ioc, opts, ec_session);
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
 
-    xcat_session->login(opts.user, opts.password, [xcat_session, send, &opts](auto t, std::error_code ec) mutable {
+    xcat_session->get_token([xcat_session, send, &opts](auto token, auto expires, auto ec) mutable {
         // store token
-        opts.token = t.token;
-        opts.expires = t.expires;
-        return send(response::xcatTokenReturn(error_wrapper(ec), t));
+        opts.token = token;
+        opts.expires = expires;
+        return send(response::xcatTokenReturn(error_wrapper(ec.ec).with_msg(ec.msg), token, expires));
     });
 }
 
@@ -645,17 +647,139 @@ void f_xcat_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document&
     xcat_get_opts_uri(uri, opts);
     xcat_get_opts_json(indocument, opts);
 
-    if (opts.token.empty()) {
-        send(response::json_error(error_wrapper(error_type::xcat_token_missing)));
-        return;
-    }
+    std::error_code ec_session;
+    auto xcat_session = getXcat(ioc, opts, ec_session);
+    if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
+    if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
+
+    xcat_session->get_nodes([xcat_session, send](auto nodes, auto ec) mutable {
+        return send(response::xcatNodesReturn(error_wrapper(ec.ec).with_msg(ec.msg), nodes));
+    });
+}
+
+template <typename CheckAuth, typename Send>
+void f_xcat_getGroups(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
+    if (!check_auth({"xcat_groups"})) return;
+
+    xcat_get_opts_uri(uri, opts);
+    xcat_get_opts_json(indocument, opts);
 
     std::error_code ec_session;
     auto xcat_session = getXcat(ioc, opts, ec_session);
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
+    if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
 
-    xcat_session->get_nodes([xcat_session, send](auto nodes, std::error_code ec) mutable {
-        return send(response::xcatNodesReturn(error_wrapper(ec), nodes));
+    std::vector<std::string> filter;
+    if (!(indocument.HasMember("filter") && indocument["filter"].IsArray())) return send(response::json_error(error_wrapper(error_type::xcat_filter_missing)));
+    for (const auto& o : indocument["filter"].GetArray()) {
+        if (o.IsString()) filter.push_back(o.GetString());
+    }
+
+    xcat_session->get_groups(filter, [xcat_session, send](auto groups, auto ec) mutable {
+        return send(response::xcatGroupsReturn(error_wrapper(ec.ec).with_msg(ec.msg), groups));
+    });
+}
+
+template <typename CheckAuth, typename Send>
+void f_xcat_getOsimages(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
+    if (!check_auth({"xcat_osimages"})) return;
+
+    xcat_get_opts_uri(uri, opts);
+    xcat_get_opts_json(indocument, opts);
+
+    std::error_code ec_session;
+    auto xcat_session = getXcat(ioc, opts, ec_session);
+    if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
+    if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
+
+    std::vector<std::string> filter;
+    if (indocument.HasMember("filter") && indocument["filter"].IsArray()) {
+        for (const auto& o : indocument["filter"].GetArray()) {
+            if (o.IsString()) filter.push_back(o.GetString());
+        }
+    }
+
+    xcat_session->get_osimages(filter, [xcat_session, send](auto images, auto ec) mutable {
+        return send(response::xcatOsimagesReturn(error_wrapper(ec.ec).with_msg(ec.msg), images));
+    });
+}
+
+
+template <typename CheckAuth, typename Send>
+void f_xcat_setBootstate(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
+    if (!check_auth({"xcat_set_bootstate"})) return;
+
+    xcat_get_opts_uri(uri, opts);
+    xcat_get_opts_json(indocument, opts);
+
+    std::error_code ec_session;
+    auto xcat_session = getXcat(ioc, opts, ec_session);
+    if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
+    if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
+
+    if (!(indocument.HasMember("osimage") && indocument["osimage"].IsString())) return send(response::json_error(error_wrapper(error_type::xcat_osimage_missing)));
+
+    std::vector<std::string> filter;
+    if (!(indocument.HasMember("filter") && indocument["filter"].IsArray())) return send(response::json_error(error_wrapper(error_type::xcat_filter_missing)));
+    for (const auto& o : indocument["filter"].GetArray()) {
+        if (o.IsString()) filter.push_back(o.GetString());
+    }
+
+    xcat_session->set_bootstate(filter, indocument["osimage"].GetString(), [xcat_session, send](auto nodes, auto ec) mutable {
+        (void)nodes;
+        return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
+    });
+}
+
+template <typename CheckAuth, typename Send>
+void f_xcat_setNextboot(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
+    if (!check_auth({"xcat_set_nextboot"})) return;
+
+    xcat_get_opts_uri(uri, opts);
+    xcat_get_opts_json(indocument, opts);
+
+    std::error_code ec_session;
+    auto xcat_session = getXcat(ioc, opts, ec_session);
+    if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
+    if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
+
+    if (!(indocument.HasMember("order") && indocument["order"].IsString())) return send(response::json_error(error_wrapper(error_type::xcat_order_missing)));
+
+    std::vector<std::string> filter;
+    if (!(indocument.HasMember("filter") && indocument["filter"].IsArray())) return send(response::json_error(error_wrapper(error_type::xcat_filter_missing)));
+    for (const auto& o : indocument["filter"].GetArray()) {
+        if (o.IsString()) filter.push_back(o.GetString());
+    }
+
+    xcat_session->set_nextboot(filter, indocument["order"].GetString(), [xcat_session, send](auto nodes, auto ec) mutable {
+        (void)nodes;
+        return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
+    });
+}
+
+template <typename CheckAuth, typename Send>
+void f_xcat_setPowerstate(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
+    if (!check_auth({"xcat_set_powerstate"})) return;
+
+    xcat_get_opts_uri(uri, opts);
+    xcat_get_opts_json(indocument, opts);
+
+    std::error_code ec_session;
+    auto xcat_session = getXcat(ioc, opts, ec_session);
+    if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
+    if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
+
+    if (!(indocument.HasMember("action") && indocument["action"].IsString())) return send(response::json_error(error_wrapper(error_type::xcat_action_missing)));
+
+    std::vector<std::string> filter;
+    if (!(indocument.HasMember("filter") && indocument["filter"].IsArray())) return send(response::json_error(error_wrapper(error_type::xcat_filter_missing)));
+    for (const auto& o : indocument["filter"].GetArray()) {
+        if (o.IsString()) filter.push_back(o.GetString());
+    }
+
+    xcat_session->set_nextboot(filter, indocument["action"].GetString(), [xcat_session, send](auto nodes, auto ec) mutable {
+        (void)nodes;
+        return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
     });
 }
 
@@ -767,6 +891,16 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
             f_xcat_login(check_auth, send, indocument, url, xcat_opts, ioc);
         } else if (command == "xcat/getNodes") {
             f_xcat_getNodes(check_auth, send, indocument, url, xcat_opts, ioc);
+        } else if (command == "xcat/getGroups") {
+            f_xcat_getGroups(check_auth, send, indocument, url, xcat_opts, ioc);
+        } else if (command == "xcat/getOsimages") {
+            f_xcat_getOsimages(check_auth, send, indocument, url, xcat_opts, ioc);
+        } else if (command == "xcat/setBootstate") {
+            f_xcat_setBootstate(check_auth, send, indocument, url, xcat_opts, ioc);
+        } else if (command == "xcat/setNextboot") {
+            f_xcat_setNextboot(check_auth, send, indocument, url, xcat_opts, ioc);
+        } else if (command == "xcat/setPowerstate") {
+            f_xcat_setPowerstate(check_auth, send, indocument, url, xcat_opts, ioc);
         } else if (command == "xcat/set") {
             send(ws_xcat_set(xcat_opts, indocument));
         } else {

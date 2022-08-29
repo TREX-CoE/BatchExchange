@@ -79,6 +79,11 @@ const char* to_cstr(error_type type) {
         case error_type::xcat_user_missing: return "xcat user is not given";
         case error_type::xcat_password_missing: return "xcat password is not given";
         case error_type::xcat_token_missing: return "xcat token is not given";
+        case error_type::xcat_auth_missing: return "xcat auth is not given";
+        case error_type::xcat_osimage_missing: return "xcat osimage is not given";
+        case error_type::xcat_filter_missing: return "xcat filter is not given";
+        case error_type::xcat_order_missing: return "xcat order is not given";
+        case error_type::xcat_action_missing: return "xcat power action is not given";
         case error_type::invalid_method: return "invalid http method";
         default: return "(unrecognized error)";
     }

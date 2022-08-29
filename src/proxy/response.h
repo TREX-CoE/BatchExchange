@@ -189,7 +189,7 @@ resp detectReturn(const error_wrapper& e, bool detected) {
     }
 }
 
-resp xcatTokenReturn(const error_wrapper& e, ::xcat::TokenInfo token) {
+resp xcatTokenReturn(const error_wrapper& e, std::string token, unsigned long int expires) {
     if (e.ec()) {
         return json_error(e);
     } else {
@@ -200,8 +200,8 @@ resp xcatTokenReturn(const error_wrapper& e, ::xcat::TokenInfo token) {
         {
             rapidjson::Value data;
             data.SetObject();
-            data.AddMember("token", token.token, allocator);
-            data.AddMember("expires", token.expires, allocator);
+            data.AddMember("token", token, allocator);
+            data.AddMember("expires", expires, allocator);
             r.first.AddMember("data", data, allocator);
         }
         return r;
@@ -228,8 +228,80 @@ resp xcatNodesReturn(const error_wrapper& e, std::map<std::string, ::xcat::NodeI
                 node.AddMember("installnic", p.second.installnic, allocator);
                 node.AddMember("primarynic", p.second.primarynic, allocator);
                 node.AddMember("mac", p.second.mac, allocator);
-                node.AddMember("groups", p.second.groups, allocator);
 
+                rapidjson::Value groups;
+                groups.SetArray();
+                for (const auto& group : p.second.groups) {
+                    rapidjson::Value g(group, allocator);
+                    groups.PushBack(g, allocator);
+                }
+                node.AddMember("groups", groups, allocator);
+
+                rapidjson::Value key(p.first.c_str(), allocator);
+                data.AddMember(key, node, allocator);
+            }
+            r.first.AddMember("data", data, allocator);
+        }
+        return r;
+    }
+}
+
+resp xcatGroupsReturn(const error_wrapper& e, std::map<std::string, ::xcat::GroupInfo> groups) {
+    if (e.ec()) {
+        return json_error(e);
+    } else {
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.second = boost::beast::http::status::ok;
+        r.first.SetObject();
+        {
+            rapidjson::Value data;
+            data.SetObject();
+            for (const auto& p : groups) {
+                rapidjson::Value node;
+                node.SetObject();
+                node.AddMember("name", p.second.name, allocator);
+                node.AddMember("mgt", p.second.mgt, allocator);
+                node.AddMember("netboot", p.second.netboot, allocator);
+
+                rapidjson::Value members;
+                members.SetArray();
+                for (const auto& group : p.second.members) {
+                    rapidjson::Value g(group, allocator);
+                    members.PushBack(g, allocator);
+                }
+                node.AddMember("members", members, allocator);
+
+                rapidjson::Value key(p.first.c_str(), allocator);
+                data.AddMember(key, node, allocator);
+            }
+            r.first.AddMember("data", data, allocator);
+        }
+        return r;
+    }
+}
+
+resp xcatOsimagesReturn(const error_wrapper& e, std::map<std::string, ::xcat::OsimageInfo> groups) {
+    if (e.ec()) {
+        return json_error(e);
+    } else {
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.second = boost::beast::http::status::ok;
+        r.first.SetObject();
+        {
+            rapidjson::Value data;
+            data.SetObject();
+            for (const auto& p : groups) {
+                rapidjson::Value node;
+                node.SetObject();
+                node.AddMember("name", p.second.name, allocator);
+                node.AddMember("profile", p.second.profile, allocator);
+                node.AddMember("osname", p.second.osname, allocator);
+                node.AddMember("osname", p.second.osname, allocator);
+                node.AddMember("osarch", p.second.osarch, allocator);
+                node.AddMember("osvers", p.second.osvers, allocator);
+                node.AddMember("provmethod", p.second.provmethod, allocator);
                 rapidjson::Value key(p.first.c_str(), allocator);
                 data.AddMember(key, node, allocator);
             }

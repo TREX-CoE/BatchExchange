@@ -79,6 +79,11 @@ enum class error_type {
     xcat_user_missing,
     xcat_password_missing,
     xcat_token_missing,
+    xcat_auth_missing,
+    xcat_osimage_missing,
+    xcat_filter_missing,
+    xcat_order_missing,
+    xcat_action_missing,
     invalid_method,
 };
 
