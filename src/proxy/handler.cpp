@@ -8,7 +8,6 @@
 #include "proxy/globals.h"
 #include "proxy/uri.h"
 #include "proxy/response.h"
-#include "proxy/y_combinator.h"
 #include "proxy/error.h"
 #include "proxy/error_wrapper.h"
 
@@ -63,6 +62,22 @@ using namespace cw::helper::uri;
 
 constexpr unsigned int timeout_cmd = 15000;
 constexpr unsigned int timeout_xcat_http = 15000;
+
+std::vector<std::string> getFilter(const rapidjson::Document& indocument, const Uri& uri) {
+    std::vector<std::string> filters;
+    if (uri.has_value() && uri.query.count("filter")) {
+        std::string filter = uri.query.at("filter");
+        cw::helper::splitString(filter, std::string(","), [&filters, &filter](size_t start, size_t end){
+            filters.push_back(filter.substr(start, end));
+            return true;
+        });
+    } else if (indocument.HasMember("filter") && indocument["filter"].IsArray()) {
+        for (const auto& o : indocument["filter"].GetArray()) {
+            if (o.IsString()) filters.push_back(o.GetString());
+        }
+    }
+    return filters;
+}
 
 std::string jsonToString(const rapidjson::Document& document) {
     rapidjson::StringBuffer buffer;
@@ -669,13 +684,7 @@ void f_xcat_getGroups(CheckAuth check_auth, Send send, const rapidjson::Document
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
     if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
 
-    std::vector<std::string> filter;
-    if (!(indocument.HasMember("filter") && indocument["filter"].IsArray())) return send(response::json_error(error_wrapper(error_type::xcat_filter_missing)));
-    for (const auto& o : indocument["filter"].GetArray()) {
-        if (o.IsString()) filter.push_back(o.GetString());
-    }
-
-    xcat_session->get_groups(filter, [xcat_session, send](auto groups, auto ec) mutable {
+    xcat_session->get_groups(getFilter(indocument, uri), [xcat_session, send](auto groups, auto ec) mutable {
         return send(response::xcatGroupsReturn(error_wrapper(ec.ec).with_msg(ec.msg), groups));
     });
 }
@@ -692,14 +701,7 @@ void f_xcat_getOsimages(CheckAuth check_auth, Send send, const rapidjson::Docume
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
     if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
 
-    std::vector<std::string> filter;
-    if (indocument.HasMember("filter") && indocument["filter"].IsArray()) {
-        for (const auto& o : indocument["filter"].GetArray()) {
-            if (o.IsString()) filter.push_back(o.GetString());
-        }
-    }
-
-    xcat_session->get_osimages(filter, [xcat_session, send](auto images, auto ec) mutable {
+    xcat_session->get_osimages(getFilter(indocument, uri), [xcat_session, send](auto images, auto ec) mutable {
         return send(response::xcatOsimagesReturn(error_wrapper(ec.ec).with_msg(ec.msg), images));
     });
 }
@@ -717,15 +719,15 @@ void f_xcat_setBootstate(CheckAuth check_auth, Send send, const rapidjson::Docum
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
     if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
 
-    if (!(indocument.HasMember("osimage") && indocument["osimage"].IsString())) return send(response::json_error(error_wrapper(error_type::xcat_osimage_missing)));
-
-    std::vector<std::string> filter;
-    if (!(indocument.HasMember("filter") && indocument["filter"].IsArray())) return send(response::json_error(error_wrapper(error_type::xcat_filter_missing)));
-    for (const auto& o : indocument["filter"].GetArray()) {
-        if (o.IsString()) filter.push_back(o.GetString());
+    std::string osimage;
+    if (uri.has_value() && uri.query.count("osimage")) {
+        osimage = uri.query.at("osimage");
+    } else if (indocument.HasMember("osimage") && indocument["osimage"].IsString()) {
+        osimage = indocument["osimage"].GetString();
     }
+    if (osimage.empty()) return send(response::json_error(error_wrapper(error_type::xcat_osimage_missing)));
 
-    xcat_session->set_bootstate(filter, indocument["osimage"].GetString(), [xcat_session, send](auto nodes, auto ec) mutable {
+    xcat_session->set_bootstate(getFilter(indocument, uri), osimage, [xcat_session, send](auto nodes, auto ec) mutable {
         (void)nodes;
         return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
     });
@@ -743,15 +745,15 @@ void f_xcat_setNextboot(CheckAuth check_auth, Send send, const rapidjson::Docume
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
     if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
 
-    if (!(indocument.HasMember("order") && indocument["order"].IsString())) return send(response::json_error(error_wrapper(error_type::xcat_order_missing)));
-
-    std::vector<std::string> filter;
-    if (!(indocument.HasMember("filter") && indocument["filter"].IsArray())) return send(response::json_error(error_wrapper(error_type::xcat_filter_missing)));
-    for (const auto& o : indocument["filter"].GetArray()) {
-        if (o.IsString()) filter.push_back(o.GetString());
+    std::string order;
+    if (uri.has_value() && uri.query.count("order")) {
+        order = uri.query.at("order");
+    } else if (indocument.HasMember("order") && indocument["order"].IsString()) {
+        order = indocument["order"].GetString();
     }
+    if (order.empty()) return send(response::json_error(error_wrapper(error_type::xcat_order_missing)));
 
-    xcat_session->set_nextboot(filter, indocument["order"].GetString(), [xcat_session, send](auto nodes, auto ec) mutable {
+    xcat_session->set_nextboot(getFilter(indocument, uri), order, [xcat_session, send](auto nodes, auto ec) mutable {
         (void)nodes;
         return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
     });
@@ -769,15 +771,15 @@ void f_xcat_setPowerstate(CheckAuth check_auth, Send send, const rapidjson::Docu
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
     if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
 
-    if (!(indocument.HasMember("action") && indocument["action"].IsString())) return send(response::json_error(error_wrapper(error_type::xcat_action_missing)));
-
-    std::vector<std::string> filter;
-    if (!(indocument.HasMember("filter") && indocument["filter"].IsArray())) return send(response::json_error(error_wrapper(error_type::xcat_filter_missing)));
-    for (const auto& o : indocument["filter"].GetArray()) {
-        if (o.IsString()) filter.push_back(o.GetString());
+    std::string action;
+    if (uri.has_value() && uri.query.count("action")) {
+        action = uri.query.at("action");
+    } else if (indocument.HasMember("action") && indocument["action"].IsString()) {
+        action = indocument["action"].GetString();
     }
+    if (action.empty()) return send(response::json_error(error_wrapper(error_type::xcat_action_missing)));
 
-    xcat_session->set_nextboot(filter, indocument["action"].GetString(), [xcat_session, send](auto nodes, auto ec) mutable {
+    xcat_session->set_nextboot(getFilter(indocument, uri), action, [xcat_session, send](auto nodes, auto ec) mutable {
         (void)nodes;
         return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
     });
@@ -1038,6 +1040,26 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
             check_json(indocument);
             cw::proxy::XcatOptions opts;
             f_xcat_getNodes(check_auth, send, indocument, url, opts, ioc);
+        } else if (req.method() == http::verb::get && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "groups") {
+            check_json(indocument);
+            cw::proxy::XcatOptions opts;
+            f_xcat_getGroups(check_auth, send, indocument, url, opts, ioc);
+        } else if (req.method() == http::verb::get && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "osimages") {
+            check_json(indocument);
+            cw::proxy::XcatOptions opts;
+            f_xcat_getOsimages(check_auth, send, indocument, url, opts, ioc);
+        } else if (req.method() == http::verb::put && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "bootstate") {
+            check_json(indocument);
+            cw::proxy::XcatOptions opts;
+            f_xcat_setBootstate(check_auth, send, indocument, url, opts, ioc);
+        } else if (req.method() == http::verb::put && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "nextboot") {
+            check_json(indocument);
+            cw::proxy::XcatOptions opts;
+            f_xcat_setNextboot(check_auth, send, indocument, url, opts, ioc);
+        } else if (req.method() == http::verb::put && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "powerstate") {
+            check_json(indocument);
+            cw::proxy::XcatOptions opts;
+            f_xcat_setPowerstate(check_auth, send, indocument, url, opts, ioc);
         } else {
             send(response::json_error(error_wrapper(error_type::request_unknown).with_msg(std::string(boost::beast::http::to_string(req.method())) + " " + std::string(req.target()))));
         }
