@@ -185,6 +185,7 @@ void runHttps(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fu
 
     std::shared_ptr<RequestSSL> boost_req{new RequestSSL{boost::asio::ip::tcp::resolver{make_strand(ioc_.get_executor())}, beast::ssl_stream<beast::tcp_stream>{make_strand(ioc_.get_executor()), ctx}, {}, {}, {}}};
     auto ec_convert = requestConvert(req, boost_req->req, host, port, true);
+
     if (ec_convert) {
         ::xcat::ApiCallResponse res;
         res.ec = ec_convert;
@@ -263,8 +264,6 @@ void runHttps(boost::asio::io_context& ioc_, ::xcat::ApiCallRequest req, std::fu
                                             resp(res);
                                             return;
                                         }
-
-                                        std::cout << boost_req->res << std::endl;
 
                                         resp(responseConvert(boost_req->res));
 

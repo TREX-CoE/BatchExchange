@@ -71,7 +71,7 @@ std::vector<std::string> getFilter(const rapidjson::Document& indocument, const 
             filters.push_back(filter.substr(start, end));
             return true;
         });
-    } else if (indocument.HasMember("filter") && indocument["filter"].IsArray()) {
+    } else if (!indocument.HasParseError() && indocument.IsObject() && indocument.HasMember("filter") && indocument["filter"].IsArray()) {
         for (const auto& o : indocument["filter"].GetArray()) {
             if (o.IsString()) filters.push_back(o.GetString());
         }
@@ -224,6 +224,7 @@ std::error_code xcat_get_opts_uri(const Uri& uri, cw::proxy::XcatOptions& opts) 
 }
 
 std::error_code xcat_get_opts_json(const rapidjson::Document& indocument, cw::proxy::XcatOptions& opts) {
+    if (indocument.HasParseError() || !indocument.IsObject()) return {};
     if (indocument.HasMember("host") && indocument["host"].IsString()) {
         opts.host = indocument["host"].GetString();
     }
@@ -722,7 +723,7 @@ void f_xcat_setBootstate(CheckAuth check_auth, Send send, const rapidjson::Docum
     std::string osimage;
     if (uri.has_value() && uri.query.count("osimage")) {
         osimage = uri.query.at("osimage");
-    } else if (indocument.HasMember("osimage") && indocument["osimage"].IsString()) {
+    } else if (!indocument.HasParseError() && indocument.IsObject() && indocument.HasMember("osimage") && indocument["osimage"].IsString()) {
         osimage = indocument["osimage"].GetString();
     }
     if (osimage.empty()) return send(response::json_error(error_wrapper(error_type::xcat_osimage_missing)));
@@ -748,7 +749,7 @@ void f_xcat_setNextboot(CheckAuth check_auth, Send send, const rapidjson::Docume
     std::string order;
     if (uri.has_value() && uri.query.count("order")) {
         order = uri.query.at("order");
-    } else if (indocument.HasMember("order") && indocument["order"].IsString()) {
+    } else if (!indocument.HasParseError() && indocument.IsObject() && indocument.HasMember("order") && indocument["order"].IsString()) {
         order = indocument["order"].GetString();
     }
     if (order.empty()) return send(response::json_error(error_wrapper(error_type::xcat_order_missing)));
@@ -774,7 +775,7 @@ void f_xcat_setPowerstate(CheckAuth check_auth, Send send, const rapidjson::Docu
     std::string action;
     if (uri.has_value() && uri.query.count("action")) {
         action = uri.query.at("action");
-    } else if (indocument.HasMember("action") && indocument["action"].IsString()) {
+    } else if (!indocument.HasParseError() && indocument.IsObject() && indocument.HasMember("action") && indocument["action"].IsString()) {
         action = indocument["action"].GetString();
     }
     if (action.empty()) return send(response::json_error(error_wrapper(error_type::xcat_action_missing)));
@@ -940,27 +941,26 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
     };
 
     auto check_json =
-    [send_, res, &content_type, &req](rapidjson::Document& document) mutable
+    [send_, res, &content_type, &req](rapidjson::Document& document, bool optional=false) mutable
     {
         if (content_type != "application/json") {
-            res.result(http::status::unsupported_media_type);
-            send_(std::move(res));
+            if (!optional) {
+                res.result(http::status::unsupported_media_type);
+                send_(std::move(res));
+            }
             return false;
         }
 
         document.Parse(req.body());
         if (document.HasParseError()) {
-            res.result(http::status::unsupported_media_type);
-            send_(std::move(res));
+            if (!optional) {
+                res.result(http::status::unsupported_media_type);
+                send_(std::move(res));
+            }
             return false;
         }
 
         return true;
-    };
-
-    auto send_info = [send_, res](auto ec, auto container) mutable {
-        to_response(res, response::containerReturn(ec, container));
-        return send_(std::move(res));
     };
 
     auto send = [res, send_](response::resp r) mutable {
@@ -1033,31 +1033,31 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
             if (!check_json(indocument)) return;
             f_rescheduleRunningJobInQueue(check_auth, send, indocument, url.remove_prefix(1), {}, ioc);
         } else if (req.method() == http::verb::post && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "login") {
-            if (!check_json(indocument)) return;
+            check_json(indocument, true);
             cw::proxy::XcatOptions opts;
             f_xcat_login(check_auth, send, indocument, url, opts, ioc);
         } else if (req.method() == http::verb::get && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "nodes") {
-            check_json(indocument);
+            check_json(indocument, true);
             cw::proxy::XcatOptions opts;
             f_xcat_getNodes(check_auth, send, indocument, url, opts, ioc);
         } else if (req.method() == http::verb::get && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "groups") {
-            check_json(indocument);
+            check_json(indocument, true);
             cw::proxy::XcatOptions opts;
             f_xcat_getGroups(check_auth, send, indocument, url, opts, ioc);
         } else if (req.method() == http::verb::get && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "osimages") {
-            check_json(indocument);
+            check_json(indocument, true);
             cw::proxy::XcatOptions opts;
             f_xcat_getOsimages(check_auth, send, indocument, url, opts, ioc);
         } else if (req.method() == http::verb::put && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "bootstate") {
-            check_json(indocument);
+            check_json(indocument, true);
             cw::proxy::XcatOptions opts;
             f_xcat_setBootstate(check_auth, send, indocument, url, opts, ioc);
         } else if (req.method() == http::verb::put && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "nextboot") {
-            check_json(indocument);
+            check_json(indocument, true);
             cw::proxy::XcatOptions opts;
             f_xcat_setNextboot(check_auth, send, indocument, url, opts, ioc);
         } else if (req.method() == http::verb::put && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "powerstate") {
-            check_json(indocument);
+            check_json(indocument, true);
             cw::proxy::XcatOptions opts;
             f_xcat_setPowerstate(check_auth, send, indocument, url, opts, ioc);
         } else {

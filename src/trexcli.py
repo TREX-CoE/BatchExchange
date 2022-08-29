@@ -17,6 +17,15 @@ curl --header "Content-Type: application/json" --insecure -H "Accept: applicatio
         "scopes":["graphs_read","units_read","configclasses_read","racks_read","preferences_read","users_self_read","users_self_write","values_read","alerts_read","inventories_read","traps_read","views_read","metrics_read"] \\
         }]' https://127.0.0.1:8000/api/v1/users
 
+
+python3 trexcli.py repl
+trex.info()
+trex.set_credentials("admin","admin")
+trex.set_batchsystem("slurm")
+trex.set_credentials("admin","admin")
+trex.set_xcat_connection(host="192.168.56.10", port=443, ssl=True, ssl_verify=False)
+trex.set_xcat_credentials(username="root", password="root")
+trex.xcat_get_nodes()
 """
 
 __all__ = ["API", "Resp", "AttrDict", "APIBase", "main"]
@@ -99,6 +108,8 @@ class APIBase:
         self.base_uri = base_uri
         self.api_uri = api_uri
         self.ignore_error = ignore_error
+        self.username = None
+        self.password = None
 
     @contextlib.contextmanager
     def errors_ignored(self):
@@ -173,13 +184,50 @@ class APIBase:
         return self.request(*args, method="OPTIONS", **kwargs)
 
 class API(APIBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.batchsystem = None
+        self.xcat_password = None
+        self.xcat_username = None
+        self.xcat_token = None
+        self.xcat_host = None
+        self.xcat_port = 443
+        self.xcat_ssl = True
+        self.xcat_ssl_verify = False
+
     def set_batchsystem(self, batchsystem):
         self.batchsystem = batchsystem
+
+    def set_xcat_connection(self, host, port=443, ssl=True, ssl_verify=False):
+        self.xcat_host = host
+        self.xcat_port = port
+        self.xcat_ssl = ssl
+        self.xcat_ssl_verify = ssl_verify
+
+    def set_xcat_token(self, token):
+        self.xcat_token = token
+
+    def set_xcat_credentials(self, username, password):
+        self.xcat_username = username
+        self.xcat_password = password
+
+    def _get_xcat_options(self):
+        opts = [("host="+self.xcat_host), ("port="+str(self.xcat_port)), ("ssl="+("true" if self.xcat_ssl else "false")), ("ssl_verify="+("true" if self.xcat_ssl_verify else "false"))]
+        if self.xcat_token is not None:
+            opts.append("token="+self.xcat_token)
+        elif self.xcat_username is not None and self.xcat_password is not None:
+            opts.append("user="+self.xcat_username)
+            opts.append("password="+self.xcat_password)
+        return "&".join(opts)
+
     def info(self):
         return self.get("/info")
     def get_nodes(self):
+        if not self.batchsystem: raise ValueError("Batchsystem not set")
         return self.get("/nodes?batchsystem="+self.batchsystem)
 
+    def xcat_get_nodes(self):
+        return self.get("/xcat/nodes?"+self._get_xcat_options())
 #endregion
 
 #region cli
