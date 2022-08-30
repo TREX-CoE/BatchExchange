@@ -215,6 +215,10 @@ void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, XcatErr
                     if (o.HasMember("mac") && o["mac"].IsString()) info.mac = o["mac"].GetString();
                     if (o.HasMember("groups") && o["groups"].IsString()) info.groups = split(o["groups"].GetString(), ',');
 
+                    for (const auto& item: o) {
+                        if (item.value.IsString()) nodes[info.name].extra[item.name.GetString()] = item.value.GetString();
+                    }
+
                     nodes[info.name] = info;
                 }
 
@@ -267,15 +271,35 @@ void Xcat::get_osimages(const std::vector<std::string> &filter, std::function<vo
     });
 }
 
-void Xcat::get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, XcatError ec)> cb) {
+void Xcat::get_bootstate(const std::vector<std::string> &filter, std::function<void(std::map<std::string, std::string>, XcatError ec)> cb) {
     if (!check_auth()) throw std::system_error(error::no_auth);
     _func(add_auth({HttpMethod::GET, filter.empty() ? "xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "", {}}, false), [cb](ApiCallResponse resp){
         if (resp.ec) {
-            cb("", {resp.ec, 0, ""});
+            cb({}, {resp.ec, 0, ""});
         } else if (resp.status_code == 200) {
-            cb("", check_errors(resp.body));
+            rapidjson::Document indocument;
+            indocument.Parse(resp.body);
+            if (!indocument.HasParseError() && indocument.IsObject()) {
+                std::map<std::string, std::string> nodes;
+                for (const auto& p : indocument.GetObject()) {
+                    std::string key = p.name.GetString();
+                    if (key == "info" && !p.value.IsObject()) {
+                        // "Could not find any object definitions to display."
+                        continue;
+                    }
+
+                    const auto& o = p.value.GetObject();
+                    std::string bootstate;
+                    if (o.HasMember("bootstate") && o["bootstate"].IsString()) bootstate = o["bootstate"].GetString();
+                    nodes[key] = bootstate;
+                }
+
+                cb(nodes, check_errors(resp.body));
+            } else {
+                cb({}, check_errors(resp.body, error::get_bootstate_failed));
+            }
         } else {
-            cb("", check_errors(resp.body, error::get_bootstate_failed));
+            cb({}, check_errors(resp.body, error::get_bootstate_failed));
         }
     });
 }

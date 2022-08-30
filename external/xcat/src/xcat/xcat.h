@@ -71,6 +71,7 @@ struct NodeInfo {
     std::string primarynic;
     std::string mac;
     std::vector<std::string> groups;
+    std::map<std::string, std::string> extra;
 };
 
 struct GroupInfo {
@@ -111,7 +112,7 @@ public:
     void get_nodes(std::function<void(std::map<std::string, NodeInfo>, XcatError ec)> cb);
     void get_groups(const std::vector<std::string> &filter, std::function<void(std::map<std::string, GroupInfo>, XcatError ec)> cb);
     void get_osimages(const std::vector<std::string> &filter, std::function<void(std::map<std::string, OsimageInfo>, XcatError ec)> cb);
-    void get_bootstate(const std::vector<std::string> &filter, std::function<void(std::string, XcatError ec)> cb);
+    void get_bootstate(const std::vector<std::string> &filter, std::function<void(std::map<std::string, std::string>, XcatError ec)> cb);
     void set_powerstate(const std::vector<std::string> &filter, std::string action, std::function<void(std::string, XcatError ec)> cb);
     void set_nextboot(const std::vector<std::string> &filter, std::string order, std::function<void(std::string, XcatError ec)> cb);
     void set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(std::string, XcatError ec)> cb);

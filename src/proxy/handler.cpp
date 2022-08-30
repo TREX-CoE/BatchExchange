@@ -709,6 +709,23 @@ void f_xcat_getOsimages(CheckAuth check_auth, Send send, const rapidjson::Docume
 
 
 template <typename CheckAuth, typename Send>
+void f_xcat_getBootstate(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
+    if (!check_auth({"xcat_get_bootstate"})) return;
+
+    xcat_get_opts_uri(uri, opts);
+    xcat_get_opts_json(indocument, opts);
+
+    std::error_code ec_session;
+    auto xcat_session = getXcat(ioc, opts, ec_session);
+    if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
+    if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
+
+    xcat_session->get_bootstate(getFilter(indocument, uri), [xcat_session, send](auto nodes, auto ec) mutable {
+        return send(response::xcatBootstateReturn(error_wrapper(ec.ec).with_msg(ec.msg), nodes));
+    });
+}
+
+template <typename CheckAuth, typename Send>
 void f_xcat_setBootstate(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
     if (!check_auth({"xcat_set_bootstate"})) return;
 
@@ -934,6 +951,8 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
             f_xcat_setPowerstate(check_auth, send, indocument, url, xcat_opts, ioc);
         } else if (command == "xcat/setGroupAttributes") {
             f_xcat_setGroupAttributes(check_auth, send, indocument, url, xcat_opts, ioc);
+        } else if (command == "xcat/getBootstate") {
+            f_xcat_getBootstate(check_auth, send, indocument, url, xcat_opts, ioc);
         } else if (command == "xcat/set") {
             send(ws_xcat_set(xcat_opts, indocument));
         } else {
@@ -1078,6 +1097,10 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
             check_json(indocument, true);
             cw::proxy::XcatOptions opts;
             f_xcat_getOsimages(check_auth, send, indocument, url, opts, ioc);
+        } else if (req.method() == http::verb::get && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "bootstate") {
+            check_json(indocument, true);
+            cw::proxy::XcatOptions opts;
+            f_xcat_getBootstate(check_auth, send, indocument, url, opts, ioc);
         } else if (req.method() == http::verb::put && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "bootstate") {
             check_json(indocument, true);
             cw::proxy::XcatOptions opts;

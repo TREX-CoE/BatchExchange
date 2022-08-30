@@ -224,11 +224,17 @@ class API(APIBase):
 
     def check_drained(self, nodes):
         get_nodes_obj = self.get_nodes()
-        nodes_to_drain = set(nodes)
+        print(get_nodes_obj)
+        nodes_to_drain = {}
+        for n in nodes:
+            nodes_to_drain[n] = "UNKNOWN"
+        set(nodes)
         for o in get_nodes_obj["data"]:
             if o["name"] in nodes_to_drain:
-                if o["state"] == "disabled":
-                    nodes_to_drain.remove(o["name"])
+                nodes_to_drain[o["name"]] = o["rawState"]
+                states = o["rawState"].lower().split("+")
+                if "drained" in states or "down" in states:
+                    nodes_to_drain.pop(o["name"])
         return nodes_to_drain
 
     def set_node_state(self, node, state, reason):
@@ -283,14 +289,16 @@ class API(APIBase):
         print("Set nodes to draining")
         for node in nodes:
             ret = self.set_node_state(node, "drain", reason=reason)
+            print(ret)
             if not ret["data"]["success"]:
                 raise ValueError("Error draining "+node)
 
         while True:
             rest = self.check_drained(nodes)
-            print("Waiting for nodes to drain: "+", ".join(rest))
             if len(rest) == 0:
                 break
+            else:
+                print("Waiting for nodes to drain: "+", ".join(k+"("+v+")" for k, v in rest.items()))
             time.sleep(drain_interval)
 
         print("Set group attributes")
@@ -365,9 +373,16 @@ def _nodes(session, args):
     set_session(session, args)
     logger.log(_NOTICE, format_dict(session.get_nodes(), args.output))
 
+def _xcatnodes(session, args):
+    set_session(session, args)
+    set_xcat_session(session, args)
+    logger.log(_NOTICE, format_dict(session.xcat_get_nodes(), args.output))
+
+
 def _deploy(session, args):
     set_session(session, args)
     set_xcat_session(session, args)
+    #session.ignore_error = False
     try:
         session.deploy(osimage=args.osimage, nodes=args.nodes, groups=args.groups, reason=args.reason, provmethod=args.provmethod, postbootscripts=args.postbootscripts, postscripts=args.postscripts)
     except ValueError as msg:
@@ -384,6 +399,7 @@ _cmds = {
     "nodes": _nodes,
     "deploy": _deploy,
     "osimages": _show_osimages,
+    "xcatnodes": _xcatnodes,
 }
 
 def _create_parser():
@@ -426,6 +442,7 @@ def _create_parser():
     parser_deploy.add_argument('--postscripts', type=str, help='postscripts')
 
     parser_osimages = subparsers.add_parser("osimages", help="Show osimages")
+    parser_xcatnodes = subparsers.add_parser("xcatnodes", help="Get xcat nodes")
 
     return parser
 
@@ -450,21 +467,6 @@ def main():
         sys.exit(1)
 
 #endregion
-
-
-def test():
-    trex = API(verify_ssl=False, base_uri="https://127.0.0.1:2000")
-    trex.ignore_error = True
-    trex.info()
-    trex.set_credentials("admin","admin")
-    trex.set_batchsystem("slurm")
-    trex.set_xcat_connection(host="192.168.56.10", port=443, ssl=True, ssl_verify=False)
-    trex.set_xcat_credentials(username="root", password="root")
-    print(trex.xcat_set_nextboot(["node1"], "net"))
-    trex.ignore_error = False
-    trex.deploy(osimage="sles11.3-ppc64-install-compute", groups=["all"])
-
-
 
 
 if __name__ == "__main__":

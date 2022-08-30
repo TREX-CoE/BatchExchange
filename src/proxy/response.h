@@ -229,6 +229,12 @@ resp xcatNodesReturn(const error_wrapper& e, std::map<std::string, ::xcat::NodeI
                 node.AddMember("primarynic", p.second.primarynic, allocator);
                 node.AddMember("mac", p.second.mac, allocator);
 
+                for (const auto& item: p.second.extra) {
+                    rapidjson::Value key(item.first.c_str(), allocator);
+                    rapidjson::Value val(item.second.c_str(), allocator);
+                    node.AddMember(key, val, allocator);
+                }
+
                 rapidjson::Value groups;
                 groups.SetArray();
                 for (const auto& group : p.second.groups) {
@@ -311,7 +317,29 @@ resp xcatOsimagesReturn(const error_wrapper& e, std::map<std::string, ::xcat::Os
     }
 }
 
-
+resp xcatBootstateReturn(const error_wrapper& e, std::map<std::string, std::string> groups) {
+    if (e.ec()) {
+        return json_error(e);
+    } else {
+        resp r;
+        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
+        r.second = boost::beast::http::status::ok;
+        r.first.SetObject();
+        {
+            rapidjson::Value data;
+            data.SetObject();
+            for (const auto& p : groups) {
+                rapidjson::Value node;
+                node.SetObject();
+                node.AddMember("bootstate", p.second, allocator);
+                rapidjson::Value key(p.first.c_str(), allocator);
+                data.AddMember(key, node, allocator);
+            }
+            r.first.AddMember("data", data, allocator);
+        }
+        return r;
+    }
+}
 
 resp runJobReturn(const error_wrapper& e, const std::string& jobName) {
     if (e) {
