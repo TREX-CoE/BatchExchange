@@ -216,7 +216,7 @@ void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, XcatErr
                     if (o.HasMember("groups") && o["groups"].IsString()) info.groups = split(o["groups"].GetString(), ',');
 
                     for (const auto& item: o) {
-                        if (item.value.IsString()) nodes[info.name].extra[item.name.GetString()] = item.value.GetString();
+                        if (item.value.IsString()) info.extra[item.name.GetString()] = item.value.GetString();
                     }
 
                     nodes[info.name] = info;
