@@ -933,7 +933,7 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
         } else if (command == "xcat/setPowerstate") {
             f_xcat_setPowerstate(check_auth, send, indocument, url, xcat_opts, ioc);
         } else if (command == "xcat/setGroupAttributes") {
-            f_xcat_setGroupAttributes(check_auth, send, indocument, url, opts, ioc);
+            f_xcat_setGroupAttributes(check_auth, send, indocument, url, xcat_opts, ioc);
         } else if (command == "xcat/set") {
             send(ws_xcat_set(xcat_opts, indocument));
         } else {

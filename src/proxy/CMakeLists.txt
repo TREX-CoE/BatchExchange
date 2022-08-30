@@ -1,6 +1,6 @@
 
 set(Boost_USE_STATIC_LIBS   ON)
-set(OPENSSL_USE_STATIC_LIBS ON)
+set(OPENSSL_USE_STATIC_LIBS OFF)
 
 find_package( Boost 1.70.0 COMPONENTS system filesystem REQUIRED )
 find_package( OpenSSL REQUIRED )
