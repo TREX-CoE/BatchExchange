@@ -113,10 +113,10 @@ public:
     void get_groups(const std::vector<std::string> &filter, std::function<void(std::map<std::string, GroupInfo>, XcatError ec)> cb);
     void get_osimages(const std::vector<std::string> &filter, std::function<void(std::map<std::string, OsimageInfo>, XcatError ec)> cb);
     void get_bootstate(const std::vector<std::string> &filter, std::function<void(std::map<std::string, std::string>, XcatError ec)> cb);
-    void set_powerstate(const std::vector<std::string> &filter, std::string action, std::function<void(std::string, XcatError ec)> cb);
-    void set_nextboot(const std::vector<std::string> &filter, std::string order, std::function<void(std::string, XcatError ec)> cb);
-    void set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(std::string, XcatError ec)> cb);
-    void set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(std::string, XcatError ec)> cb);
+    void set_powerstate(const std::vector<std::string> &filter, std::string action, std::function<void(XcatError ec)> cb);
+    void set_nextboot(const std::vector<std::string> &filter, std::string order, std::function<void(XcatError ec)> cb);
+    void set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(XcatError ec)> cb);
+    void set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(XcatError ec)> cb);
 }; 
 
 

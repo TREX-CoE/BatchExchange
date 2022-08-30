@@ -86,12 +86,17 @@ resp json_error(error_wrapper e) {
     return r;
 }
 
-resp commandSuccess() {
+resp commandSuccess(boost::beast::http::status status=boost::beast::http::status::ok) {
     resp r;
     rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
     r.first.SetObject();
-    r.first.AddMember("success", true, allocator);
-    r.second = boost::beast::http::status::ok;
+    {
+        rapidjson::Value data;
+        data.SetObject();
+        data.AddMember("success", true, allocator);
+        r.first.AddMember("data", data, allocator);
+    }
+    r.second = status;
     return r;
 }
 
@@ -117,17 +122,7 @@ resp commandReturn(error_wrapper e, const std::string& failType = "Running comma
     if (e) {
         return json_error(e.with_msg(failType).with_status(static_cast<int>(statusFail)));
     } else {
-        resp r;
-        rapidjson::Document::AllocatorType& allocator = r.first.GetAllocator();
-        r.second = statusFail;
-        r.first.SetObject();
-        {
-            rapidjson::Value data;
-            data.SetObject();
-            data.AddMember("success", true, allocator);
-            r.first.AddMember("data", data, allocator);
-        }
-        return r;
+        return commandSuccess();
     }
 }
 

@@ -304,46 +304,46 @@ void Xcat::get_bootstate(const std::vector<std::string> &filter, std::function<v
     });
 }
 
-void Xcat::set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(std::string, XcatError ec)> cb) {
+void Xcat::set_bootstate(const std::vector<std::string> &filter, std::string osimage, std::function<void(XcatError ec)> cb) {
     if (!check_auth()) throw std::system_error(error::no_auth);
     _func(add_auth({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/bootstate" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/bootstate"), "{\"osimage\":\"" + osimage + "\"}", {{"Content-Type", "application/json"}}}, false), [cb](ApiCallResponse resp){
         if (resp.ec) {
-            cb("", {resp.ec, 0, ""});
+            cb({resp.ec, 0, ""});
         } else if (resp.status_code == 200) {
-            cb("", check_errors(resp.body));
+            cb(check_errors(resp.body));
         } else {
-            cb("", check_errors(resp.body, error::set_bootstate_failed));
+            cb(check_errors(resp.body, error::set_bootstate_failed));
         }
     });
 }
 
-void Xcat::set_nextboot(const std::vector<std::string> &filter, std::string order, std::function<void(std::string, XcatError ec)> cb) {
+void Xcat::set_nextboot(const std::vector<std::string> &filter, std::string order, std::function<void(XcatError ec)> cb) {
     if (!check_auth()) throw std::system_error(error::no_auth);
     _func(add_auth({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/nextboot" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/nextboot"), "{\"order\":\"" + order + "\"}", {{"Content-Type", "application/json"}}}, false), [cb](ApiCallResponse resp){
         if (resp.ec) {
-            cb("", {resp.ec, 0, ""});
+            cb({resp.ec, 0, ""});
         } else if (resp.status_code == 200) {
-            cb("", check_errors(resp.body));
+            cb(check_errors(resp.body));
         } else {
-            cb("", check_errors(resp.body, error::set_nextboot_failed));
+            cb(check_errors(resp.body, error::set_nextboot_failed));
         }
     });
 }
 
-void Xcat::set_powerstate(const std::vector<std::string> &filter, std::string action, std::function<void(std::string, XcatError ec)> cb) {
+void Xcat::set_powerstate(const std::vector<std::string> &filter, std::string action, std::function<void(XcatError ec)> cb) {
     if (!check_auth()) throw std::system_error(error::no_auth);
     _func(add_auth({HttpMethod::PUT, filter.empty() ? "/xcatws/nodes/ALLRESOURCES/power" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",") + "/power"), "{\"action\":\""+action+"\"}", {{"Content-Type", "application/json"}}}, false), [cb](ApiCallResponse resp){
         if (resp.ec) {
-            cb("", {resp.ec, 0, ""});
+            cb({resp.ec, 0, ""});
         } else if (resp.status_code == 200) {
-            cb("", check_errors(resp.body));
+            cb(check_errors(resp.body));
         } else {
-            cb("", check_errors(resp.body, error::set_powerstate_failed));
+            cb(check_errors(resp.body, error::set_powerstate_failed));
         }
     });
 }
 
-void Xcat::set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(std::string, XcatError ec)> cb) {
+void Xcat::set_group_attributes(const std::vector<std::string> &filter, const std::map<std::string, std::string>& attrs, std::function<void(XcatError ec)> cb) {
     if (!check_auth()) throw std::system_error(error::no_auth);
 
     rapidjson::Document doc;
@@ -359,11 +359,11 @@ void Xcat::set_group_attributes(const std::vector<std::string> &filter, const st
 
     _func(add_auth({HttpMethod::PUT, "/xcatws/groups/" + internal::joinString(filter.begin(), filter.end(), ","), jsonToString(doc), {{"Content-Type", "application/json"}}}, false), [cb](ApiCallResponse resp){
         if (resp.ec) {
-            cb("", {resp.ec, 0, ""});
+            cb({resp.ec, 0, ""});
         } else if (resp.status_code == 200) {
-            cb("", check_errors(resp.body));
+            cb(check_errors(resp.body));
         } else {
-            cb("", check_errors(resp.body, error::set_group_attributes_failed));
+            cb(check_errors(resp.body, error::set_group_attributes_failed));
         }
     });
 }

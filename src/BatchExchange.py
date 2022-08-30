@@ -224,7 +224,6 @@ class API(APIBase):
 
     def check_drained(self, nodes):
         get_nodes_obj = self.get_nodes()
-        print(get_nodes_obj)
         nodes_to_drain = {}
         for n in nodes:
             nodes_to_drain[n] = "UNKNOWN"
@@ -289,7 +288,6 @@ class API(APIBase):
         print("Set nodes to draining")
         for node in nodes:
             ret = self.set_node_state(node, "drain", reason=reason)
-            print(ret)
             if not ret["data"]["success"]:
                 raise ValueError("Error draining "+node)
 

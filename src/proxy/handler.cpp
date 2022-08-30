@@ -745,8 +745,7 @@ void f_xcat_setBootstate(CheckAuth check_auth, Send send, const rapidjson::Docum
     }
     if (osimage.empty()) return send(response::json_error(error_wrapper(error_type::xcat_osimage_missing)));
 
-    xcat_session->set_bootstate(getFilter(indocument, uri), osimage, [xcat_session, send](auto nodes, auto ec) mutable {
-        (void)nodes;
+    xcat_session->set_bootstate(getFilter(indocument, uri), osimage, [xcat_session, send](auto ec) mutable {
         return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
     });
 }
@@ -771,8 +770,7 @@ void f_xcat_setNextboot(CheckAuth check_auth, Send send, const rapidjson::Docume
     }
     if (order.empty()) return send(response::json_error(error_wrapper(error_type::xcat_order_missing)));
 
-    xcat_session->set_nextboot(getFilter(indocument, uri), order, [xcat_session, send](auto nodes, auto ec) mutable {
-        (void)nodes;
+    xcat_session->set_nextboot(getFilter(indocument, uri), order, [xcat_session, send](auto ec) mutable {
         return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
     });
 }
@@ -797,8 +795,7 @@ void f_xcat_setPowerstate(CheckAuth check_auth, Send send, const rapidjson::Docu
     }
     if (action.empty()) return send(response::json_error(error_wrapper(error_type::xcat_action_missing)));
 
-    xcat_session->set_nextboot(getFilter(indocument, uri), action, [xcat_session, send](auto nodes, auto ec) mutable {
-        (void)nodes;
+    xcat_session->set_powerstate(getFilter(indocument, uri), action, [xcat_session, send](auto ec) mutable {
         return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
     });
 }
@@ -824,9 +821,7 @@ void f_xcat_setGroupAttributes(CheckAuth check_auth, Send send, const rapidjson:
         }
     }
 
-
-    xcat_session->set_group_attributes(getFilter(indocument, uri), attributes, [xcat_session, send](auto nodes, auto ec) mutable {
-        (void)nodes;
+    xcat_session->set_group_attributes(getFilter(indocument, uri), attributes, [xcat_session, send](auto ec) mutable {
         return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
     });
 }
