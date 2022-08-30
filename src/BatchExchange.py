@@ -232,7 +232,7 @@ class API(APIBase):
             if o["name"] in nodes_to_drain:
                 nodes_to_drain[o["name"]] = o["rawState"]
                 states = o["rawState"].lower().split("+")
-                if "drained" in states or "down" in states:
+                if o["state"] == "disabled" or "drained" in states or "down" in states:
                     nodes_to_drain.pop(o["name"])
         return nodes_to_drain
 
@@ -264,7 +264,7 @@ class API(APIBase):
         return self.put("/xcat/nextboot?"+self._get_xcat_options(), data={"filter": filter, "order": order})
 
     def xcat_set_powerstate(self, filter, action):
-        return self.put("/xcat/bootstate?"+self._get_xcat_options(), data={"filter": filter, "action": action})
+        return self.put("/xcat/powerstate?"+self._get_xcat_options(), data={"filter": filter, "action": action})
 
 
     def deploy(self, osimage, nodes=None, groups=None, reason="redeployment", provmethod=None, prescripts=None, postbootscripts=None, postscripts=None, drain_interval=5):
