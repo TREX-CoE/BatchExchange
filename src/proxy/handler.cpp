@@ -786,6 +786,34 @@ void f_xcat_setPowerstate(CheckAuth check_auth, Send send, const rapidjson::Docu
     });
 }
 
+template <typename CheckAuth, typename Send>
+void f_xcat_setGroupAttributes(CheckAuth check_auth, Send send, const rapidjson::Document& indocument, const Uri& uri, cw::proxy::XcatOptions& opts, boost::asio::io_context& ioc) {
+    if (!check_auth({"xcat_set_group_attributes"})) return;
+
+    xcat_get_opts_uri(uri, opts);
+    xcat_get_opts_json(indocument, opts);
+
+    std::error_code ec_session;
+    auto xcat_session = getXcat(ioc, opts, ec_session);
+    if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
+    if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
+
+    if (indocument.HasParseError() || !indocument.IsObject() || !indocument.HasMember("attributes")) return send(response::json_error(error_wrapper(error_type::xcat_attributes_missing)));
+    
+    std::map<std::string, std::string> attributes;
+    for (const auto& p : indocument["attributes"].GetObject()) {
+        if (p.value.IsString()) {
+            attributes[p.name.GetString()] = p.value.GetString();
+        }
+    }
+
+
+    xcat_session->set_group_attributes(getFilter(indocument, uri), attributes, [xcat_session, send](auto nodes, auto ec) mutable {
+        (void)nodes;
+        return send(ec.ec ? response::json_error(error_wrapper(ec.ec).with_msg(ec.msg)) : response::commandSuccess());
+    });
+}
+
 }
 
 namespace cw {
@@ -904,6 +932,8 @@ void ws(std::function<void(std::string)> send_, boost::asio::io_context& ioc, st
             f_xcat_setNextboot(check_auth, send, indocument, url, xcat_opts, ioc);
         } else if (command == "xcat/setPowerstate") {
             f_xcat_setPowerstate(check_auth, send, indocument, url, xcat_opts, ioc);
+        } else if (command == "xcat/setGroupAttributes") {
+            f_xcat_setGroupAttributes(check_auth, send, indocument, url, opts, ioc);
         } else if (command == "xcat/set") {
             send(ws_xcat_set(xcat_opts, indocument));
         } else {
@@ -1060,6 +1090,10 @@ void rest(std::function<void(boost::beast::http::response<boost::beast::http::st
             check_json(indocument, true);
             cw::proxy::XcatOptions opts;
             f_xcat_setPowerstate(check_auth, send, indocument, url, opts, ioc);
+        } else if (req.method() == http::verb::put && url.path.size() == 2 && url.path[0] == "xcat" && url.path[1] == "groupattrs") {
+            if (!check_json(indocument)) return;
+            cw::proxy::XcatOptions opts;
+            f_xcat_setGroupAttributes(check_auth, send, indocument, url, opts, ioc);
         } else {
             send(response::json_error(error_wrapper(error_type::request_unknown).with_msg(std::string(boost::beast::http::to_string(req.method())) + " " + std::string(req.target()))));
         }

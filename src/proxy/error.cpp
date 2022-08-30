@@ -84,6 +84,7 @@ const char* to_cstr(error_type type) {
         case error_type::xcat_filter_missing: return "xcat filter is not given";
         case error_type::xcat_order_missing: return "xcat order is not given";
         case error_type::xcat_action_missing: return "xcat power action is not given";
+        case error_type::xcat_attributes_missing: return "xcat attributes is not given";
         case error_type::invalid_method: return "invalid http method";
         default: return "(unrecognized error)";
     }

@@ -84,6 +84,7 @@ enum class error_type {
     xcat_filter_missing,
     xcat_order_missing,
     xcat_action_missing,
+    xcat_attributes_missing,
     invalid_method,
 };
 

@@ -189,7 +189,7 @@ boost::optional<std::tuple<std::string, bool>> deleteJobById(const rapidjson::Do
     std::get<1>(t) = false;
 
     if (uri.has_value()) {
-        if (uri.path.size() != 1) { ec = error_type::rest_path_not_including_job_id; return {}; }
+        if (uri.path.size() < 1) { ec = error_type::rest_path_not_including_job_id; return {}; }
         std::get<0>(t) = uri.path[0];
         if (uri.query.count("force")) {
             bool succ;
@@ -259,7 +259,7 @@ boost::optional<std::tuple<std::string, NodeChangeState, bool, std::string, bool
     std::get<2>(t) = false;
 
     if (uri.has_value()) {
-        if (uri.path.size() != 1) {
+        if (uri.path.size() < 1) {
             ec = error_type::rest_path_not_including_node_id;
             return {}; 
         }
@@ -309,7 +309,7 @@ boost::optional<std::tuple<std::string, QueueState, bool>> setQueueState(const r
     std::get<2>(t) = false;
 
     if (uri.has_value()) {
-        if (uri.path.size() != 1) {
+        if (uri.path.size() < 1) {
             ec = error_type::rest_path_not_including_queue_id;
             return {}; 
         }
@@ -341,7 +341,7 @@ boost::optional<std::tuple<std::string, bool, std::string, bool>> setNodeComment
     std::get<1>(t) = false;
 
     if (uri.has_value()) {
-        if (uri.path.size() != 1) {
+        if (uri.path.size() < 1) {
             ec = error_type::rest_path_not_including_node_id;
             return {}; 
         }
@@ -388,7 +388,7 @@ boost::optional<std::tuple<std::string, bool>> holdJob(const rapidjson::Document
     std::get<1>(t) = false;
 
     if (uri.has_value()) {
-        if (uri.path.size() != 1) {
+        if (uri.path.size() < 1) {
             ec = error_type::rest_path_not_including_job_id;
             return {}; 
         }

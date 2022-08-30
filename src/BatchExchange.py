@@ -1,31 +1,17 @@
 #! /usr/bin/env python3
 
 _HELP = """
-# Get only access token from login
-%(prog)s --output parse --uri https://127.0.0.1:8000 login admin admin
+# Examples
 
-# Revoke access token
-%(prog)s revoke admin [access_token]
+%(prog)s repl
+>>> trex.info()
+>>> trex.set_credentials("admin","admin")
+>>> trex.set_batchsystem("slurm")
+>>> trex.set_xcat_connection(host="192.168.56.10", port=443, ssl=True, ssl_verify=False)
+>>> trex.set_xcat_credentials(username="root", password="root")
+>>> trex.xcat_get_nodes()
 
-# Use access token to call api with other tools
-curl --header "Content-Type: application/json" --insecure -H "Accept: application/json" -H "Authorization: Bearer [access_token]" -H "X-HTTP-Method-Override: POST" -X POST --data '[{ \\
-        "language":"en", \\
-        "password":"batch", \\
-        "real_name":"batch", \\
-        "user_name":"batch", \\
-        "user_type":"batch", \\
-        "scopes":["graphs_read","units_read","configclasses_read","racks_read","preferences_read","users_self_read","users_self_write","values_read","alerts_read","inventories_read","traps_read","views_read","metrics_read"] \\
-        }]' https://127.0.0.1:8000/api/v1/users
-
-
-python3 trexcli.py repl
-trex.info()
-trex.set_credentials("admin","admin")
-trex.set_batchsystem("slurm")
-trex.set_credentials("admin","admin")
-trex.set_xcat_connection(host="192.168.56.10", port=443, ssl=True, ssl_verify=False)
-trex.set_xcat_credentials(username="root", password="root")
-trex.xcat_get_nodes()
+%(prog)s --xcat-host=192.168.56.10 --xcat-user=root --xcat-password=root --password=admin --batchsystem slurm deploy --nodes node1 --osimage sles12.3-ppc64-install-compute
 """
 
 __all__ = ["API", "Resp", "AttrDict", "APIBase", "main"]
@@ -62,12 +48,17 @@ _LOGMESSAGE_NORMAL = '%(message)s'
 
 Resp = collections.namedtuple("Resp", ['data', 'raw', 'response'])
 
-def set_session(session, args):
-    if args.password is None:
+def set_session(session, args, ask=True):
+    if ask and args.password is None:
         args.password =  getpass.getpass("Password> ") # hide input for password prompt
     session.set_credentials(args.username, args.password)
     session.set_batchsystem(args.batchsystem)
 
+def set_xcat_session(session, args, ask=True):
+    if ask and args.xcat_password is None:
+        args.xcat_password =  getpass.getpass("XCAT Password> ") # hide input for password prompt
+    session.set_xcat_connection(host=args.xcat_host, port=args.xcat_port, ssl=(not args.xcat_no_ssl), ssl_verify=args.xcat_verify_ssl)
+    session.set_xcat_credentials(username=args.xcat_user, password=args.xcat_password)
 
 def _repl(vars):
     import code
@@ -182,6 +173,7 @@ class APIBase:
         return self.request(*args, method="DELETE", **kwargs)
     def options(self, *args, **kwargs):
         return self.request(*args, method="OPTIONS", **kwargs)
+        
 
 class API(APIBase):
     def __init__(self, *args, **kwargs):
@@ -222,13 +214,100 @@ class API(APIBase):
 
     def info(self):
         return self.get("/info")
-    def get_nodes(self):
+    
+    def _check_batchsystem(self):
         if not self.batchsystem: raise ValueError("Batchsystem not set")
+
+    def get_nodes(self):
+        self._check_batchsystem()
         return self.get("/nodes?batchsystem="+self.batchsystem)
+
+    def check_drained(self, nodes):
+        get_nodes_obj = self.get_nodes()
+        nodes_to_drain = set(nodes)
+        for o in get_nodes_obj["data"]:
+            if o["name"] in nodes_to_drain:
+                if o["state"] == "disabled":
+                    nodes_to_drain.remove(o["name"])
+        return nodes_to_drain
+
+    def set_node_state(self, node, state, reason):
+        self._check_batchsystem()
+        return self.post("/nodes/"+node+"/state?batchsystem="+self.batchsystem, data={"state": state, "reason": reason})
 
     def xcat_get_nodes(self):
         return self.get("/xcat/nodes?"+self._get_xcat_options())
+
+    def xcat_get_osimages(self):
+        return self.get("/xcat/osimages?"+self._get_xcat_options())
+
+    def xcat_get_groups(self):
+        return self.get("/xcat/groups?"+self._get_xcat_options())
+
+    def xcat_set_group_attributes(self, filter, provmethod=None, prescripts=None, postbootscripts=None, postscripts=None, **attrs):
+        o = {**attrs}
+        if provmethod is not None: o["provmethod"] = provmethod
+        if prescripts is not None: o["prescripts"] = prescripts
+        if postbootscripts is not None: o["postbootscripts"] = postbootscripts
+        if postscripts is not None: o["postscripts"] = postscripts
+        return self.put("/xcat/groupattrs?"+self._get_xcat_options(), data={"filter": filter, "attributes": o})
+
+    def xcat_set_bootstate(self, filter, osimage):
+        return self.put("/xcat/bootstate?"+self._get_xcat_options(), data={"filter": filter, "osimage": osimage})
+
+    def xcat_set_nextboot(self, filter, order):
+        return self.put("/xcat/nextboot?"+self._get_xcat_options(), data={"filter": filter, "order": order})
+
+    def xcat_set_powerstate(self, filter, action):
+        return self.put("/xcat/bootstate?"+self._get_xcat_options(), data={"filter": filter, "action": action})
+
+
+    def deploy(self, osimage, nodes=None, groups=None, reason="redeployment", provmethod=None, prescripts=None, postbootscripts=None, postscripts=None, drain_interval=5):
+
+        if nodes is None and groups is None:
+            raise ValueError("Either select nodes or groups")
+
+        available_images = [*self.xcat_get_osimages()["data"].keys()]
+        if osimage not in available_images:
+            raise ValueError("osimage not found in available images: "+", ".join(available_images))
+
+        if groups is not None:
+            groupdata = self.xcat_get_groups()["data"]
+            nodes = []
+            for g in groups:
+                for n in groupdata[g]["members"]:
+                    nodes.append(n)
+            
+            print("Found nodes for groups: "+", ".join(nodes))
+        
+        print("Set nodes to draining")
+        for node in nodes:
+            ret = self.set_node_state(node, "drain", reason=reason)
+            if not ret["data"]["success"]:
+                raise ValueError("Error draining "+node)
+
+        while True:
+            rest = self.check_drained(nodes)
+            print("Waiting for nodes to drain: "+", ".join(rest))
+            if len(rest) == 0:
+                break
+            time.sleep(drain_interval)
+
+        print("Set group attributes")
+        self.xcat_set_group_attributes(nodes if groups is None else groups, provmethod=provmethod, prescripts=prescripts, postbootscripts=postbootscripts, postscripts=postscripts)
+
+        print("Set osimage")
+        self.xcat_set_bootstate(nodes, osimage)
+
+        print("Set netboot for next start to ensure provisioning")
+        self.xcat_set_nextboot(nodes, "net")
+
+        print("Request restart of nodes")
+        self.xcat_set_powerstate(nodes, "reset")
+
+
 #endregion
+
 
 #region cli
 
@@ -276,6 +355,8 @@ def _repl(session, args):
     globvars = globals()
     vars = {v: globvars[v] for v in __all__}
     vars.update({"trex": session})
+    set_session(session, args, False)
+    set_xcat_session(session, args, False)
     session.ignore_error = True
     _repl_wrapper(vars)
     sys.exit(0)
@@ -284,11 +365,25 @@ def _nodes(session, args):
     set_session(session, args)
     logger.log(_NOTICE, format_dict(session.get_nodes(), args.output))
 
+def _deploy(session, args):
+    set_session(session, args)
+    set_xcat_session(session, args)
+    try:
+        session.deploy(osimage=args.osimage, nodes=args.nodes, groups=args.groups, reason=args.reason, provmethod=args.provmethod, postbootscripts=args.postbootscripts, postscripts=args.postscripts)
+    except ValueError as msg:
+        print(msg)
+
+def _show_osimages(session, args):
+    set_session(session, args)
+    set_xcat_session(session, args)
+    logger.log(_NOTICE, "\n".join(session.xcat_get_osimages()["data"].keys()))
 
 _cmds = {
     "info": _info,
     "repl": _repl,
     "nodes": _nodes,
+    "deploy": _deploy,
+    "osimages": _show_osimages,
 }
 
 def _create_parser():
@@ -300,6 +395,15 @@ def _create_parser():
     parser.add_argument('--verify-ssl', action='store_true', help="Enable ssl certificate validation")
     parser.add_argument('-l', '--loglevel', type=str, choices=["DEBUG", "INFO", "NOTICE", "WARNING", "ERROR", "CRITICAL"], default="NOTICE", help='Set log level (default: {})'.format(_LOG_LEVEL))
 
+
+    parser.add_argument('--xcat-host', type=str, help='Xcat host')
+    parser.add_argument('--xcat-token', type=str, help='Xcat token')
+    parser.add_argument('--xcat-port', type=int, help='Xcat port', default=443)
+    parser.add_argument('--xcat-user', type=str, help='Xcat user', default="root")
+    parser.add_argument('--xcat-password', type=str, help='Xcat password')
+    parser.add_argument('--xcat-verify-ssl', action='store_true', help="Enable xcat ssl certificate validation")
+    parser.add_argument('--xcat-no-ssl', action='store_true', help="Do not use ssl for xcat connection")
+
     subparsers = parser.add_subparsers(help="Available subcommands", dest="cmd") # required=True only supported from py3.7+
     parser_repl = subparsers.add_parser('repl', help='Open python repl')
 
@@ -307,6 +411,21 @@ def _create_parser():
 
     parser.add_argument('--batchsystem', type=str, help="Batchsystem")
     parser_nodes = subparsers.add_parser("nodes", help="Get batchsystem nodes")
+
+    parser_deploy = subparsers.add_parser("deploy", help="Reprovision and deploy nodes")
+    parser_deploy.add_argument('--osimage', type=str, help='Osimage to provision', required=True)
+    parser_deploy.add_argument('--reason', type=str, help='Reason for batchsystem drain operation', default="redeployment")
+
+    group = parser_deploy.add_mutually_exclusive_group(required=True)
+    group.add_argument('--nodes', type=str, nargs='+', help='Nodes to provision')
+    group.add_argument('--groups', type=str, nargs='+', help='Groups to provision')
+
+    parser_deploy.add_argument('--provmethod', type=str, help='provmethod')
+    parser_deploy.add_argument('--prescripts', type=str, help='prescripts')
+    parser_deploy.add_argument('--postbootscripts', type=str, help='postbootscripts')
+    parser_deploy.add_argument('--postscripts', type=str, help='postscripts')
+
+    parser_osimages = subparsers.add_parser("osimages", help="Show osimages")
 
     return parser
 
@@ -331,6 +450,22 @@ def main():
         sys.exit(1)
 
 #endregion
+
+
+def test():
+    trex = API(verify_ssl=False, base_uri="https://127.0.0.1:2000")
+    trex.ignore_error = True
+    trex.info()
+    trex.set_credentials("admin","admin")
+    trex.set_batchsystem("slurm")
+    trex.set_xcat_connection(host="192.168.56.10", port=443, ssl=True, ssl_verify=False)
+    trex.set_xcat_credentials(username="root", password="root")
+    print(trex.xcat_set_nextboot(["node1"], "net"))
+    trex.ignore_error = False
+    trex.deploy(osimage="sles11.3-ppc64-install-compute", groups=["all"])
+
+
+
 
 if __name__ == "__main__":
     main()
