@@ -31,13 +31,13 @@ import contextlib
 import time
 import shlex
 
-#: A special loglevel that is used for command line output of cw_webgateway_cli
+#: A special loglevel that is used for command line output of batchexchange
 _NOTICE = 25
 
 # default loglevel to use
 _LOG_LEVEL = "NOTICE"
 
-logger = logging.getLogger("cw_webgateway_cli")
+logger = logging.getLogger("batchexchange")
 logger.addHandler(logging.NullHandler())
 
 
@@ -50,9 +50,9 @@ _LOGMESSAGE_NORMAL = '%(message)s'
 Resp = collections.namedtuple("Resp", ['data', 'raw', 'response'])
 
 def set_session(session, args, ask=True):
-    if ask and args.password is None:
-        args.password =  getpass.getpass("Password> ") # hide input for password prompt
-    session.set_credentials(args.username, args.password)
+    if ask and args.proxy_password is None:
+        args.proxy_password =  getpass.getpass("Password> ") # hide input for password prompt
+    session.set_credentials(args.proxy_username, args.proxy_password)
     session.set_batchsystem(args.batchsystem)
 
 def set_xcat_session(session, args, ask=True):
@@ -213,15 +213,22 @@ class API(APIBase):
             opts.append("password="+self.xcat_password)
         return "&".join(opts)
 
+    def _get_batchsystem_options(self):
+        if self.batchsystem == "detect":
+            for batch in self.detect():
+                self.batchsystem = batch
+                break
+    
+        if self.batchsystem == "detect" or not self.batchsystem:
+            raise ValueError("Batchsystem not set")
+            
+        return "batchsystem="+self.batchsystem
+
     def info(self):
         return self.get("/info")
     
-    def _check_batchsystem(self):
-        if not self.batchsystem: raise ValueError("Batchsystem not set")
-
     def get_nodes(self):
-        self._check_batchsystem()
-        return self.get("/nodes?batchsystem="+self.batchsystem)
+        return self.get("/nodes?"+self._get_batchsystem_options())
 
     def check_drained(self, nodes):
         get_nodes_obj = self.get_nodes()
@@ -238,8 +245,7 @@ class API(APIBase):
         return nodes_to_drain
 
     def set_node_state(self, node, state, reason):
-        self._check_batchsystem()
-        return self.post("/nodes/"+node+"/state?batchsystem="+self.batchsystem, data={"state": state, "reason": reason})
+        return self.post("/nodes/"+node+"/state?"+self._get_batchsystem_options(), data={"state": state, "reason": reason})
 
     def xcat_get_nodes(self):
         return self.get("/xcat/nodes?"+self._get_xcat_options())
@@ -267,6 +273,10 @@ class API(APIBase):
     def xcat_set_powerstate(self, filter, action):
         return self.put("/xcat/powerstate?"+self._get_xcat_options(), data={"filter": filter, "action": action})
 
+    def detect(self):
+        for batch in ("slurm", "lsf", "pbs"):
+            if self.get("/state?batchsystem="+batch)["data"]["detected"]:
+                yield batch
 
     def deploy(self, osimage, nodes=None, groups=None, reason="redeployment", provmethod=None, prescripts=None, postbootscripts=None, postscripts=None, drain_interval=5):
 
@@ -329,7 +339,7 @@ def format_nested(d, path, outlist):
     else:
         outlist.append(path+": "+str(d))
 
-def format_dict(d, output):
+def format_dict(d, output, parse_key=None):
     if output == "json":
         return json.dumps(d, separators=(',', ':'))
     elif output == "json_pretty":
@@ -338,6 +348,8 @@ def format_dict(d, output):
         out = []
         format_nested(d, "", out)
         return "\n".join(out)
+    elif output == "parse" and parse_key is not None:
+        return "\n".join(parse_key(k, v) for k, v in d.items())
 
     return str(d)
 
@@ -370,13 +382,21 @@ def _repl(session, args):
 
 def _nodes(session, args):
     set_session(session, args)
-    logger.log(_NOTICE, format_dict(session.get_nodes(), args.output))
+    logger.log(_NOTICE, format_dict({n["name"]: n for n in session.get_nodes().get("data")}, args.output, lambda k, _v: k))
 
 def _xcatnodes(session, args):
     set_session(session, args)
     set_xcat_session(session, args)
-    logger.log(_NOTICE, format_dict(session.xcat_get_nodes(), args.output))
+    logger.log(_NOTICE, format_dict(session.xcat_get_nodes().get("data"), args.output, lambda k, _v: k))
 
+
+def _changestate(session, args):
+    set_session(session, args)
+
+    for node in args.nodes:
+        ret = session.set_node_state(node, args.state, reason=args.reason)
+        if not ret["data"]["success"]:
+            raise ValueError("Error changing state of node "+node)
 
 def _deploy(session, args):
     set_session(session, args)
@@ -390,7 +410,11 @@ def _deploy(session, args):
 def _show_osimages(session, args):
     set_session(session, args)
     set_xcat_session(session, args)
-    logger.log(_NOTICE, "\n".join(session.xcat_get_osimages()["data"].keys()))
+    logger.log(_NOTICE, format_dict(session.xcat_get_osimages().get("data"), args.output, lambda k, _v: k))
+
+def _batchdetect(session, args):
+    set_session(session, args)
+    logger.log(_NOTICE, "\n".join(session.detect()))
 
 _cmds = {
     "info": _info,
@@ -399,6 +423,8 @@ _cmds = {
     "deploy": _deploy,
     "osimages": _show_osimages,
     "xcatnodes": _xcatnodes,
+    "changestate": _changestate,
+    "batchdetect": _batchdetect,
 }
 
 class _ArgumentShlexParser(argparse.ArgumentParser):
@@ -407,30 +433,39 @@ class _ArgumentShlexParser(argparse.ArgumentParser):
         return shlex.split(arg_line, comments=True)
 
 def _create_parser():
-    parser = _ArgumentShlexParser(description='Control webgateway authorization.', epilog=_HELP, formatter_class=argparse.RawDescriptionHelpFormatter, fromfile_prefix_chars='@')
-    parser.add_argument('-U', '--uri', type=str, help='Base URI to webgateway', default="https://127.0.0.1:2000")
-    parser.add_argument('-u', '--username', type=str, help='Username', default="admin")
-    parser.add_argument('-p', '--password', type=str, help='Password')
-    parser.add_argument('-o', '--output', choices=['print', 'parse', 'json', 'json_pretty'], default="print", help="Print responses as single parse value or json instead of column text")
-    parser.add_argument('--verify-ssl', action='store_true', help="Enable ssl certificate validation")
+    parser = _ArgumentShlexParser(description='BatchExchange proxy command line interface.', epilog=_HELP, formatter_class=argparse.RawDescriptionHelpFormatter, fromfile_prefix_chars='@')
     parser.add_argument('-l', '--loglevel', type=str, choices=["DEBUG", "INFO", "NOTICE", "WARNING", "ERROR", "CRITICAL"], default="NOTICE", help='Set log level (default: {})'.format(_LOG_LEVEL))
+    parser.add_argument('-o', '--output', choices=['print', 'parse', 'json', 'json_pretty'], default="print", help="Print responses as single parse value or json instead of column text")
 
+    proxy_group = parser.add_argument_group('proxy options')
+    proxy_group.add_argument('-U', '--proxy-uri', type=str, help='Base URI to proxy', default="https://127.0.0.1:2000")
+    proxy_group.add_argument('-u', '--proxy-username', type=str, help='Username', default="admin")
+    proxy_group.add_argument('-p', '--proxy-password', type=str, help='Password')
+    proxy_group.add_argument('--proxy-verify-ssl', action='store_true', help="Enable ssl certificate validation")
 
-    parser.add_argument('--xcat-host', type=str, help='Xcat host')
-    parser.add_argument('--xcat-token', type=str, help='Xcat token')
-    parser.add_argument('--xcat-port', type=int, help='Xcat port', default=443)
-    parser.add_argument('--xcat-user', type=str, help='Xcat user', default="root")
-    parser.add_argument('--xcat-password', type=str, help='Xcat password')
-    parser.add_argument('--xcat-verify-ssl', action='store_true', help="Enable xcat ssl certificate validation")
-    parser.add_argument('--xcat-no-ssl', action='store_true', help="Do not use ssl for xcat connection")
+    xcat_group = parser.add_argument_group('xcat options')
+    xcat_group.add_argument('--xcat-host', type=str, help='xCAT host')
+    xcat_group.add_argument('--xcat-token', type=str, help='xCAT token')
+    xcat_group.add_argument('--xcat-port', type=int, help='xCAT port', default=443)
+    xcat_group.add_argument('--xcat-user', type=str, help='xCAT user', default="root")
+    xcat_group.add_argument('--xcat-password', type=str, help='xCAT password')
+    xcat_group.add_argument('--xcat-verify-ssl', action='store_true', help="Enable xcat ssl certificate validation")
+    xcat_group.add_argument('--xcat-no-ssl', action='store_true', help="Do not use ssl for xcat connection")
 
     subparsers = parser.add_subparsers(help="Available subcommands", dest="cmd") # required=True only supported from py3.7+
     parser_repl = subparsers.add_parser('repl', help='Open python repl')
 
     parser_info = subparsers.add_parser("info", help="Get trex info")
 
-    parser.add_argument('-b', '--batchsystem', type=str, help="Batchsystem")
+    parser.add_argument('-b', '--batchsystem', type=str, choices=["slurm", "lsf", "pbs", "detect"], default="detect", help="Batchsystem")
     parser_nodes = subparsers.add_parser("nodes", help="Get batchsystem nodes")
+
+    parser_batchdetect = subparsers.add_parser("batchdetect", help="Detect batchsystems supported on management server")
+
+    parser_changestate = subparsers.add_parser("changestate", help="Change node job manager state")
+    parser_changestate.add_argument('state', choices=['drain', 'undrain', 'resume'])
+    parser_changestate.add_argument('nodes', type=str, nargs='+', help='Nodes to change state for')
+    parser_changestate.add_argument('--reason', type=str, help='Reason for batchsystem drain operation', default="trex changestate")
 
     parser_deploy = subparsers.add_parser("deploy", help="Reprovision and deploy nodes")
     parser_deploy.add_argument('--osimage', type=str, help='Osimage to provision', required=True)
@@ -446,7 +481,7 @@ def _create_parser():
     parser_deploy.add_argument('--postscripts', type=str, help='postscripts')
 
     parser_osimages = subparsers.add_parser("osimages", help="Show osimages")
-    parser_xcatnodes = subparsers.add_parser("xcatnodes", help="Get xcat nodes")
+    parser_xcatnodes = subparsers.add_parser("xcatnodes", help="Get xCAT nodes")
 
     return parser
 
@@ -463,7 +498,7 @@ def main():
     logger.handlers[1].setFormatter(logging.Formatter(_LOGMESSAGE_DEBUG if args.loglevel == "DEBUG" else _LOGMESSAGE_NORMAL))
 
     if args.cmd in _cmds:
-        session = API(verify_ssl=args.verify_ssl, base_uri=args.uri)
+        session = API(verify_ssl=args.proxy_verify_ssl, base_uri=args.proxy_uri)
         session.ignore_error = True
         _cmds[args.cmd](args=args, session=session)
     else: # needed without subparsers required=True
