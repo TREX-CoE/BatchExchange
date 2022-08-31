@@ -29,6 +29,7 @@ import logging
 import getpass
 import contextlib
 import time
+import shlex
 
 #: A special loglevel that is used for command line output of cw_webgateway_cli
 _NOTICE = 25
@@ -400,12 +401,17 @@ _cmds = {
     "xcatnodes": _xcatnodes,
 }
 
+class _ArgumentShlexParser(argparse.ArgumentParser):
+    """Custom argument parser using shlex to allow --longopt val without = and comments in file."""
+    def convert_arg_line_to_args(self, arg_line):
+        return shlex.split(arg_line, comments=True)
+
 def _create_parser():
-    parser = argparse.ArgumentParser(description='Control webgateway authorization.', epilog=_HELP, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--uri', type=str, help='Base URI to webgateway', default="https://127.0.0.1:2000")
+    parser = _ArgumentShlexParser(description='Control webgateway authorization.', epilog=_HELP, formatter_class=argparse.RawDescriptionHelpFormatter, fromfile_prefix_chars='@')
+    parser.add_argument('-U', '--uri', type=str, help='Base URI to webgateway', default="https://127.0.0.1:2000")
     parser.add_argument('-u', '--username', type=str, help='Username', default="admin")
     parser.add_argument('-p', '--password', type=str, help='Password')
-    parser.add_argument('--output', choices=['print', 'parse', 'json', 'json_pretty'], default="print", help="Print responses as single parse value or json instead of column text")
+    parser.add_argument('-o', '--output', choices=['print', 'parse', 'json', 'json_pretty'], default="print", help="Print responses as single parse value or json instead of column text")
     parser.add_argument('--verify-ssl', action='store_true', help="Enable ssl certificate validation")
     parser.add_argument('-l', '--loglevel', type=str, choices=["DEBUG", "INFO", "NOTICE", "WARNING", "ERROR", "CRITICAL"], default="NOTICE", help='Set log level (default: {})'.format(_LOG_LEVEL))
 
@@ -423,7 +429,7 @@ def _create_parser():
 
     parser_info = subparsers.add_parser("info", help="Get trex info")
 
-    parser.add_argument('--batchsystem', type=str, help="Batchsystem")
+    parser.add_argument('-b', '--batchsystem', type=str, help="Batchsystem")
     parser_nodes = subparsers.add_parser("nodes", help="Get batchsystem nodes")
 
     parser_deploy = subparsers.add_parser("deploy", help="Reprovision and deploy nodes")
