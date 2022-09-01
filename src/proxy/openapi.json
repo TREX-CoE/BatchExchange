@@ -935,6 +935,793 @@
           }
         }
       }
+    },
+    "/xcat/login": {
+      "post": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat token",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XcatBody"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_login"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat node information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "token": {
+                          "type": "string",
+                          "description": "Token for xcat api calls"
+                        },
+                        "expires": {
+                          "type": "integer",
+                          "description": "Epoch time in seconds when token expires"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/nodes": {
+      "get": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat nodes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "xcat_nodes"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat node information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "x-additionalPropertiesName": "node",
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "Node name"
+                          },
+                          "postscripts": {
+                            "type": "string",
+                            "description": "Scripts executed after provisioning"
+                          },
+                          "postbootscripts": {
+                            "type": "string",
+                            "description": "Scripts executed after each boot"
+                          },
+                          "installnic": {
+                            "type": "string",
+                            "description": "Network controller used for install"
+                          },
+                          "primarynic": {
+                            "type": "string",
+                            "description": "Primary network controller"
+                          },
+                          "mac": {
+                            "type": "string",
+                            "description": "Mac address"
+                          },
+                          "groups": {
+                            "type": "array",
+                            "description": "Groups the node is member of",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": {
+                          "x-additionalPropertiesName": "attr",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/groups": {
+      "get": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat groups",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "xcat_groups"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat group information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "x-additionalPropertiesName": "group",
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "Group name"
+                          },
+                          "mgt": {
+                            "type": "string",
+                            "description": "Management method"
+                          },
+                          "netboot": {
+                            "type": "string",
+                            "description": "Netboot options"
+                          },
+                          "members": {
+                            "description": "Nodes in group",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/osimages": {
+      "get": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat osimages",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "xcat_osimages"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat osimage information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "x-additionalPropertiesName": "group",
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "Osimage name"
+                          },
+                          "profile": {
+                            "type": "string",
+                            "description": "Osimage profile"
+                          },
+                          "osname": {
+                            "type": "string",
+                            "description": "Operating system name"
+                          },
+                          "osarch": {
+                            "type": "string",
+                            "description": "Operating system architecture"
+                          },
+                          "osvers": {
+                            "type": "string",
+                            "description": "Operating system version"
+                          },
+                          "provmethod": {
+                            "type": "string",
+                            "description": "Provisioning method"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/bootstate": {
+      "get": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat bootstates",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "xcat_get_bootstate"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat bootstate information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "x-additionalPropertiesName": "node",
+                        "type": "object",
+                        "properties": {
+                          "bootstate": {
+                            "type": "string",
+                            "description": "Node bootstate"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Change bootstate",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/XcatBody"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "description": "Nodes to filter",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "osimage": {
+                        "type": "string",
+                        "description": "Osimage to provision"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_set_bootstate"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "description": "Successfull state"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/nextboot": {
+      "put": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Change boot order",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/XcatBody"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "description": "Nodes to filter",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "order": {
+                        "type": "string",
+                        "description": "Boot order"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_set_nextboot"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "description": "Successfull state"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/powerstate": {
+      "put": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Change power state of nodes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/XcatBody"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "description": "Nodes to filter",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "action": {
+                        "type": "string",
+                        "description": "Power action like reset"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_set_powerstate"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "description": "Successfull state"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/groupattrs": {
+      "put": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Set group attributes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/XcatBody"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "description": "Nodes to filter",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "additionalProperties": {
+                      "x-additionalPropertiesName": "attribute",
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_set_group_attributes"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "description": "Successfull state"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1001,9 +1788,114 @@
         "schema": {
           "$ref": "#/components/schemas/BatchSystem"
         }
+      },
+      "XcatHost": {
+        "name": "host",
+        "description": "xcat host",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatPort": {
+        "name": "port",
+        "description": "xcat port",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatSsl": {
+        "name": "ssl",
+        "description": "xcat ssl",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "XcatSslVerify": {
+        "name": "ssl_verify",
+        "description": "xcat ssl verify",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "XcatUser": {
+        "name": "user",
+        "description": "xcat user",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatPassword": {
+        "name": "user",
+        "description": "xcat password",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatToken": {
+        "name": "token",
+        "description": "xcat token",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatFilter": {
+        "name": "filter",
+        "description": "Show only certain elements from xcat query (comma seperated)",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "schemas": {
+      "XcatBody": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "description": "xcat user name",
+            "type": "string"
+          },
+          "password": {
+            "description": "xcat password",
+            "type": "string"
+          },
+          "token": {
+            "description": "xcat token",
+            "type": "string"
+          },
+          "host": {
+            "description": "xcat host",
+            "type": "string"
+          },
+          "port": {
+            "description": "xcat port",
+            "type": "string"
+          },
+          "ssl": {
+            "description": "whether to use ssl",
+            "type": "boolean"
+          },
+          "ssl_verify": {
+            "description": "whether to require ssl verification",
+            "type": "boolean"
+          }
+        }
+      },
       "BatchSystem": {
         "type": "string",
         "enum": [
@@ -1564,7 +2456,16 @@
               "queues_info": "Get queue infos",
               "nodes_info": "Get node infos",
               "batch_info": "Get batchsystem infos",
-              "batch_detect": "Detect batchsystem support"
+              "batch_detect": "Detect batchsystem support",
+              "xcat_login": "Get xcat token",
+              "xcat_nodes": "Get xcat node infos",
+              "xcat_groups": "Get xcat group infos",
+              "xcat_osimages": "Get xcat osimage infos",
+              "xcat_get_bootstate": "Get xcat node bootstates",
+              "xcat_set_bootstate": "Set xcat node bootstates",
+              "xcat_set_nextboot": "Set xcat node nextboot order",
+              "xcat_set_powerstate": "Set xcat node powerstate",
+              "xcat_set_group_attributes": "Set xcat group attributes"
             }
           }
         }
