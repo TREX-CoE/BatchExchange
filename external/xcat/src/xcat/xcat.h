@@ -200,7 +200,15 @@ public:
      * \param cb Asynchronous get map of all groups
      */
     void get_groups(const std::vector<std::string> &filter, std::function<void(std::map<std::string, GroupInfo>, XcatError ec)> cb);
-    
+
+    /**
+     * \brief Get osimage infos
+     * 
+     * \param filter Get only these osimages or all if empty
+     * \param cb Asynchronous get map of all osimages
+     */
+    void get_osimages(const std::vector<std::string> &filter, std::function<void(std::map<std::string, OsimageInfo>, XcatError ec)> cb);
+
     /**
      * \brief Get node bootstates
      * 
