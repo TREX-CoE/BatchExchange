@@ -187,11 +187,12 @@ public:
 
     /**
      * \brief Get node infos
-     * 
+     *
+     * \param filter Get only these nodes or all if empty
      * \param cb Asynchronous get map of all nodes
      */
-    void get_nodes(std::function<void(std::map<std::string, NodeInfo>, XcatError ec)> cb);
-    
+    void get_nodes(const std::vector<std::string> &filter, std::function<void(std::map<std::string, NodeInfo>, XcatError ec)> cb);
+
     /**
      * \brief Get group infos
      * 

@@ -188,9 +188,9 @@ ApiCallRequest Xcat::add_auth(ApiCallRequest req, bool has_query_params) {
     return req;
 }
 
-void Xcat::get_nodes(std::function<void(std::map<std::string, NodeInfo>, XcatError ec)> cb) {
+void Xcat::get_nodes(const std::vector<std::string> &filter, std::function<void(std::map<std::string, NodeInfo>, XcatError ec)> cb) {
     if (!check_auth()) throw std::system_error(error::no_auth);
-    _func(add_auth({HttpMethod::GET, "/xcatws/nodes/ALLRESOURCES", "", {}}, false), [cb](ApiCallResponse resp){
+    _func(add_auth({HttpMethod::GET, filter.empty() ? "/xcatws/nodes/ALLRESOURCES" : (std::string("/xcatws/nodes/") + internal::joinString(filter.begin(), filter.end(), ",")), "", {}}, false), [cb](ApiCallResponse resp){
         if (resp.ec) {
             cb({}, {resp.ec, 0, ""});
         } else if (resp.status_code == 200) {
