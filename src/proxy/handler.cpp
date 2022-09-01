@@ -668,7 +668,7 @@ void f_xcat_getNodes(CheckAuth check_auth, Send send, const rapidjson::Document&
     if (ec_session) return send(response::json_error(error_wrapper(ec_session)));
     if (!xcat_session->check_auth()) return send(response::json_error(error_wrapper(error_type::xcat_auth_missing)));
 
-    xcat_session->get_nodes([xcat_session, send](auto nodes, auto ec) mutable {
+    xcat_session->get_nodes(getFilter(indocument, uri), [xcat_session, send](auto nodes, auto ec) mutable {
         return send(response::xcatNodesReturn(error_wrapper(ec.ec).with_msg(ec.msg), nodes));
     });
 }

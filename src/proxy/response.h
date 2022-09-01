@@ -299,7 +299,6 @@ resp xcatOsimagesReturn(const error_wrapper& e, std::map<std::string, ::xcat::Os
                 node.AddMember("name", p.second.name, allocator);
                 node.AddMember("profile", p.second.profile, allocator);
                 node.AddMember("osname", p.second.osname, allocator);
-                node.AddMember("osname", p.second.osname, allocator);
                 node.AddMember("osarch", p.second.osarch, allocator);
                 node.AddMember("osvers", p.second.osvers, allocator);
                 node.AddMember("provmethod", p.second.provmethod, allocator);
