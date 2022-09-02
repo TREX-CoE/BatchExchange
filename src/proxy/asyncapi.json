@@ -85,6 +85,36 @@
             },
             {
               "$ref": "#/components/messages/rescheduleJob"
+            },
+            {
+              "$ref": "#/components/messages/xcatLogin"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetNodes"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetOsimages"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetGroups"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetBootstate"
+            },
+            {
+              "$ref": "#/components/messages/xcatSetBootstate"
+            },
+            {
+              "$ref": "#/components/messages/xcatSetNextboot"
+            },
+            {
+              "$ref": "#/components/messages/xcatSetPowerstate"
+            },
+            {
+              "$ref": "#/components/messages/xcatSetGroupAttributes"
+            },
+            {
+              "$ref": "#/components/messages/set"
             }
           ]
         }
@@ -136,6 +166,34 @@
   },
   "components": {
     "messages": {
+      "xcatSetBootstate": {
+        "summary": "Prevent a pending job from being run",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "osimage"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "xcat/setBootstate"
+            },
+            "filter": {
+              "type": "array",
+              "description": "Nodes to filter or all if not given",
+              "items": {
+                "type": "string"
+              }
+            },
+            "osimage": {
+              "type": "string",
+              "description": "Osimage to use for provisioning"
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
       "holdJob": {
         "summary": "Prevent a pending job from being run",
         "payload": {
@@ -1381,6 +1439,40 @@
           "undrain"
         ],
         "description": "Change status:\n * `resume` - Remove Offline state\n * `drain` - Mark node to disable jobs being scheduled on\n * `undrain` - Mark node to allow jobs being scheduled on\n"
+      },
+      "XcatOptions": {
+        "type": "object",
+        "description": "Xcat connection and credential options",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Xcat host"
+          },
+          "port": {
+            "type": "integer",
+            "description": "Xcat port"
+          },
+          "ssl": {
+            "type": "boolean",
+            "description": "Whether to use ssl"
+          },
+          "ssl_verify": {
+            "type": "boolean",
+            "description": "Whether to require ssl verification"
+          },
+          "token": {
+            "type": "string",
+            "description": "Xcat login token"
+          },
+          "user": {
+            "type": "string",
+            "description": "Xcat username"
+          },
+          "password": {
+            "type": "string",
+            "description": "Xcat password"
+          }
+        }
       }
     }
   }
