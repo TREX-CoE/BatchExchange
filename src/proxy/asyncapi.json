@@ -114,7 +114,7 @@
               "$ref": "#/components/messages/xcatSetGroupAttributes"
             },
             {
-              "$ref": "#/components/messages/set"
+              "$ref": "#/components/messages/xcatSet"
             }
           ]
         }
@@ -158,6 +158,18 @@
             },
             {
               "$ref": "#/components/messages/jobsSubmitData"
+            },
+            {
+              "$ref": "#/components/messages/xcatLoginData"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetNodesData"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetOsimagesData"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetGroupsData"
             }
           ]
         }
@@ -166,31 +178,364 @@
   },
   "components": {
     "messages": {
-      "xcatSetBootstate": {
-        "summary": "Prevent a pending job from being run",
+      "xcatLoginData": {
+        "summary": "Xcat token",
         "payload": {
           "type": "object",
-          "required": [
-            "command",
-            "osimage"
-          ],
           "properties": {
-            "command": {
-              "type": "string",
-              "const": "xcat/setBootstate"
+            "data": {
+              "$ref": "#/components/schemas/XcatToken"
+            }
+          }
+        }
+      },
+      "xcatGetNodesData": {
+        "summary": "Xcat node infos",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "node",
+                "$ref": "#/components/schemas/XcatNode"
+              }
+            }
+          }
+        }
+      },
+      "xcatGetGroupsData": {
+        "summary": "Xcat group infos",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "group",
+                "$ref": "#/components/schemas/XcatGroup"
+              }
+            }
+          }
+        }
+      },
+      "xcatGetOsimagesData": {
+        "summary": "Xcat osimage infos",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "image",
+                "$ref": "#/components/schemas/XcatOsimage"
+              }
+            }
+          }
+        }
+      },
+      "xcatGetNodes": {
+        "summary": "Get xcat nodes info",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/getNodes"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Nodes to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
             },
-            "filter": {
-              "type": "array",
-              "description": "Nodes to filter or all if not given",
-              "items": {
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/xcatGetNodesData"
+      },
+      "xcatGetGroups": {
+        "summary": "Get xcat group info",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/getGroups"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Groups to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/xcatGetGroupsData"
+      },
+      "xcatGetBootstate": {
+        "summary": "Get xcat group info",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/getBootstate"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Node to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/xcatGetBootstateData"
+      },
+      "xcatGetOsimages": {
+        "summary": "Get xcat osimage infos",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/getOsimages"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Osimages to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/xcatGetOsimagesData"
+      },
+      "xcatLogin": {
+        "summary": "Get a xcat token",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/Login"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSet": {
+        "summary": "Set xcat options",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/set"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSetGroupAttributes": {
+        "summary": "Set attributes for groups",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/setGroupAttributes"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Groups to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": {
+                "x-additionalPropertiesName": "attribute",
                 "type": "string"
               }
             },
-            "osimage": {
-              "type": "string",
-              "description": "Osimage to use for provisioning"
+            {
+              "$ref": "#/components/schemas/XcatOptions"
             }
-          }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSetNextboot": {
+        "summary": "Set nextboot for nodes",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command",
+                "order"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/setNextboot"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Nodes to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "order": {
+                  "type": "string",
+                  "description": "Boot order"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSetPowerstate": {
+        "summary": "Set powerstate for nodes",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command",
+                "order"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/setPowerstate"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Nodes to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "action": {
+                  "type": "string",
+                  "description": "Power action"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSetBootstate": {
+        "summary": "Set bootstate for nodes",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command",
+                "osimage"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/setBootstate"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Nodes to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "osimage": {
+                  "type": "string",
+                  "description": "Osimage to use for provisioning"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
         },
         "x-response": "#/components/messages/commandSuccess"
       },
@@ -1471,6 +1816,121 @@
           "password": {
             "type": "string",
             "description": "Xcat password"
+          }
+        }
+      },
+      "XcatToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token for xcat api calls"
+          },
+          "expires": {
+            "type": "integer",
+            "description": "Epoch time in seconds when token expires"
+          }
+        }
+      },
+      "XcatNode": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Node name"
+          },
+          "postscripts": {
+            "type": "string",
+            "description": "Scripts executed after provisioning"
+          },
+          "postbootscripts": {
+            "type": "string",
+            "description": "Scripts executed after each boot"
+          },
+          "installnic": {
+            "type": "string",
+            "description": "Network controller used for install"
+          },
+          "primarynic": {
+            "type": "string",
+            "description": "Primary network controller"
+          },
+          "mac": {
+            "type": "string",
+            "description": "Mac address"
+          },
+          "groups": {
+            "type": "array",
+            "description": "Groups the node is member of",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": {
+          "x-additionalPropertiesName": "attr",
+          "type": "string"
+        }
+      },
+      "XcatGroup": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Group name"
+          },
+          "mgt": {
+            "type": "string",
+            "description": "Management method"
+          },
+          "netboot": {
+            "type": "string",
+            "description": "Netboot options"
+          },
+          "members": {
+            "description": "Nodes in group",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XcatOsimage": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Osimage name"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Osimage profile"
+          },
+          "osname": {
+            "type": "string",
+            "description": "Operating system name"
+          },
+          "osarch": {
+            "type": "string",
+            "description": "Operating system architecture"
+          },
+          "osvers": {
+            "type": "string",
+            "description": "Operating system version"
+          },
+          "provmethod": {
+            "type": "string",
+            "description": "Provisioning method"
+          }
+        }
+      },
+      "XcatBootstate": {
+        "type": "object",
+        "properties": {
+          "bootstate": {
+            "type": "string",
+            "description": "Node bootstate"
           }
         }
       }

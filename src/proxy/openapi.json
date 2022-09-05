@@ -991,17 +991,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "token": {
-                          "type": "string",
-                          "description": "Token for xcat api calls"
-                        },
-                        "expires": {
-                          "type": "integer",
-                          "description": "Epoch time in seconds when token expires"
-                        }
-                      }
+                      "$ref": "#/components/schemas/XcatToken"
                     }
                   }
                 }
@@ -1062,44 +1052,7 @@
                       "type": "object",
                       "additionalProperties": {
                         "x-additionalPropertiesName": "node",
-                        "type": "object",
-                        "properties": {
-                          "name": {
-                            "type": "string",
-                            "description": "Node name"
-                          },
-                          "postscripts": {
-                            "type": "string",
-                            "description": "Scripts executed after provisioning"
-                          },
-                          "postbootscripts": {
-                            "type": "string",
-                            "description": "Scripts executed after each boot"
-                          },
-                          "installnic": {
-                            "type": "string",
-                            "description": "Network controller used for install"
-                          },
-                          "primarynic": {
-                            "type": "string",
-                            "description": "Primary network controller"
-                          },
-                          "mac": {
-                            "type": "string",
-                            "description": "Mac address"
-                          },
-                          "groups": {
-                            "type": "array",
-                            "description": "Groups the node is member of",
-                            "items": {
-                              "type": "string"
-                            }
-                          }
-                        },
-                        "additionalProperties": {
-                          "x-additionalPropertiesName": "attr",
-                          "type": "string"
-                        }
+                        "$ref": "#/components/schemas/XcatNode"
                       }
                     }
                   }
@@ -1161,28 +1114,7 @@
                       "type": "object",
                       "additionalProperties": {
                         "x-additionalPropertiesName": "group",
-                        "type": "object",
-                        "properties": {
-                          "name": {
-                            "type": "string",
-                            "description": "Group name"
-                          },
-                          "mgt": {
-                            "type": "string",
-                            "description": "Management method"
-                          },
-                          "netboot": {
-                            "type": "string",
-                            "description": "Netboot options"
-                          },
-                          "members": {
-                            "description": "Nodes in group",
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          }
-                        }
+                        "$ref": "#/components/schemas/XcatGroup"
                       }
                     }
                   }
@@ -1244,33 +1176,7 @@
                       "type": "object",
                       "additionalProperties": {
                         "x-additionalPropertiesName": "group",
-                        "type": "object",
-                        "properties": {
-                          "name": {
-                            "type": "string",
-                            "description": "Osimage name"
-                          },
-                          "profile": {
-                            "type": "string",
-                            "description": "Osimage profile"
-                          },
-                          "osname": {
-                            "type": "string",
-                            "description": "Operating system name"
-                          },
-                          "osarch": {
-                            "type": "string",
-                            "description": "Operating system architecture"
-                          },
-                          "osvers": {
-                            "type": "string",
-                            "description": "Operating system version"
-                          },
-                          "provmethod": {
-                            "type": "string",
-                            "description": "Provisioning method"
-                          }
-                        }
+                        "$ref": "#/components/schemas/XcatOsimage"
                       }
                     }
                   }
@@ -1332,13 +1238,7 @@
                       "type": "object",
                       "additionalProperties": {
                         "x-additionalPropertiesName": "node",
-                        "type": "object",
-                        "properties": {
-                          "bootstate": {
-                            "type": "string",
-                            "description": "Node bootstate"
-                          }
-                        }
+                        "$ref": "#/components/schemas/XcatBootstate"
                       }
                     }
                   }
@@ -2429,6 +2329,121 @@
           "undrain"
         ],
         "description": "Change status:\n * `resume` - Remove Offline state\n * `drain` - Mark node to disable jobs being scheduled on\n * `undrain` - Mark node to allow jobs being scheduled on\n"
+      },
+      "XcatToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token for xcat api calls"
+          },
+          "expires": {
+            "type": "integer",
+            "description": "Epoch time in seconds when token expires"
+          }
+        }
+      },
+      "XcatNode": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Node name"
+          },
+          "postscripts": {
+            "type": "string",
+            "description": "Scripts executed after provisioning"
+          },
+          "postbootscripts": {
+            "type": "string",
+            "description": "Scripts executed after each boot"
+          },
+          "installnic": {
+            "type": "string",
+            "description": "Network controller used for install"
+          },
+          "primarynic": {
+            "type": "string",
+            "description": "Primary network controller"
+          },
+          "mac": {
+            "type": "string",
+            "description": "Mac address"
+          },
+          "groups": {
+            "type": "array",
+            "description": "Groups the node is member of",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": {
+          "x-additionalPropertiesName": "attr",
+          "type": "string"
+        }
+      },
+      "XcatGroup": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Group name"
+          },
+          "mgt": {
+            "type": "string",
+            "description": "Management method"
+          },
+          "netboot": {
+            "type": "string",
+            "description": "Netboot options"
+          },
+          "members": {
+            "description": "Nodes in group",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XcatOsimage": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Osimage name"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Osimage profile"
+          },
+          "osname": {
+            "type": "string",
+            "description": "Operating system name"
+          },
+          "osarch": {
+            "type": "string",
+            "description": "Operating system architecture"
+          },
+          "osvers": {
+            "type": "string",
+            "description": "Operating system version"
+          },
+          "provmethod": {
+            "type": "string",
+            "description": "Provisioning method"
+          }
+        }
+      },
+      "XcatBootstate": {
+        "type": "object",
+        "properties": {
+          "bootstate": {
+            "type": "string",
+            "description": "Node bootstate"
+          }
+        }
       }
     },
     "securitySchemes": {
