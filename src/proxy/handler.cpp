@@ -587,7 +587,11 @@ void f_getQueues(CheckAuth check_auth, Send send, const rapidjson::Document& ind
 
     if (!batch->getQueues(supported)) return send(response::json_error(error_wrapper(error_type::command_unsupported).with_status(400)));
 
-    batch->getQueues([batch, send](auto container, std::error_code e) mutable {
+    std::error_code ec;
+    auto o = cw_proxy_batch::getQueues(indocument, uri, ec);
+    if (ec) return send(response::json_error(error_wrapper(ec)));
+
+    batch->getQueues(o, [batch, send](auto container, std::error_code e) mutable {
         return send(response::containerReturn(error_wrapper(e), container));
     });
 }

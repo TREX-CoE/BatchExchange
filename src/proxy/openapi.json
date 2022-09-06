@@ -169,6 +169,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/BatchSystem"
+          },
+          {
+            "$ref": "#/components/parameters/FilterQueues"
           }
         ],
         "security": [
@@ -209,6 +212,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/BatchSystem"
+          },
+          {
+            "$ref": "#/components/parameters/FilterNodes"
           }
         ],
         "security": [
@@ -249,6 +255,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/BatchSystem"
+          },
+          {
+            "$ref": "#/components/parameters/FilterJobs"
           }
         ],
         "security": [
@@ -1687,6 +1696,33 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/BatchSystem"
+        }
+      },
+      "FilterJobs": {
+        "name": "filterJobs",
+        "description": "Show only certain jobs (comma seperated)",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "FilterQueues": {
+        "name": "filterQueues",
+        "description": "Show only certain queues (comma seperated)",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "FilterNodes": {
+        "name": "filterNodes",
+        "description": "Show only certain nodes (comma seperated)",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
         }
       },
       "XcatHost": {

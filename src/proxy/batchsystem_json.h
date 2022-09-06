@@ -412,6 +412,29 @@ constexpr auto suspendJob = holdJob;
 constexpr auto resumeJob = holdJob;
 constexpr auto rescheduleRunningJobInQueue = holdJob;
 
+std::vector<std::string> getQueues(const rapidjson::Document& document, const Uri& uri, std::error_code& ec) {
+    std::vector<std::string> queues;
+    if (uri.has_value() && uri.query.count("filterQueues")) {
+        std::string filter = uri.query.at("filterQueues");
+        cw::helper::splitString(filter, queryComma, [&queues, &filter](size_t start, size_t end){
+            queues.push_back(filter.substr(start, end));
+            return true;
+        });
+    } else if (document.IsObject() && document.HasMember("filterQueues")) {
+            if (!document["filterQueues"].IsArray()) {
+                    ec = error_type::filterQueues_not_array;
+                    return queues;
+            }
+            for (const auto& v : document["filterQueues"].GetArray()) {
+                if (!v.IsString()) {
+                        ec = error_type::filterQueues_not_string_array;
+                        return queues;
+                }
+                queues.push_back(v.GetString());
+            }
+    }
+    return queues;
+}
 
 std::vector<std::string> getJobs(const rapidjson::Document& document, const Uri& uri, std::error_code& ec) {
     std::vector<std::string> jobs;

@@ -1186,6 +1186,13 @@
             "command": {
               "type": "string",
               "const": "getQueues"
+            },
+            "filterQueues": {
+              "description": "Queues to filter",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           }
         },

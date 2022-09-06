@@ -74,6 +74,8 @@ enum class error_type {
     filterJobs_not_string_array,
     filterNodes_not_array,
     filterNodes_not_string_array,
+    filterQueues_not_array,
+    filterQueues_not_string_array,
     xcat_host_missing,
     xcat_port_missing,
     xcat_user_missing,

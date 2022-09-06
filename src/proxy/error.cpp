@@ -74,6 +74,8 @@ const char* to_cstr(error_type type) {
         case error_type::filterJobs_not_string_array: return "filterJObs is not a string array";
         case error_type::filterNodes_not_array: return "filterNodes is not an array";
         case error_type::filterNodes_not_string_array: return "filterNodes is not a string array";
+        case error_type::filterQueues_not_array: return "filterQueues is not an array";
+        case error_type::filterQueues_not_string_array: return "filterQueues is not a string array";
         case error_type::xcat_host_missing: return "xcat host is not given";
         case error_type::xcat_port_missing: return "xcat port is not given";
         case error_type::xcat_user_missing: return "xcat user is not given";
