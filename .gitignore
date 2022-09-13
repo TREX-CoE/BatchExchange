@@ -1,3 +1,5 @@
+src/proxy/build_data.cpp
+
 # exclude editor and build stuff
 .vscode/
 venv/

@@ -1,4 +1,4 @@
-[submodule "external/restclient"]
-	path = external/restclient
-	url = ../../Megware/restclient.git
-	branch = main
+[submodule "external/batchsystem"]
+	path = external/batchsystem
+	branch=main
+	url = ../../Megware/batchsystem.git

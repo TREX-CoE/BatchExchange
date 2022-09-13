@@ -1,0 +1,178 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+$SETUPDB = <<-'BLOCK'
+create database slurm_acct_db;
+create user 'slurm'@'localhost';
+set password for 'slurm'@'localhost' = password('slurmdbpass');
+grant usage on *.* to 'slurm'@'localhost';
+grant all privileges on slurm_acct_db.* to 'slurm'@'localhost';
+flush privileges;
+exit;
+BLOCK
+
+$SLURMCONF = <<-'BLOCK'
+ClusterName=cluster
+ControlMachine=slurm
+ControlAddr=192.168.56.9
+SlurmUser=root
+SlurmdUser=root
+SlurmctldPort=6817
+SlurmdPort=6818
+AuthType=auth/munge
+SwitchType=switch/none
+MpiDefault=none
+SlurmctldPidFile=/var/run/slurm-llnl/slurmctld.pid
+SlurmdPidFile=/var/run/slurm-llnl/slurmd.pid
+ReturnToService=0
+SlurmctldTimeout=300
+SlurmdTimeout=300
+InactiveLimit=0
+MinJobAge=300
+KillWait=30
+Waittime=0
+SchedulerType=sched/backfill
+SlurmctldDebug=info
+SlurmctldLogFile=/var/log/slurmctld.log
+SlurmdDebug=info
+SlurmdLogFile=/var/log/slurmd.log
+JobCompType=jobcomp/none
+
+# COMPUTE NODES
+NodeName=node1 NodeAddr=192.168.56.11 CPUs=1 State=UNKNOWN
+PartitionName=debug Nodes=ALL Default=YES MaxTime=INFINITE State=UP
+BLOCK
+
+$HOSTS = <<-SHELL
+192.168.56.9 slurm
+192.168.56.10 xcat
+192.168.56.11 node1
+SHELL
+
+$PROVISION_SLURM = <<-SHELL
+apt-get update
+apt-get install -y mariadb-server slurmd slurm-client slurmctld
+cat << EOF | sudo mysql -u root
+#{$SETUPDB}
+EOF
+cat << EOF > /etc/slurm-llnl/slurm.conf
+#{$SLURMCONF}
+EOF
+cat << EOF >> /etc/hosts
+#{$HOSTS}
+EOF
+systemctl enable slurmctld.service
+systemctl start slurmctld.service
+SHELL
+
+$PROVISION_NODE = <<-SHELL
+apt-get update
+apt-get install -y slurmd
+cat << EOF > /etc/slurm-llnl/slurm.conf
+#{$SLURMCONF}
+EOF
+cat << EOF > /etc/slurm-llnl/cgroup.conf
+CgroupAutomount=yes
+ConstrainCores=no
+ConstrainRAMSpace=no
+EOF
+cat << EOF >> /etc/hosts
+#{$HOSTS}
+EOF
+systemctl enable slurmd.service
+systemctl start slurmd.service
+SHELL
+
+$PROVISION_XCAT = <<-SHELL
+wget -O - "http://xcat.org/files/xcat/repos/apt/apt.key" | apt-key add -
+echo "deb [arch=amd64] http://xcat.org/files/xcat/repos/apt/latest/xcat-core bionic main\ndeb [arch=amd64] http://xcat.org/files/xcat/repos/apt/latest/xcat-dep bionic main" > /etc/apt/sources.list.d/xcat.list
+apt-get update
+apt-get install -y xcat
+source /etc/profile.d/xcat.sh
+yes | sudo /opt/xcat/share/xcat/scripts/setup-local-client.sh vagrant
+lsxcatd -a
+sudo systemctl enable xcatd.service
+
+# enable rest api ssl support
+sudo a2enmod ssl
+ln -s ../sites-available/default-ssl.conf  /etc/apache2/sites-enabled/ssl.conf
+sudo service apache2 restart
+
+# verify ssl is loaded
+sudo apache2ctl -t -D DUMP_MODULES | grep ssl
+
+apt-get install libjson-perl
+
+# set password for root login
+tabch key=xcat,username=root passwd.password=root
+
+# add non root user
+useradd -u 1101 user1
+(echo 'pass'; echo 'pass') | passwd user1
+tabch key=xcat,username=user1 passwd.password=pass
+mkdef -t policy 6 name=user1 rule=allow
+
+# register node
+mkdef -t node node1 groups=all ip=192.168.56.11 installnic=mac primarynic=mac mac=aa:06:fd:af:4d:c9
+
+cat << EOF >> /etc/hosts
+#{$HOSTS}
+EOF
+
+SHELL
+
+Vagrant.configure("2") do |main|
+
+    main.vm.define "xcat" do |config|
+      config.vm.box = "generic/ubuntu1804"
+    
+      config.vm.network "private_network", ip: "192.168.56.10"
+      config.vm.hostname = "xcat"
+    
+      config.vm.provider "virtualbox" do |v|
+        v.name = "vagrant_trex_xcat"
+        v.check_guest_additions = false
+        v.memory = 1024
+        v.cpus = 1
+        v.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
+      end
+    
+      config.vm.provision "shell", inline: $PROVISION_XCAT
+    end
+
+    main.vm.define "slurm" do |config|
+      config.vm.box = "generic/ubuntu1804"
+    
+      config.vm.network "private_network", ip: "192.168.56.9"
+      config.vm.hostname = "slurm"
+    
+      config.vm.provider "virtualbox" do |v|
+        v.name = "vagrant_trex_slurm"
+        v.check_guest_additions = false
+        v.memory = 1024
+        v.cpus = 1
+        v.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
+      end
+
+      config.vm.provision "shell", inline: $PROVISION_SLURM
+
+      config.vm.provision "file", source: "./munge.key", destination: "/etc/munge/munge.key"
+    end
+
+    main.vm.define "node1" do |config|
+      config.vm.box = "generic/ubuntu1804"
+      config.vm.network "private_network", ip: "192.168.56.11", mac: "AA06FDAF4DC9"
+      config.vm.hostname = "node1"
+      config.vm.provider "virtualbox" do |v|
+        v.name = "vagrant_trex_node1"
+        v.check_guest_additions = false
+        v.memory = 1024
+        v.cpus = 1
+        v.customize ["modifyvm", :id, "--cpuexecutioncap", "25"]
+      end
+
+      config.vm.provision "shell", inline: $PROVISION_NODE
+      
+      config.vm.provision "file", source: "./munge.key", destination: "/etc/munge/munge.key"
+    end
+end

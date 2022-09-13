@@ -1,0 +1,2526 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "TREX API",
+    "description": "TREX API",
+    "version": "0.1.0",
+    "contact": {
+      "name": "Megware",
+      "url": "megware.com",
+      "email": "info@megware.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "batch server"
+    }
+  ],
+  "paths": {
+    "/openapi.json": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "description": "Get this REST API documentation",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/asyncapi.json": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "description": "Get websocket API documentation",
+        "responses": {
+          "200": {
+            "description": "AsyncAPI JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/info": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "description": "Get build information",
+        "responses": {
+          "200": {
+            "description": "TREX tool info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Info"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/state": {
+      "get": {
+        "tags": [
+          "batch"
+        ],
+        "description": "Get batchsystem state",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "batch_detect"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batchsystem state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Detected"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/batchinfo": {
+      "get": {
+        "tags": [
+          "batch"
+        ],
+        "description": "Get batchsystem information",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "batch_info"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batchsystem information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Batchinfo"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queues": {
+      "get": {
+        "tags": [
+          "queues"
+        ],
+        "description": "Get queues",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          },
+          {
+            "$ref": "#/components/parameters/FilterQueues"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "queues_info"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queues information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Queue"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes": {
+      "get": {
+        "tags": [
+          "nodes"
+        ],
+        "description": "Get nodes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          },
+          {
+            "$ref": "#/components/parameters/FilterNodes"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "nodes_info"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nodes information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Node"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "description": "Get jobs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          },
+          {
+            "$ref": "#/components/parameters/FilterJobs"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "jobs_info"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Jobs information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/*/submit": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "description": "Get jobs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "jobs_submit"
+            ]
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobOptions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Jobs information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/JobSubmit"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}": {
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/Force"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Delete job by id",
+        "security": [
+          {
+            "oauth2": [
+              "jobs_delete"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/*": {
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BatchUser"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Delete job by user",
+        "security": [
+          {
+            "oauth2": [
+              "jobs_user_delete"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/hold": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Hold job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_hold"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Holded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/release": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Release job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_release"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Released successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/suspend": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Suspend job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_suspend"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suspended successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/resume": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Resume job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_resume"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resumed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/reschedule": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Reschedule job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "jobs_reschedule"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rescheduled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes/{node_id}/comment": {
+      "post": {
+        "tags": [
+          "nodes"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/NodeId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Change node comment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "comment"
+                ],
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "append": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "nodes_comment_edit"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes/{node_id}/state": {
+      "post": {
+        "tags": [
+          "nodes"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/NodeId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Change node state",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "$ref": "#/components/schemas/ChangeNodeState"
+                  },
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "append": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "nodes_state_edit"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queues/{queue_id}/state": {
+      "post": {
+        "tags": [
+          "queues"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/QueueId"
+          },
+          {
+            "$ref": "#/components/parameters/BatchSystem"
+          }
+        ],
+        "description": "Change queue state",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "$ref": "#/components/schemas/ChangeQueueState"
+                  },
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "queues_state_edit"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "description": "Add user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "users_add"
+            ]
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_name}": {
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/User"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        },
+        "description": "Patch user",
+        "security": [
+          {
+            "oauth2": [
+              "users_edit"
+            ]
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Patched successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdded"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/User"
+          }
+        ],
+        "description": "Delete user",
+        "security": [
+          {
+            "oauth2": [
+              "users_delete"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandReturn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/login": {
+      "post": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat token",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XcatBody"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_login"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat node information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/XcatToken"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/nodes": {
+      "get": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat nodes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "xcat_nodes"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat node information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "x-additionalPropertiesName": "node",
+                        "$ref": "#/components/schemas/XcatNode"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/groups": {
+      "get": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat groups",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "xcat_groups"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat group information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "x-additionalPropertiesName": "group",
+                        "$ref": "#/components/schemas/XcatGroup"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/osimages": {
+      "get": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat osimages",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "xcat_osimages"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat osimage information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "x-additionalPropertiesName": "group",
+                        "$ref": "#/components/schemas/XcatOsimage"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/bootstate": {
+      "get": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Get xcat bootstates",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "security": [
+          {
+            "oauth2": [
+              "xcat_get_bootstate"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xcat bootstate information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "x-additionalPropertiesName": "node",
+                        "$ref": "#/components/schemas/XcatBootstate"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Change bootstate",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/XcatBody"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "description": "Nodes to filter",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "osimage": {
+                        "type": "string",
+                        "description": "Osimage to provision"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_set_bootstate"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "description": "Successfull state"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/nextboot": {
+      "put": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Change boot order",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/XcatBody"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "description": "Nodes to filter",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "order": {
+                        "type": "string",
+                        "description": "Boot order"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_set_nextboot"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "description": "Successfull state"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/powerstate": {
+      "put": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Change power state of nodes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/XcatBody"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "description": "Nodes to filter",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "action": {
+                        "type": "string",
+                        "description": "Power action like reset"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_set_powerstate"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "description": "Successfull state"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xcat/groupattrs": {
+      "put": {
+        "tags": [
+          "xcat"
+        ],
+        "description": "Set group attributes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XcatHost"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPort"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSsl"
+          },
+          {
+            "$ref": "#/components/parameters/XcatSslVerify"
+          },
+          {
+            "$ref": "#/components/parameters/XcatUser"
+          },
+          {
+            "$ref": "#/components/parameters/XcatPassword"
+          },
+          {
+            "$ref": "#/components/parameters/XcatToken"
+          },
+          {
+            "$ref": "#/components/parameters/XcatFilter"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/XcatBody"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "filter": {
+                        "description": "Nodes to filter",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "additionalProperties": {
+                      "x-additionalPropertiesName": "attribute",
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": [
+              "xcat_set_group_attributes"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "description": "Successfull state"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "JobId": {
+        "name": "job_id",
+        "in": "path",
+        "required": true,
+        "description": "Id of job",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "QueueId": {
+        "name": "queue_id",
+        "in": "path",
+        "required": true,
+        "description": "Id of queue",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "NodeId": {
+        "name": "node_id",
+        "in": "path",
+        "required": true,
+        "description": "Id of node",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "User": {
+        "name": "user_name",
+        "in": "path",
+        "required": true,
+        "description": "Username",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Force": {
+        "name": "force",
+        "description": "Force command",
+        "in": "query",
+        "schema": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "BatchUser": {
+        "name": "user",
+        "description": "Batchsystem username",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "BatchSystem": {
+        "name": "batchsystem",
+        "description": "Batchsystem to use",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/BatchSystem"
+        }
+      },
+      "FilterJobs": {
+        "name": "filterJobs",
+        "description": "Show only certain jobs (comma seperated)",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "FilterQueues": {
+        "name": "filterQueues",
+        "description": "Show only certain queues (comma seperated)",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "FilterNodes": {
+        "name": "filterNodes",
+        "description": "Show only certain nodes (comma seperated)",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatHost": {
+        "name": "host",
+        "description": "xcat host",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatPort": {
+        "name": "port",
+        "description": "xcat port",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatSsl": {
+        "name": "ssl",
+        "description": "xcat ssl",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "XcatSslVerify": {
+        "name": "ssl_verify",
+        "description": "xcat ssl verify",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        }
+      },
+      "XcatUser": {
+        "name": "user",
+        "description": "xcat user",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatPassword": {
+        "name": "user",
+        "description": "xcat password",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatToken": {
+        "name": "token",
+        "description": "xcat token",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XcatFilter": {
+        "name": "filter",
+        "description": "Show only certain elements from xcat query (comma seperated)",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "XcatBody": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "description": "xcat user name",
+            "type": "string"
+          },
+          "password": {
+            "description": "xcat password",
+            "type": "string"
+          },
+          "token": {
+            "description": "xcat token",
+            "type": "string"
+          },
+          "host": {
+            "description": "xcat host",
+            "type": "string"
+          },
+          "port": {
+            "description": "xcat port",
+            "type": "string"
+          },
+          "ssl": {
+            "description": "whether to use ssl",
+            "type": "boolean"
+          },
+          "ssl_verify": {
+            "description": "whether to require ssl verification",
+            "type": "boolean"
+          }
+        }
+      },
+      "BatchSystem": {
+        "type": "string",
+        "enum": [
+          "pbs",
+          "lsf",
+          "slurm"
+        ],
+        "description": "Node status:\n * `pbs` - Pbs / PbsPro / Torque\n * `lsf` - IBM LSF\n * `slurm` - Slurm\n"
+      },
+      "CommandReturn": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "Batchinfo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the batchsystem"
+          },
+          "version": {
+            "type": "string",
+            "description": "Version of the batchsystem"
+          },
+          "info": {
+            "type": "object",
+            "description": "Additional batchsystem metadata",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "key",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "user",
+          "password"
+        ],
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UserAdded": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Node": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "description": "Shortened (hostname only) node name",
+            "type": "string"
+          },
+          "nameFull": {
+            "description": "Full node name",
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "various",
+              "online",
+              "offline",
+              "disabled",
+              "powersave",
+              "reserved",
+              "maintainence",
+              "failed"
+            ],
+            "description": "Node status:\n * `unknown` - Unknown / unhandled or invalid node state\n * `various` - Node/Nodes/Nodegroup have different states\n * `online` - Node is online and ready to run jobs\n * `offline` - Node is offline\n * `disabled` - Node is disabled from scheduling jobs on\n * `powersave` - Node is in powersave mode\n * `reserved` - Node is reserved\n * `maintainence` - Node is disabled for maintainence\n * `failed` - Node is a failed / error state\n"
+          },
+          "rawState": {
+            "description": "Raw node state (unmodified)",
+            "type": "string"
+          },
+          "comment": {
+            "description": "User settable comment for node",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Reason why node is in state (set by user/batchsystem)",
+            "type": "string"
+          },
+          "cpus": {
+            "description": "Number of cpus available",
+            "type": "integer"
+          },
+          "cpusReserved": {
+            "description": "Number of cpus reserved",
+            "type": "integer"
+          },
+          "cpusUsed": {
+            "description": "Number of cpus used",
+            "type": "integer"
+          },
+          "cpusOfJobs": {
+            "description": "Mapping for jobs on node with the number of cpus allocated by each one",
+            "type": "object",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "cpus",
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "description": "Job Id used by batchsystem",
+            "type": "string"
+          },
+          "idCompact": {
+            "description": "Shortened Job Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of job",
+            "type": "string"
+          },
+          "owner": {
+            "description": "Owner of job",
+            "type": "string"
+          },
+          "user": {
+            "description": "Username of user that triggered job",
+            "type": "string"
+          },
+          "userId": {
+            "description": "User Id of user that triggered job",
+            "type": "integer"
+          },
+          "group": {
+            "description": "Groupname of user that triggered job",
+            "type": "string"
+          },
+          "groupId": {
+            "description": "Group Id of user that triggered job",
+            "type": "integer"
+          },
+          "queue": {
+            "description": "Name of queue job is currently in",
+            "type": "string"
+          },
+          "priority": {
+            "description": "Priority of job",
+            "type": "integer"
+          },
+          "execHost": {
+            "description": "Hostname where job is executed",
+            "type": "string"
+          },
+          "submitHost": {
+            "description": "Hostname where job has been submitted from",
+            "type": "string"
+          },
+          "server": {
+            "description": "Server managing job",
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "running",
+              "queued",
+              "requeued",
+              "terminating",
+              "finished",
+              "cancelled",
+              "failed",
+              "moved",
+              "suspend",
+              "zombie"
+            ],
+            "description": "Job status:\n * `unknown` - Unknown / unhandled or invalid job state\n * `running` - Job is currently running\n * `queued` - Job is scheduled for running\n * `requeued` - Job is scheduled after being run already\n * `terminating` - Job is currently terminating\n * `finished` - Job already finished\n * `cancelled` - Job has been cancelled\n * `failed` - Job failed to run\n * `moved` - Job is been moved to another node\n * `suspend` - Job has been paused from running\n * `zombie` - Job failed in a possibly unstoppable zombie state\n"
+          },
+          "rawState": {
+            "description": "Raw job state (unmodified)",
+            "type": "string"
+          },
+          "workdir": {
+            "description": "Workdirectory used for executing job",
+            "type": "string"
+          },
+          "exitCode": {
+            "description": "Exitcode of job if finished",
+            "type": "integer"
+          },
+          "exitSignal": {
+            "description": "Signal Id of job if finished",
+            "type": "integer"
+          },
+          "submitArgs": {
+            "description": "Arguments passed while submitting job",
+            "type": "string"
+          },
+          "comment": {
+            "description": "Comments of job",
+            "type": "object",
+            "properties": {
+              "reason": {
+                "description": "Reason why job is in its current state",
+                "type": "string"
+              },
+              "user": {
+                "description": "User set comment for job",
+                "type": "string"
+              },
+              "admin": {
+                "description": "Admin set comment for job",
+                "type": "string"
+              },
+              "system": {
+                "description": "System set comment for job",
+                "type": "string"
+              }
+            }
+          },
+          "time": {
+            "description": "Times of job",
+            "type": "object",
+            "properties": {
+              "submit": {
+                "description": "Time the job has been submitted",
+                "type": "integer"
+              },
+              "start": {
+                "description": "Time the job was started",
+                "type": "integer"
+              },
+              "end": {
+                "description": "Time the job finished",
+                "type": "integer"
+              },
+              "queue": {
+                "description": "Time the job has been queued for execution",
+                "type": "integer"
+              }
+            }
+          },
+          "used": {
+            "description": "Used resources",
+            "type": "object",
+            "properties": {
+              "cpusPerNode": {
+                "description": "Number of cpus used per node",
+                "type": "integer"
+              },
+              "cpus": {
+                "description": "Number of cpus allocated for job",
+                "type": "integer"
+              },
+              "nodes": {
+                "description": "Number of nodes allocated for job",
+                "type": "integer"
+              },
+              "wallTime": {
+                "description": "Walltime used by job in seconds",
+                "type": "integer"
+              },
+              "cpuTime": {
+                "description": "Cputime used by job in seconds",
+                "type": "integer"
+              },
+              "mem": {
+                "description": "Memory used by job in bytes",
+                "type": "integer"
+              },
+              "vmem": {
+                "description": "Virtual memory used by job in bytes",
+                "type": "integer"
+              }
+            }
+          },
+          "requested": {
+            "description": "Requested resources",
+            "type": "object",
+            "properties": {
+              "other": {
+                "description": "Other / custom required string field",
+                "type": "string"
+              },
+              "nice": {
+                "description": "Nice level requested by job",
+                "type": "integer"
+              },
+              "cpus": {
+                "description": "Number of cpus requested",
+                "type": "integer"
+              },
+              "nodes": {
+                "description": "Number of nodes requested",
+                "type": "integer"
+              },
+              "wallTime": {
+                "description": "Walltime requested by job in seconds",
+                "type": "integer"
+              },
+              "general": {
+                "description": "General key-value pairs for requested custom resources",
+                "type": "object",
+                "additionalProperties": {
+                  "x-additionalPropertiesName": "resource",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "cpusFromNode": {
+            "description": "Mapping of nodenames and number of cpus from each node used by the job",
+            "type": "object",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "node",
+              "type": "integer"
+            }
+          },
+          "variableList": {
+            "description": "Environment variables used for job execution",
+            "type": "object",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "key",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ChangeQueueState": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed",
+          "inactive",
+          "draining"
+        ],
+        "description": "Queue status:\n * `open` - Open queue, jobs can be scheduled and run\n * `closed` - Closed queue, jobs can neither be scheduled nor run\n * `inactive` - Queue is inactive, jobs can be scheduled but will not run (yet)\n * `draining` - Queue currently draining, jobs cannot be scheduled but existing still run\n"
+      },
+      "Queue": {
+        "description": "Queue information",
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "description": "Name of queue",
+            "type": "string"
+          },
+          "priority": {
+            "description": "Priority order",
+            "type": "integer"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "open",
+              "closed",
+              "inactive",
+              "draining"
+            ],
+            "description": "Queue status:\n * `unknown` - Unknown / unhandled or invalid queue state\n * `open` - Open queue, jobs can be scheduled and run\n * `closed` - Closed queue, jobs can neither be scheduled nor run\n * `inactive` - Queue is inactive, jobs can be scheduled but will not run (yet)\n * `draining` - Queue currently draining, jobs cannot be scheduled but existing still run\n"
+          },
+          "rawState": {
+            "description": "Raw / unparsed state description of queue",
+            "type": "string"
+          },
+          "jobs": {
+            "description": "Information about number of jobs in queue",
+            "type": "object",
+            "properties": {
+              "total": {
+                "description": "Total number of jobs",
+                "type": "integer"
+              },
+              "pending": {
+                "description": "Pending jobs",
+                "type": "integer"
+              },
+              "running": {
+                "description": "Running jobs",
+                "type": "integer"
+              },
+              "suspended": {
+                "description": "Suspended jobs",
+                "type": "integer"
+              }
+            }
+          },
+          "cpus": {
+            "description": "Number of cpus in queue",
+            "type": "integer"
+          },
+          "nodesTotal": {
+            "description": "Total nodes in queue",
+            "type": "integer"
+          },
+          "nodesMin": {
+            "description": "Minimum nodes per job",
+            "type": "integer"
+          },
+          "nodesMax": {
+            "description": "Maximum nodes per job",
+            "type": "integer"
+          },
+          "wallTimeMax": {
+            "description": "Maximum wallTime per job",
+            "type": "integer"
+          },
+          "memPerCpuMax": {
+            "description": "Maximum memory per cpu per job in bytes",
+            "type": "integer"
+          },
+          "modifyTime": {
+            "description": "Last time the queue was modified",
+            "type": "integer"
+          },
+          "nodes": {
+            "description": "All nodes by name in queue",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "JobOptions": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "description": "Path to job script to execute",
+            "type": "string"
+          },
+          "nodes": {
+            "description": "Number of nodes requested",
+            "type": "integer"
+          },
+          "nodesMax": {
+            "description": "Maximum number of nodes requested",
+            "type": "integer"
+          },
+          "tasks": {
+            "description": "Number of tasks requested",
+            "type": "integer"
+          },
+          "gpus": {
+            "description": "Number of gpus requested",
+            "type": "integer"
+          }
+        }
+      },
+      "JobSubmit": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "description": "Id of submitted job"
+          }
+        }
+      },
+      "Info": {
+        "type": "object",
+        "properties": {
+          "hash": {
+            "type": "string",
+            "description": "Git hash"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Git branch"
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Git revision count"
+          }
+        }
+      },
+      "Detected": {
+        "type": "object",
+        "properties": {
+          "detected": {
+            "type": "boolean",
+            "description": "Whether batchsystem is available"
+          }
+        }
+      },
+      "ChangeNodeState": {
+        "type": "string",
+        "enum": [
+          "resume",
+          "drain",
+          "undrain"
+        ],
+        "description": "Change status:\n * `resume` - Remove Offline state\n * `drain` - Mark node to disable jobs being scheduled on\n * `undrain` - Mark node to allow jobs being scheduled on\n"
+      },
+      "XcatToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token for xcat api calls"
+          },
+          "expires": {
+            "type": "integer",
+            "description": "Epoch time in seconds when token expires"
+          }
+        }
+      },
+      "XcatNode": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Node name"
+          },
+          "postscripts": {
+            "type": "string",
+            "description": "Scripts executed after provisioning"
+          },
+          "postbootscripts": {
+            "type": "string",
+            "description": "Scripts executed after each boot"
+          },
+          "installnic": {
+            "type": "string",
+            "description": "Network controller used for install"
+          },
+          "primarynic": {
+            "type": "string",
+            "description": "Primary network controller"
+          },
+          "mac": {
+            "type": "string",
+            "description": "Mac address"
+          },
+          "groups": {
+            "type": "array",
+            "description": "Groups the node is member of",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": {
+          "x-additionalPropertiesName": "attr",
+          "type": "string"
+        }
+      },
+      "XcatGroup": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Group name"
+          },
+          "mgt": {
+            "type": "string",
+            "description": "Management method"
+          },
+          "netboot": {
+            "type": "string",
+            "description": "Netboot options"
+          },
+          "members": {
+            "description": "Nodes in group",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XcatOsimage": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Osimage name"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Osimage profile"
+          },
+          "osname": {
+            "type": "string",
+            "description": "Operating system name"
+          },
+          "osarch": {
+            "type": "string",
+            "description": "Operating system architecture"
+          },
+          "osvers": {
+            "type": "string",
+            "description": "Operating system version"
+          },
+          "provmethod": {
+            "type": "string",
+            "description": "Provisioning method"
+          }
+        }
+      },
+      "XcatBootstate": {
+        "type": "object",
+        "properties": {
+          "bootstate": {
+            "type": "string",
+            "description": "Node bootstate"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "flows": {
+          "implicit": {
+            "authorizationUrl": "/",
+            "scopes": {
+              "users_edit": "Edit existing system user",
+              "users_add": "Add new system user",
+              "users_delete": "Delete system user",
+              "jobs_submit": "Submit a batchsystem job",
+              "jobs_delete": "Delete a batchsystem job by id",
+              "jobs_user_delete": "Delete bathsystem jobs by user",
+              "nodes_state_edit": "Edit node state",
+              "queues_state_edit": "Edit queue state",
+              "nodes_comment_edit": "Edit node comment",
+              "jobs_hold": "Hold job",
+              "jobs_release": "Release job",
+              "jobs_suspend": "Suspend job",
+              "jobs_resume": "Resume job",
+              "jobs_reschedule": "Reschedule job in queue",
+              "jobs_info": "Get job infos",
+              "queues_info": "Get queue infos",
+              "nodes_info": "Get node infos",
+              "batch_info": "Get batchsystem infos",
+              "batch_detect": "Detect batchsystem support",
+              "xcat_login": "Get xcat token",
+              "xcat_nodes": "Get xcat node infos",
+              "xcat_groups": "Get xcat group infos",
+              "xcat_osimages": "Get xcat osimage infos",
+              "xcat_get_bootstate": "Get xcat node bootstates",
+              "xcat_set_bootstate": "Set xcat node bootstates",
+              "xcat_set_nextboot": "Set xcat node nextboot order",
+              "xcat_set_powerstate": "Set xcat node powerstate",
+              "xcat_set_group_attributes": "Set xcat group attributes"
+            }
+          }
+        }
+      }
+    }
+  }
+}

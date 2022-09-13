@@ -1,0 +1,1946 @@
+{
+  "asyncapi": "2.4.0",
+  "info": {
+    "title": "TREX",
+    "version": "1.0.0",
+    "description": "Generic batchsystem websocket interface"
+  },
+  "channels": {
+    "/": {
+      "publish": {
+        "operationId": "sendMessage",
+        "message": {
+          "oneOf": [
+            {
+              "$ref": "#/components/messages/login"
+            },
+            {
+              "$ref": "#/components/messages/logout"
+            },
+            {
+              "$ref": "#/components/messages/getNodes"
+            },
+            {
+              "$ref": "#/components/messages/getQueues"
+            },
+            {
+              "$ref": "#/components/messages/getJobs"
+            },
+            {
+              "$ref": "#/components/messages/openapi.json"
+            },
+            {
+              "$ref": "#/components/messages/asyncapi.json"
+            },
+            {
+              "$ref": "#/components/messages/info"
+            },
+            {
+              "$ref": "#/components/messages/setBatchsystem"
+            },
+            {
+              "$ref": "#/components/messages/detect"
+            },
+            {
+              "$ref": "#/components/messages/getBatchInfo"
+            },
+            {
+              "$ref": "#/components/messages/usersAdd"
+            },
+            {
+              "$ref": "#/components/messages/usersEdit"
+            },
+            {
+              "$ref": "#/components/messages/usersDelete"
+            },
+            {
+              "$ref": "#/components/messages/jobsSubmit"
+            },
+            {
+              "$ref": "#/components/messages/jobsDeleteById"
+            },
+            {
+              "$ref": "#/components/messages/jobsDeleteByUser"
+            },
+            {
+              "$ref": "#/components/messages/setNodeState"
+            },
+            {
+              "$ref": "#/components/messages/setQueueState"
+            },
+            {
+              "$ref": "#/components/messages/setNodeComment"
+            },
+            {
+              "$ref": "#/components/messages/holdJob"
+            },
+            {
+              "$ref": "#/components/messages/releaseJob"
+            },
+            {
+              "$ref": "#/components/messages/suspendJob"
+            },
+            {
+              "$ref": "#/components/messages/resumeJob"
+            },
+            {
+              "$ref": "#/components/messages/rescheduleJob"
+            },
+            {
+              "$ref": "#/components/messages/xcatLogin"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetNodes"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetOsimages"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetGroups"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetBootstate"
+            },
+            {
+              "$ref": "#/components/messages/xcatSetBootstate"
+            },
+            {
+              "$ref": "#/components/messages/xcatSetNextboot"
+            },
+            {
+              "$ref": "#/components/messages/xcatSetPowerstate"
+            },
+            {
+              "$ref": "#/components/messages/xcatSetGroupAttributes"
+            },
+            {
+              "$ref": "#/components/messages/xcatSet"
+            }
+          ]
+        }
+      },
+      "subscribe": {
+        "operationId": "processMessage",
+        "message": {
+          "oneOf": [
+            {
+              "$ref": "#/components/messages/invalidLogin"
+            },
+            {
+              "$ref": "#/components/messages/commandSuccess"
+            },
+            {
+              "$ref": "#/components/messages/getNodesData"
+            },
+            {
+              "$ref": "#/components/messages/getQueuesData"
+            },
+            {
+              "$ref": "#/components/messages/getJobsData"
+            },
+            {
+              "$ref": "#/components/messages/openapi.jsonData"
+            },
+            {
+              "$ref": "#/components/messages/asyncapi.jsonData"
+            },
+            {
+              "$ref": "#/components/messages/infoData"
+            },
+            {
+              "$ref": "#/components/messages/detectData"
+            },
+            {
+              "$ref": "#/components/messages/getBatchInfoData"
+            },
+            {
+              "$ref": "#/components/messages/usersAddData"
+            },
+            {
+              "$ref": "#/components/messages/jobsSubmitData"
+            },
+            {
+              "$ref": "#/components/messages/xcatLoginData"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetNodesData"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetOsimagesData"
+            },
+            {
+              "$ref": "#/components/messages/xcatGetGroupsData"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "components": {
+    "messages": {
+      "xcatLoginData": {
+        "summary": "Xcat token",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/components/schemas/XcatToken"
+            }
+          }
+        }
+      },
+      "xcatGetNodesData": {
+        "summary": "Xcat node infos",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "node",
+                "$ref": "#/components/schemas/XcatNode"
+              }
+            }
+          }
+        }
+      },
+      "xcatGetGroupsData": {
+        "summary": "Xcat group infos",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "group",
+                "$ref": "#/components/schemas/XcatGroup"
+              }
+            }
+          }
+        }
+      },
+      "xcatGetOsimagesData": {
+        "summary": "Xcat osimage infos",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": {
+                "x-additionalPropertiesName": "image",
+                "$ref": "#/components/schemas/XcatOsimage"
+              }
+            }
+          }
+        }
+      },
+      "xcatGetNodes": {
+        "summary": "Get xcat nodes info",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/getNodes"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Nodes to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/xcatGetNodesData"
+      },
+      "xcatGetGroups": {
+        "summary": "Get xcat group info",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/getGroups"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Groups to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/xcatGetGroupsData"
+      },
+      "xcatGetBootstate": {
+        "summary": "Get xcat group info",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/getBootstate"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Node to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/xcatGetBootstateData"
+      },
+      "xcatGetOsimages": {
+        "summary": "Get xcat osimage infos",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/getOsimages"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Osimages to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/xcatGetOsimagesData"
+      },
+      "xcatLogin": {
+        "summary": "Get a xcat token",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/Login"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSet": {
+        "summary": "Set xcat options",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/set"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSetGroupAttributes": {
+        "summary": "Set attributes for groups",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/setGroupAttributes"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Groups to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": {
+                "x-additionalPropertiesName": "attribute",
+                "type": "string"
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSetNextboot": {
+        "summary": "Set nextboot for nodes",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command",
+                "order"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/setNextboot"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Nodes to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "order": {
+                  "type": "string",
+                  "description": "Boot order"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSetPowerstate": {
+        "summary": "Set powerstate for nodes",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command",
+                "order"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/setPowerstate"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Nodes to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "action": {
+                  "type": "string",
+                  "description": "Power action"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "xcatSetBootstate": {
+        "summary": "Set bootstate for nodes",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "required": [
+                "command",
+                "osimage"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "xcat/setBootstate"
+                },
+                "filter": {
+                  "type": "array",
+                  "description": "Nodes to filter or all if not given",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "osimage": {
+                  "type": "string",
+                  "description": "Osimage to use for provisioning"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/XcatOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "holdJob": {
+        "summary": "Prevent a pending job from being run",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "job",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "holdJob"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "job": {
+              "type": "string"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "releaseJob": {
+        "summary": "Release a job that has been hold before to start execution",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "job",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "releaseJob"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "job": {
+              "type": "string"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "suspendJob": {
+        "summary": "Suspend a running job",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "job",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "suspendJob"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "job": {
+              "type": "string"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "resumeJob": {
+        "summary": "Resume a job that was suspended before",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "job",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "resumeJob"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "job": {
+              "type": "string"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "rescheduleJob": {
+        "summary": "Requeue a job into a waiting state",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "job",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "rescheduleJob"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "job": {
+              "type": "string"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "jobsDeleteById": {
+        "summary": "Delete Job by Id",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "job",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "jobsDeleteById"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "job": {
+              "type": "string"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "jobsDeleteByUser": {
+        "summary": "Delete Job by User",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "user",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "jobsDeleteByUser"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "user": {
+              "type": "string"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "setNodeState": {
+        "summary": "Change node state",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "state",
+            "node",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "setNodeState"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "node": {
+              "type": "string"
+            },
+            "state": {
+              "$ref": "#/components/schemas/ChangeNodeState"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            },
+            "reason": {
+              "type": "string"
+            },
+            "append": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "setNodeComment": {
+        "summary": "Change node state",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "comment",
+            "node",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "setNodeComment"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "node": {
+              "type": "string"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            },
+            "comment": {
+              "type": "string"
+            },
+            "append": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "setQueueState": {
+        "summary": "Change node state",
+        "payload": {
+          "type": "object",
+          "required": [
+            "command",
+            "state",
+            "queue",
+            "batchsystem"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "setNodeState"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            },
+            "queue": {
+              "type": "string"
+            },
+            "state": {
+              "$ref": "#/components/schemas/ChangeQueueState"
+            },
+            "force": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "setBatchsystem": {
+        "summary": "Set batchsystem to use",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "setBatchsystem"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "detect": {
+        "summary": "Check if build system can be detected",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "detect"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            }
+          }
+        },
+        "x-response": "#/components/messages/detectData"
+      },
+      "detectData": {
+        "summary": "Detected info",
+        "payload": {
+          "$ref": "#/components/schemas/Detected"
+        }
+      },
+      "jobsSubmit": {
+        "summary": "Submit job to batchsystem",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "usersAdd"
+                },
+                "batchsystem": {
+                  "$ref": "#/components/schemas/BatchSystem"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/JobOptions"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/jobsSubmitData"
+      },
+      "jobsSubmitData": {
+        "summary": "Submitted job info",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/components/schemas/JobSubmit"
+            }
+          }
+        }
+      },
+      "usersAdd": {
+        "summary": "Add proxy user",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "usersAdd"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/User"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/usersAddData"
+      },
+      "usersAddData": {
+        "summary": "Added / edited user info",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/components/schemas/UserAdded"
+            }
+          }
+        }
+      },
+      "usersEdit": {
+        "summary": "Edit proxy user",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "usersEdit"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/User"
+            }
+          ]
+        },
+        "x-response": "#/components/messages/usersAddData"
+      },
+      "usersDelete": {
+        "summary": "Delete proxy user",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "usersDelete"
+            },
+            "user": {
+              "type": "string",
+              "description": "User to delete"
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "getBatchInfo": {
+        "summary": "Get batchsystem information",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "getBatchInfo"
+            },
+            "batchsystem": {
+              "$ref": "#/components/schemas/BatchSystem"
+            }
+          }
+        },
+        "x-response": "#/components/messages/getBatchInfoData"
+      },
+      "getBatchInfoData": {
+        "summary": "Batchsystem information",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/components/schemas/Batchinfo"
+            }
+          }
+        }
+      },
+      "info": {
+        "summary": "Get build information",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "info"
+            }
+          }
+        },
+        "x-response": "#/components/messages/infoData"
+      },
+      "infoData": {
+        "summary": "Build information",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/components/schemas/Info"
+            }
+          }
+        }
+      },
+      "openapi.json": {
+        "summary": "Get openapi json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "openapi.json"
+            }
+          }
+        },
+        "x-response": "#/components/messages/openapiJsonData"
+      },
+      "openapi.jsonData": {
+        "summary": "OpenAPI JSON",
+        "payload": {
+          "type": "object"
+        }
+      },
+      "asyncapi.json": {
+        "summary": "Get asyncapi json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "asyncapi.json"
+            }
+          }
+        },
+        "x-response": "#/components/messages/asyncapiJsonData"
+      },
+      "asyncapi.jsonData": {
+        "summary": "AsyncAPI JSON",
+        "payload": {
+          "type": "object"
+        }
+      },
+      "login": {
+        "summary": "Login with user",
+        "payload": {
+          "allOf": [
+            {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "const": "login"
+                }
+              }
+            },
+            {
+              "$ref": "#/components/schemas/User"
+            }
+          ]
+        },
+        "x-response": {
+          "oneOf": [
+            "#/components/messages/invalidLogin",
+            "#/components/messages/validLogin"
+          ]
+        }
+      },
+      "validLogin": {
+        "summary": "Login succeeded",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/components/schemas/UserAdded"
+            }
+          }
+        }
+      },
+      "invalidLogin": {
+        "summary": "Login failed",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "integer",
+                  "const": 401
+                },
+                "message": {
+                  "type": "string",
+                  "const": "Could not authenticate user for login"
+                },
+                "type": {
+                  "type": "string",
+                  "const": "Invalid login"
+                }
+              }
+            }
+          }
+        }
+      },
+      "logout": {
+        "summary": "Logout",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "logout"
+            }
+          }
+        },
+        "x-response": "#/components/messages/commandSuccess"
+      },
+      "getNodes": {
+        "summary": "Get node informations",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "getNodes"
+            },
+            "filterNodes": {
+              "description": "Nodes to filter",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-response": "#/components/messages/getNodesData"
+      },
+      "getNodesData": {
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Node"
+              }
+            }
+          }
+        }
+      },
+      "getQueues": {
+        "summary": "Get queue informations",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "getQueues"
+            },
+            "filterQueues": {
+              "description": "Queues to filter",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-response": "#/components/messages/getQueuesData"
+      },
+      "getQueuesData": {
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Queue"
+              }
+            }
+          }
+        }
+      },
+      "getJobs": {
+        "summary": "Get job informations",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "getJobs"
+            },
+            "filterJobs": {
+              "description": "Job ids to filter",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-response": "#/components/messages/getJobsData"
+      },
+      "getJobsData": {
+        "payload": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Job"
+              }
+            }
+          }
+        }
+      },
+      "commandSuccess": {
+        "summary": "Command succeeded",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "boolean",
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "BatchSystem": {
+        "type": "string",
+        "enum": [
+          "pbs",
+          "lsf",
+          "slurm"
+        ],
+        "description": "Node status:\n * `pbs` - Pbs / PbsPro / Torque\n * `lsf` - IBM LSF\n * `slurm` - Slurm\n"
+      },
+      "CommandReturn": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "Batchinfo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the batchsystem"
+          },
+          "version": {
+            "type": "string",
+            "description": "Version of the batchsystem"
+          },
+          "info": {
+            "type": "object",
+            "description": "Additional batchsystem metadata",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "key",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "user",
+          "password"
+        ],
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UserAdded": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Node": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "description": "Shortened (hostname only) node name",
+            "type": "string"
+          },
+          "nameFull": {
+            "description": "Full node name",
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "various",
+              "online",
+              "offline",
+              "disabled",
+              "powersave",
+              "reserved",
+              "maintainence",
+              "failed"
+            ],
+            "description": "Node status:\n * `unknown` - Unknown / unhandled or invalid node state\n * `various` - Node/Nodes/Nodegroup have different states\n * `online` - Node is online and ready to run jobs\n * `offline` - Node is offline\n * `disabled` - Node is disabled from scheduling jobs on\n * `powersave` - Node is in powersave mode\n * `reserved` - Node is reserved\n * `maintainence` - Node is disabled for maintainence\n * `failed` - Node is a failed / error state\n"
+          },
+          "rawState": {
+            "description": "Raw node state (unmodified)",
+            "type": "string"
+          },
+          "comment": {
+            "description": "User settable comment for node",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Reason why node is in state (set by user/batchsystem)",
+            "type": "string"
+          },
+          "cpus": {
+            "description": "Number of cpus available",
+            "type": "integer"
+          },
+          "cpusReserved": {
+            "description": "Number of cpus reserved",
+            "type": "integer"
+          },
+          "cpusUsed": {
+            "description": "Number of cpus used",
+            "type": "integer"
+          },
+          "cpusOfJobs": {
+            "description": "Mapping for jobs on node with the number of cpus allocated by each one",
+            "type": "object",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "cpus",
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "description": "Job Id used by batchsystem",
+            "type": "string"
+          },
+          "idCompact": {
+            "description": "Shortened Job Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of job",
+            "type": "string"
+          },
+          "owner": {
+            "description": "Owner of job",
+            "type": "string"
+          },
+          "user": {
+            "description": "Username of user that triggered job",
+            "type": "string"
+          },
+          "userId": {
+            "description": "User Id of user that triggered job",
+            "type": "integer"
+          },
+          "group": {
+            "description": "Groupname of user that triggered job",
+            "type": "string"
+          },
+          "groupId": {
+            "description": "Group Id of user that triggered job",
+            "type": "integer"
+          },
+          "queue": {
+            "description": "Name of queue job is currently in",
+            "type": "string"
+          },
+          "priority": {
+            "description": "Priority of job",
+            "type": "integer"
+          },
+          "execHost": {
+            "description": "Hostname where job is executed",
+            "type": "string"
+          },
+          "submitHost": {
+            "description": "Hostname where job has been submitted from",
+            "type": "string"
+          },
+          "server": {
+            "description": "Server managing job",
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "running",
+              "queued",
+              "requeued",
+              "terminating",
+              "finished",
+              "cancelled",
+              "failed",
+              "moved",
+              "suspend",
+              "zombie"
+            ],
+            "description": "Job status:\n * `unknown` - Unknown / unhandled or invalid job state\n * `running` - Job is currently running\n * `queued` - Job is scheduled for running\n * `requeued` - Job is scheduled after being run already\n * `terminating` - Job is currently terminating\n * `finished` - Job already finished\n * `cancelled` - Job has been cancelled\n * `failed` - Job failed to run\n * `moved` - Job is been moved to another node\n * `suspend` - Job has been paused from running\n * `zombie` - Job failed in a possibly unstoppable zombie state\n"
+          },
+          "rawState": {
+            "description": "Raw job state (unmodified)",
+            "type": "string"
+          },
+          "workdir": {
+            "description": "Workdirectory used for executing job",
+            "type": "string"
+          },
+          "exitCode": {
+            "description": "Exitcode of job if finished",
+            "type": "integer"
+          },
+          "exitSignal": {
+            "description": "Signal Id of job if finished",
+            "type": "integer"
+          },
+          "submitArgs": {
+            "description": "Arguments passed while submitting job",
+            "type": "string"
+          },
+          "comment": {
+            "description": "Comments of job",
+            "type": "object",
+            "properties": {
+              "reason": {
+                "description": "Reason why job is in its current state",
+                "type": "string"
+              },
+              "user": {
+                "description": "User set comment for job",
+                "type": "string"
+              },
+              "admin": {
+                "description": "Admin set comment for job",
+                "type": "string"
+              },
+              "system": {
+                "description": "System set comment for job",
+                "type": "string"
+              }
+            }
+          },
+          "time": {
+            "description": "Times of job",
+            "type": "object",
+            "properties": {
+              "submit": {
+                "description": "Time the job has been submitted",
+                "type": "integer"
+              },
+              "start": {
+                "description": "Time the job was started",
+                "type": "integer"
+              },
+              "end": {
+                "description": "Time the job finished",
+                "type": "integer"
+              },
+              "queue": {
+                "description": "Time the job has been queued for execution",
+                "type": "integer"
+              }
+            }
+          },
+          "used": {
+            "description": "Used resources",
+            "type": "object",
+            "properties": {
+              "cpusPerNode": {
+                "description": "Number of cpus used per node",
+                "type": "integer"
+              },
+              "cpus": {
+                "description": "Number of cpus allocated for job",
+                "type": "integer"
+              },
+              "nodes": {
+                "description": "Number of nodes allocated for job",
+                "type": "integer"
+              },
+              "wallTime": {
+                "description": "Walltime used by job in seconds",
+                "type": "integer"
+              },
+              "cpuTime": {
+                "description": "Cputime used by job in seconds",
+                "type": "integer"
+              },
+              "mem": {
+                "description": "Memory used by job in bytes",
+                "type": "integer"
+              },
+              "vmem": {
+                "description": "Virtual memory used by job in bytes",
+                "type": "integer"
+              }
+            }
+          },
+          "requested": {
+            "description": "Requested resources",
+            "type": "object",
+            "properties": {
+              "other": {
+                "description": "Other / custom required string field",
+                "type": "string"
+              },
+              "nice": {
+                "description": "Nice level requested by job",
+                "type": "integer"
+              },
+              "cpus": {
+                "description": "Number of cpus requested",
+                "type": "integer"
+              },
+              "nodes": {
+                "description": "Number of nodes requested",
+                "type": "integer"
+              },
+              "wallTime": {
+                "description": "Walltime requested by job in seconds",
+                "type": "integer"
+              },
+              "general": {
+                "description": "General key-value pairs for requested custom resources",
+                "type": "object",
+                "additionalProperties": {
+                  "x-additionalPropertiesName": "resource",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "cpusFromNode": {
+            "description": "Mapping of nodenames and number of cpus from each node used by the job",
+            "type": "object",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "node",
+              "type": "integer"
+            }
+          },
+          "variableList": {
+            "description": "Environment variables used for job execution",
+            "type": "object",
+            "additionalProperties": {
+              "x-additionalPropertiesName": "key",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ChangeQueueState": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed",
+          "inactive",
+          "draining"
+        ],
+        "description": "Queue status:\n * `open` - Open queue, jobs can be scheduled and run\n * `closed` - Closed queue, jobs can neither be scheduled nor run\n * `inactive` - Queue is inactive, jobs can be scheduled but will not run (yet)\n * `draining` - Queue currently draining, jobs cannot be scheduled but existing still run\n"
+      },
+      "Queue": {
+        "description": "Queue information",
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "description": "Name of queue",
+            "type": "string"
+          },
+          "priority": {
+            "description": "Priority order",
+            "type": "integer"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "open",
+              "closed",
+              "inactive",
+              "draining"
+            ],
+            "description": "Queue status:\n * `unknown` - Unknown / unhandled or invalid queue state\n * `open` - Open queue, jobs can be scheduled and run\n * `closed` - Closed queue, jobs can neither be scheduled nor run\n * `inactive` - Queue is inactive, jobs can be scheduled but will not run (yet)\n * `draining` - Queue currently draining, jobs cannot be scheduled but existing still run\n"
+          },
+          "rawState": {
+            "description": "Raw / unparsed state description of queue",
+            "type": "string"
+          },
+          "jobs": {
+            "description": "Information about number of jobs in queue",
+            "type": "object",
+            "properties": {
+              "total": {
+                "description": "Total number of jobs",
+                "type": "integer"
+              },
+              "pending": {
+                "description": "Pending jobs",
+                "type": "integer"
+              },
+              "running": {
+                "description": "Running jobs",
+                "type": "integer"
+              },
+              "suspended": {
+                "description": "Suspended jobs",
+                "type": "integer"
+              }
+            }
+          },
+          "cpus": {
+            "description": "Number of cpus in queue",
+            "type": "integer"
+          },
+          "nodesTotal": {
+            "description": "Total nodes in queue",
+            "type": "integer"
+          },
+          "nodesMin": {
+            "description": "Minimum nodes per job",
+            "type": "integer"
+          },
+          "nodesMax": {
+            "description": "Maximum nodes per job",
+            "type": "integer"
+          },
+          "wallTimeMax": {
+            "description": "Maximum wallTime per job",
+            "type": "integer"
+          },
+          "memPerCpuMax": {
+            "description": "Maximum memory per cpu per job in bytes",
+            "type": "integer"
+          },
+          "modifyTime": {
+            "description": "Last time the queue was modified",
+            "type": "integer"
+          },
+          "nodes": {
+            "description": "All nodes by name in queue",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "JobOptions": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "description": "Path to job script to execute",
+            "type": "string"
+          },
+          "nodes": {
+            "description": "Number of nodes requested",
+            "type": "integer"
+          },
+          "nodesMax": {
+            "description": "Maximum number of nodes requested",
+            "type": "integer"
+          },
+          "tasks": {
+            "description": "Number of tasks requested",
+            "type": "integer"
+          },
+          "gpus": {
+            "description": "Number of gpus requested",
+            "type": "integer"
+          }
+        }
+      },
+      "JobSubmit": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "description": "Id of submitted job"
+          }
+        }
+      },
+      "Info": {
+        "type": "object",
+        "properties": {
+          "hash": {
+            "type": "string",
+            "description": "Git hash"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Git branch"
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Git revision count"
+          }
+        }
+      },
+      "Detected": {
+        "type": "object",
+        "properties": {
+          "detected": {
+            "type": "boolean",
+            "description": "Whether batchsystem is available"
+          }
+        }
+      },
+      "ChangeNodeState": {
+        "type": "string",
+        "enum": [
+          "resume",
+          "drain",
+          "undrain"
+        ],
+        "description": "Change status:\n * `resume` - Remove Offline state\n * `drain` - Mark node to disable jobs being scheduled on\n * `undrain` - Mark node to allow jobs being scheduled on\n"
+      },
+      "XcatOptions": {
+        "type": "object",
+        "description": "Xcat connection and credential options",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Xcat host"
+          },
+          "port": {
+            "type": "integer",
+            "description": "Xcat port"
+          },
+          "ssl": {
+            "type": "boolean",
+            "description": "Whether to use ssl"
+          },
+          "ssl_verify": {
+            "type": "boolean",
+            "description": "Whether to require ssl verification"
+          },
+          "token": {
+            "type": "string",
+            "description": "Xcat login token"
+          },
+          "user": {
+            "type": "string",
+            "description": "Xcat username"
+          },
+          "password": {
+            "type": "string",
+            "description": "Xcat password"
+          }
+        }
+      },
+      "XcatToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token for xcat api calls"
+          },
+          "expires": {
+            "type": "integer",
+            "description": "Epoch time in seconds when token expires"
+          }
+        }
+      },
+      "XcatNode": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Node name"
+          },
+          "postscripts": {
+            "type": "string",
+            "description": "Scripts executed after provisioning"
+          },
+          "postbootscripts": {
+            "type": "string",
+            "description": "Scripts executed after each boot"
+          },
+          "installnic": {
+            "type": "string",
+            "description": "Network controller used for install"
+          },
+          "primarynic": {
+            "type": "string",
+            "description": "Primary network controller"
+          },
+          "mac": {
+            "type": "string",
+            "description": "Mac address"
+          },
+          "groups": {
+            "type": "array",
+            "description": "Groups the node is member of",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": {
+          "x-additionalPropertiesName": "attr",
+          "type": "string"
+        }
+      },
+      "XcatGroup": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Group name"
+          },
+          "mgt": {
+            "type": "string",
+            "description": "Management method"
+          },
+          "netboot": {
+            "type": "string",
+            "description": "Netboot options"
+          },
+          "members": {
+            "description": "Nodes in group",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XcatOsimage": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Osimage name"
+          },
+          "profile": {
+            "type": "string",
+            "description": "Osimage profile"
+          },
+          "osname": {
+            "type": "string",
+            "description": "Operating system name"
+          },
+          "osarch": {
+            "type": "string",
+            "description": "Operating system architecture"
+          },
+          "osvers": {
+            "type": "string",
+            "description": "Operating system version"
+          },
+          "provmethod": {
+            "type": "string",
+            "description": "Provisioning method"
+          }
+        }
+      },
+      "XcatBootstate": {
+        "type": "object",
+        "properties": {
+          "bootstate": {
+            "type": "string",
+            "description": "Node bootstate"
+          }
+        }
+      }
+    }
+  }
+}

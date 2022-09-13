@@ -1,0 +1,11 @@
+#include "proxy/build_data.h"
+
+namespace cw {
+namespace build {
+    const char* asyncapi_json = R"EOF(@ASYNCAPI@)EOF";
+    const char* openapi_json = R"EOF(@OPENAPI@)EOF";
+    const char* git_hash = R"EOF(@GIT_VERSION_HASH@)EOF";
+    const char* git_branch = R"EOF(@GIT_BUILD_BRANCH@)EOF";
+    const unsigned int git_revision = @GIT_REVISION_COUNT@;
+}
+}

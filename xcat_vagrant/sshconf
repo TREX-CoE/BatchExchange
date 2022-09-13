@@ -1,0 +1,33 @@
+Host xcat
+  HostName 127.0.0.1
+  User vagrant
+  Port 2222
+  UserKnownHostsFile /dev/null
+  StrictHostKeyChecking no
+  PasswordAuthentication no
+  IdentityFile /home/kevth/Dokumente/trex/xcat_vagrant/.vagrant/machines/xcat/virtualbox/private_key
+  IdentitiesOnly yes
+  LogLevel FATAL
+
+Host slurm
+  HostName 127.0.0.1
+  User vagrant
+  Port 2200
+  UserKnownHostsFile /dev/null
+  StrictHostKeyChecking no
+  PasswordAuthentication no
+  IdentityFile /home/kevth/Dokumente/trex/xcat_vagrant/.vagrant/machines/slurm/virtualbox/private_key
+  IdentitiesOnly yes
+  LogLevel FATAL
+
+Host node1
+  HostName 127.0.0.1
+  User vagrant
+  Port 2201
+  UserKnownHostsFile /dev/null
+  StrictHostKeyChecking no
+  PasswordAuthentication no
+  IdentityFile /home/kevth/Dokumente/trex/xcat_vagrant/.vagrant/machines/node1/virtualbox/private_key
+  IdentitiesOnly yes
+  LogLevel FATAL
+
