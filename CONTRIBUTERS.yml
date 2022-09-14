@@ -1,0 +1,22 @@
+# wrapper tool for bare metal provisioning
+- name: MEGWARE Computer Vertrieb und Service GmbH
+  name_type: Organizational
+  first: true
+
+- name: Kevin Thomas
+  given_name: Kevin
+  family_name: Thomas
+  affiliations:
+  - name: MEGWARE Computer Vertrieb und Service GmbH
+
+- name: Nico Tippmann
+  given_name: Nico
+  family_name: Tippmann
+  affiliations:
+  - name: MEGWARE Computer Vertrieb und Service GmbH
+
+- name: Kai Löhnig
+  given_name: Kai
+  family_name: Löhnig
+  affiliations:
+  - name: MEGWARE Computer Vertrieb und Service GmbH
